@@ -72,6 +72,7 @@ def test_csv_multiline_preserves_bytes_and_all_required_checks(tmp_path):
         assert artifact.path.read_bytes() == raw
         assert artifact.rows == 1
         report = artifact.validation_report
+        assert report is not None
         assert report.result == "PASS"
         assert {c.rule_id for c in report.checks} == set(required_rule_ids("CSV"))
         assert all(c.status == "PASS" for c in report.checks)
@@ -110,8 +111,10 @@ def test_csv_extra_and_empty_warnings(tmp_path):
         result = capture.read(
             request(path, policy(allow_extra_columns=True, allow_empty_records=True))
         )
-        assert result.validation_report.result == "WARNING"
-        assert result.validation_report.total_warnings == 2
+        report = result.validation_report
+        assert report is not None
+        assert report.result == "WARNING"
+        assert report.total_warnings == 2
         assert result.rows == 0
 
 
@@ -144,8 +147,10 @@ def test_scan_limits_block_input(tmp_path, limit, value):
 
 def excel_file(path, rows):
     book = Workbook()
+    sheet = book.active
+    assert sheet is not None
     for row in rows:
-        book.active.append(row)
+        sheet.append(row)
     book.save(path)
     book.close()
 
@@ -175,8 +180,10 @@ def test_excel_counts_blank_rows_preserves_bytes_and_dates(tmp_path):
     with BronzeCapture() as capture:
         artifact = capture.read(request(path, policy(parser=ExcelOptions(sheet_name="Sheet"))))
         assert artifact.path.read_bytes() == path.read_bytes()
-        assert artifact.validation_report.blank_rows_skipped == 1
-        assert artifact.validation_report.result == "PASS"
+        report = artifact.validation_report
+        assert report is not None
+        assert report.blank_rows_skipped == 1
+        assert report.result == "PASS"
         assert artifact.rows == 1
 
 
@@ -231,8 +238,10 @@ def test_pg_snapshot_preserves_types_even_for_empty_and_null(monkeypatch, rows):
         assert table.schema.field("id").type == pa.int32()
         assert table.schema.field("amount").type == pa.decimal128(10, 2)
         assert table.num_rows == len(rows)
-        assert result.validation_report.can_accept
-        assert "secret" not in result.validation_report.model_dump_json()
+        report = result.validation_report
+        assert report is not None
+        assert report.can_accept
+        assert "secret" not in report.model_dump_json()
     assert conn.execute.call_args_list[0].args[0].endswith("REPEATABLE READ READ ONLY")
     conn.cursor.assert_called_once_with(name="bronze_validation")
 
@@ -244,6 +253,8 @@ def test_policy_binding_and_snapshot_survive_catalog_parser_edit():
     req.configuration["delimiter"] = ";"
     ctx[0].location = "new.csv"
     bound = bind_policy(snapshot, ctx, req, 10)
+    assert bound.validation_policy is not None
+    assert isinstance(bound.validation_policy.parser, CSVOptions)
     assert bound.validation_policy.parser.delimiter == ","
     assert bound.location == "input.csv"
     with pytest.raises(ValueError, match="BINDING_MISMATCH"):
@@ -354,6 +365,7 @@ def test_minio_validated_download_is_bounded_and_version_pinned(monkeypatch, fai
         with resolve_file_request(req) as resolved:
             from pathlib import Path
 
+            assert resolved.location is not None
             assert Path(resolved.location).read_bytes() == raw
             assert resolved.object_version_id == "v1"
         client.get_object.assert_called_once_with("source", "input.csv", version_id="v1")
@@ -390,6 +402,7 @@ def test_pg_source_revision_change_blocks_old_job():
 
 def test_pg_schema_drift_blocks_before_export(monkeypatch):
     conn, req = mock_postgres(monkeypatch, [(1, Decimal("1.20"))])
+    assert req.validation_policy is not None
     req.validation_policy = policy(
         parser=req.validation_policy.parser,
         columns=(

@@ -39,7 +39,9 @@ class InputValidationError(Exception):
 
     def __init__(self, rule: str, code: ErrorCode, *, infrastructure: bool = False) -> None:
         super().__init__(code)
-        self.rule, self.code, self.infrastructure = rule, code, infrastructure
+        self.rule = rule
+        self.code: ErrorCode = code
+        self.infrastructure = infrastructure
 
 
 class ValidationBlockedError(Exception):

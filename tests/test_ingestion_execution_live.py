@@ -210,6 +210,7 @@ async def test_api_queue_worker_storage_failures_and_recovery(tmp_path, monkeypa
             stat = bronze_verifier_client().stat_object(
                 bucket, key, version_id=result["output"]["version_id"]
             )
+            assert stat.metadata is not None
             tags = {name.lower(): value for name, value in stat.metadata.items()}
             for name, value in result["output"]["metadata"].items():
                 assert tags[f"x-amz-meta-{name}"] == value
@@ -455,6 +456,7 @@ async def test_validated_excel_and_postgresql_are_written_to_bronze(
             response.close()
             response.release_conn()
         if source_type == "EXCEL":
+            assert location is not None
             assert raw == Path(location).read_bytes()
         else:
             table = pq.read_table(io.BytesIO(raw))
