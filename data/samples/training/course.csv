@@ -1,0 +1,63 @@
+course_id,course_code,course_name,credit_hours,major_id
+1,GEN101,Triết học Mác - Lênin,3,
+2,GEN102,Kinh tế chính trị Mác - Lênin,2,
+3,GEN103,Chủ nghĩa xã hội khoa học,2,
+4,GEN104,Tư tưởng Hồ Chí Minh,2,
+5,GEN105,Pháp luật đại cương,2,
+6,GEN106,Lịch sử Đảng Cộng sản Việt Nam,2,
+7,ENG101,Tiếng Anh 1,3,
+8,ENG102,Tiếng Anh 2,3,
+9,ENG201,Tiếng Anh 3,3,
+10,MTH101,Toán cao cấp,3,
+11,MTH102,Xác suất thống kê,3,
+12,CS101,Nhập môn lập trình,3,1
+13,CS102,Cấu trúc dữ liệu và giải thuật,3,1
+14,CS201,Cơ sở dữ liệu,3,1
+15,CS202,Mạng máy tính,3,1
+16,CS203,Hệ điều hành,3,1
+17,CS204,Lập trình hướng đối tượng,3,1
+18,CS301,Công nghệ phần mềm,3,1
+19,CS302,Trí tuệ nhân tạo,3,1
+20,SE201,Phân tích và thiết kế hệ thống,3,2
+21,SE202,Kiểm thử phần mềm,3,2
+22,SE301,Quản lý dự án phần mềm,3,2
+23,SE302,Phát triển ứng dụng web,3,2
+24,DS201,Nhập môn khoa học dữ liệu,3,3
+25,DS202,Học máy,3,3
+26,DS203,Trực quan hóa dữ liệu,2,3
+27,DS301,Khai phá dữ liệu,3,3
+28,DS302,Dữ liệu lớn,3,3
+29,BUS101,Kinh tế vi mô,3,4
+30,BUS102,Kinh tế vĩ mô,3,4
+31,BUS103,Quản trị học,3,4
+32,BUS201,Marketing căn bản,3,4
+33,BUS202,Quản trị nguồn nhân lực,3,4
+34,BUS203,Quản trị tài chính doanh nghiệp,3,4
+35,BUS301,Quản trị chiến lược,3,4
+36,BUS302,Hành vi tổ chức,3,4
+37,ACC101,Nguyên lý kế toán,3,5
+38,ACC201,Kế toán tài chính 1,3,5
+39,ACC202,Kế toán tài chính 2,3,5
+40,ACC203,Kế toán quản trị,3,5
+41,ACC301,Kiểm toán căn bản,3,5
+42,ACC302,Thuế,2,5
+43,LNG101,Nghe - Nói 1,3,6
+44,LNG102,Đọc - Viết 1,3,6
+45,LNG103,Nghe - Nói 2,3,6
+46,LNG104,Đọc - Viết 2,3,6
+47,LNG201,Ngữ âm - Âm vị học,2,6
+48,LNG202,Ngữ pháp tiếng Anh,3,6
+49,LNG203,Biên dịch 1,3,6
+50,LNG204,Văn hóa Anh - Mỹ,2,6
+51,LNG301,Phiên dịch 1,3,6
+52,LNG302,Tiếng Anh thương mại,3,6
+53,CE101,Hình họa - Vẽ kỹ thuật,3,7
+54,CE102,Cơ học lý thuyết,3,7
+55,CE103,Vật liệu xây dựng,2,7
+56,CE201,Sức bền vật liệu,3,7
+57,CE202,Cơ học đất,3,7
+58,CE203,Kết cấu bê tông cốt thép 1,3,7
+59,CE204,Trắc địa,2,7
+60,CE301,Kết cấu thép,3,7
+61,CE302,Nền móng,3,7
+62,MS601,Thuật toán nâng cao,3,8

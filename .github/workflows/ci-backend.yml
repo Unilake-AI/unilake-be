@@ -1,0 +1,67 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Lint, type-check, test, and migrate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: unilake
+          POSTGRES_PASSWORD: unilake
+          POSTGRES_DB: unilake
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: unilake
+      DB_PASSWORD: unilake
+      DB_NAME: unilake
+      JWT_SECRET_KEY: ci-secret
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install backend dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check app tests
+
+      - name: Format check
+        run: ruff format app tests --check
+
+      - name: Type check
+        run: mypy --config-file pyproject.toml app
+
+      - name: Editor type check
+        run: pyright --pythonpath "$(command -v python)"
+
+      - name: Test migrations
+        run: alembic upgrade head
+
+      - name: Tests
+        run: pytest

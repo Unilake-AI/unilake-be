@@ -1,0 +1,100 @@
+flowchart TB
+    %% ===== 1. TẦNG GIAO DIỆN =====
+    subgraph PRESENTATION["🖥️ 1. Presentation Layer"]
+        direction LR
+        WEB["Web Dashboard<br/>(Next.js + TailwindCSS)"]
+        CHATBOT_UI["Chatbot UI<br/>(Natural Language Query)"]
+        RECHARTS["Visualization<br/>(Recharts / Chart.js)"]
+    end
+
+    %% ===== 2. TẦNG ỨNG DỤNG / API =====
+    subgraph APP["⚙️ 2. Application / API Layer — Modular Monolith (Python + FastAPI)"]
+        direction TB
+        subgraph CORE["Core Modules"]
+            direction LR
+            AUTH["Auth Module<br/>(JWT / OAuth2 / RBAC)"]
+            INGEST["Ingest Module<br/>(Upload / Trigger Pipeline)"]
+            PIPELINE["Pipeline Module<br/>(Celery / ARQ / APScheduler)"]
+            QUERY["Query Module<br/>(Text-to-SQL Proxy)"]
+            DASH_API["Dashboard API<br/>(Scenario Comparison)"]
+        end
+    end
+
+    %% ===== 3. TẦNG PHÂN TÍCH AI =====
+    subgraph AI["🤖 3. AI Analytics Layer (Internal Monolith Module)"]
+        direction LR
+        INTENT["Intent Parser<br/>(LangChain)"]
+        T2SQL["Text-to-SQL Engine<br/>(LLM + Prompt Engineering<br/>+ VectorDB)"]
+        OPT["Constraint Optimization<br/>(Google OR-Tools)<br/>What-If Analysis"]
+    end
+
+    %% ===== 4. TẦNG QUẢN TRỊ DỮ LIỆU =====
+    subgraph GOV["🛡️ 4. Data Governance Layer"]
+        direction LR
+        CATALOG["Data Catalog<br/>(OpenMetadata)"]
+        LINEAGE["Data Lineage<br/>(Bronze → Silver → Gold)"]
+        DQC["Data Quality Check<br/>(Great Expectations)"]
+    end
+
+    %% ===== 5. TẦNG DATA LAKE =====
+    subgraph LAKE["🗄️ 5. Data Lake Layer (Delta Lake)"]
+        direction LR
+        BRONZE["🥉 Bronze Layer<br/>(Raw Data)<br/>MinIO / S3"]
+        SILVER["🥈 Silver Layer<br/>(Cleaned & Standardized)<br/>DuckDB + Delta Lake"]
+        GOLD["🥇 Gold Layer<br/>(Aggregated / Data Marts)<br/>PostgreSQL + Delta Lake"]
+    end
+
+    %% ===== KẾT NỐI LUỒNG =====
+    %% Giao diện ↔ API
+    WEB -->|HTTP / REST| AUTH
+    CHATBOT_UI -->|HTTP / REST| QUERY
+    WEB -->|HTTP / REST| DASH_API
+
+    %% API ↔ AI
+    QUERY -->|in-process call| INTENT
+    INTENT -->|in-process call| T2SQL
+    DASH_API -->|in-process call| OPT
+
+    %% API ↔ Quản trị dữ liệu
+    INGEST -->|trigger| DQC
+    PIPELINE -->|log metadata| CATALOG
+    PIPELINE -->|track lineage| LINEAGE
+
+    %% API ↔ Data lake
+    INGEST -->|write raw| BRONZE
+    PIPELINE -->|ETL / ELT| SILVER
+    PIPELINE -->|aggregate| GOLD
+
+    %% AI đọc từ Gold
+    T2SQL -->|read schema + data| GOLD
+    OPT -->|read KPIs| GOLD
+
+    %% Quản trị dữ liệu đọc mọi tầng
+    DQC -.->|validate| BRONZE
+    DQC -.->|validate| SILVER
+    DQC -.->|validate| GOLD
+    CATALOG -.->|index| BRONZE
+    CATALOG -.->|index| SILVER
+    CATALOG -.->|index| GOLD
+    LINEAGE -.->|trace| BRONZE
+    LINEAGE -.->|trace| SILVER
+    LINEAGE -.->|trace| GOLD
+
+    %% Luồng nội bộ data lake
+    BRONZE ==>|"transform"| SILVER
+    SILVER ==>|"aggregate"| GOLD
+
+    %% Định dạng hiển thị
+    classDef layer fill:#f0f4ff,stroke:#2563eb,stroke-width:2px,color:#1e293b
+    classDef bronze fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f
+    classDef silver fill:#e0e7ff,stroke:#4f46e5,stroke-width:2px,color:#312e81
+    classDef gold fill:#fef9c3,stroke:#ca8a04,stroke-width:2px,color:#713f12
+    classDef ai fill:#fce7f3,stroke:#db2777,stroke-width:2px,color:#831843
+    classDef gov fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d
+
+    class PRESENTATION,APP layer
+    class BRONZE bronze
+    class SILVER silver
+    class GOLD gold
+    class AI ai
+    class GOV gov

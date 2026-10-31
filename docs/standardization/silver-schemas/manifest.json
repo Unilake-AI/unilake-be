@@ -1,0 +1,198 @@
+{
+  "version": "0.1.0-draft",
+  "entities": [
+    {
+      "domain": "admissions",
+      "entity": "major",
+      "primary_key": [
+        "major_id"
+      ],
+      "source_version": "1.3.0"
+    },
+    {
+      "domain": "admissions",
+      "entity": "program",
+      "primary_key": [
+        "program_id"
+      ],
+      "source_version": "1.3.0"
+    },
+    {
+      "domain": "admissions",
+      "entity": "admission_method",
+      "primary_key": [
+        "admission_method_id"
+      ],
+      "source_version": "1.3.0"
+    },
+    {
+      "domain": "admissions",
+      "entity": "admission_year",
+      "primary_key": [
+        "admission_year_id"
+      ],
+      "source_version": "1.3.0"
+    },
+    {
+      "domain": "admissions",
+      "entity": "applicant",
+      "primary_key": [
+        "applicant_id"
+      ],
+      "source_version": "1.3.0"
+    },
+    {
+      "domain": "admissions",
+      "entity": "admission",
+      "primary_key": [
+        "admission_id"
+      ],
+      "source_version": "1.3.0"
+    },
+    {
+      "domain": "academic",
+      "entity": "student",
+      "primary_key": [
+        "student_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "academic",
+      "entity": "course",
+      "primary_key": [
+        "course_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "academic",
+      "entity": "curriculum",
+      "primary_key": [
+        "curriculum_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "academic",
+      "entity": "curriculum_course",
+      "primary_key": [
+        "curriculum_course_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "academic",
+      "entity": "semester",
+      "primary_key": [
+        "semester_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "academic",
+      "entity": "class",
+      "primary_key": [
+        "class_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "academic",
+      "entity": "class_lecturer",
+      "primary_key": [
+        "class_lecturer_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "academic",
+      "entity": "enrollment",
+      "primary_key": [
+        "enrollment_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "academic",
+      "entity": "enrollment_grade",
+      "primary_key": [
+        "enrollment_grade_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "hr",
+      "entity": "department",
+      "primary_key": [
+        "department_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "hr",
+      "entity": "position",
+      "primary_key": [
+        "position_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "hr",
+      "entity": "qualification",
+      "primary_key": [
+        "qualification_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "hr",
+      "entity": "employee",
+      "primary_key": [
+        "employee_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "hr",
+      "entity": "lecturer",
+      "primary_key": [
+        "employee_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "hr",
+      "entity": "employee_qualification",
+      "primary_key": [
+        "employee_id",
+        "qualification_id"
+      ],
+      "source_version": "1.2.0"
+    },
+    {
+      "domain": "hr",
+      "entity": "assignment",
+      "primary_key": [
+        "assignment_id"
+      ],
+      "source_version": "1.2.0"
+    }
+  ],
+  "activation_allowed": false,
+  "blockers": [
+    "G0",
+    "D04_PII",
+    "D07_AUTHORITY",
+    "DOMAIN_RULE_REVIEW"
+  ],
+  "audit_fields": [
+    "_source_system_id",
+    "_source_record_id",
+    "_batch_id",
+    "_run_id",
+    "_processed_at",
+    "_schema_version",
+    "_mapping_version"
+  ]
+}

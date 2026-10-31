@@ -1,0 +1,4 @@
+admission_method_id,method_code,method_name,description
+1,THPT,Xét điểm thi tốt nghiệp THPT,"Tổng điểm 3 môn theo tổ hợp, thang 30, đã cộng điểm ưu tiên"
+2,HOCBA,Xét học bạ THPT,"Điểm trung bình 3 môn lớp 12 theo tổ hợp, thang 30, đã cộng điểm ưu tiên"
+3,XTT,Xét tuyển thẳng,"Theo quy chế tuyển sinh của Bộ GD&ĐT, không xét điểm"

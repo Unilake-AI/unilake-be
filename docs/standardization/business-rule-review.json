@@ -1,0 +1,392 @@
+[
+  {
+    "domain": "admissions",
+    "id": "ADM-DQ-01",
+    "entity": "*",
+    "rule": "PK và cột unique không null, không trùng",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "admissions",
+    "id": "ADM-DQ-02",
+    "entity": "*",
+    "rule": "FK trỏ tới bản ghi có thật",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "admissions",
+    "id": "ADM-DQ-03",
+    "entity": "*",
+    "rule": "Đúng kiểu, độ dài, null, giá trị trạng thái, pattern, min/max",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "admissions",
+    "id": "ADM-DQ-04",
+    "entity": "admission_year",
+    "rule": "end_date > start_date; tối đa một mùa Open tại một thời điểm",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "admissions",
+    "id": "ADM-DQ-05",
+    "entity": "admission",
+    "rule": "Khi có application_date thì nằm trong mùa tuyển sinh",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "admissions",
+    "id": "ADM-DQ-06",
+    "entity": "admission",
+    "rule": "Phương thức max_score = 0 thì admission_score null; ngược lại admission_score trong [0, max_score] và có điểm khi status khác Applied",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "admissions",
+    "id": "ADM-DQ-07",
+    "entity": "admission",
+    "rule": "Mỗi thí sinh tối đa một hồ sơ Accepted mỗi mùa; nếu trúng thì là nguyện vọng có preference_rank nhỏ nhất đủ điều kiện",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "admissions",
+    "id": "ADM-DQ-08",
+    "entity": "admission",
+    "rule": "Không trùng (applicant_id, admission_year_id, preference_rank) và (applicant_id, program_id, admission_year_id, admission_method_id); preference_rank liên tục từ 1",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "admissions",
+    "id": "ADM-DQ-09",
+    "entity": "applicant",
+    "rule": "Khi có ngày sinh: tuổi tại mùa tuyển sinh 16 - 30",
+    "severity": "warning",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "admissions",
+    "id": "ADM-DQ-10",
+    "entity": "admission",
+    "rule": "Hồ sơ trỏ tới phương thức is_active = true",
+    "severity": "warning",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "admissions",
+    "id": "ADM-DQ-11",
+    "entity": "student",
+    "rule": "Khi có admission_id: hồ sơ Accepted, cùng applicant_id, program_id, admission_year_id với student",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "admissions",
+    "id": "ADM-DQ-12",
+    "entity": "student",
+    "rule": "Khi có applicant_id: họ tên, ngày sinh, giới tính khớp applicant",
+    "severity": "warning",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "academic",
+    "id": "ACA-DQ-01",
+    "entity": "*",
+    "rule": "PK và cột unique không null, không trùng",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "academic",
+    "id": "ACA-DQ-02",
+    "entity": "*",
+    "rule": "FK trỏ tới bản ghi có thật",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "academic",
+    "id": "ACA-DQ-03",
+    "entity": "*",
+    "rule": "Đúng kiểu, độ dài, null, giá trị trạng thái, pattern, min/max",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "academic",
+    "id": "ACA-DQ-04",
+    "entity": "semester",
+    "rule": "end_date > start_date; không chồng lấn; academic_year khớp semester_code",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "academic",
+    "id": "ACA-DQ-05",
+    "entity": "curriculum",
+    "rule": "Không trùng curriculum_code, (program_id, version); effective_to > effective_from khi có cả hai; tối đa một khung Active mỗi chương trình",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "academic",
+    "id": "ACA-DQ-06",
+    "entity": "curriculum_course",
+    "rule": "Không trùng (curriculum_id, course_id); tiên quyết khác chính nó, có trong cùng khung, semester_no nhỏ hơn; course_type Elective thì is_required = false",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "academic",
+    "id": "ACA-DQ-07",
+    "entity": "class_lecturer",
+    "rule": "Không trùng (class_id, lecturer_id); mỗi lớp đúng một giảng viên chính; assigned_from/assigned_to nằm trong học kỳ của lớp",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "academic",
+    "id": "ACA-DQ-08",
+    "entity": "enrollment",
+    "rule": "Không trùng (student_id, class_id); không đăng ký cùng học phần hai lần trong một học kỳ; không học trước năm nhập học; enrollment_date <= semester.end_date",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "academic",
+    "id": "ACA-DQ-09",
+    "entity": "class",
+    "rule": "Khi có max_capacity: số enrollment Registered/Completed <= max_capacity",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "academic",
+    "id": "ACA-DQ-10",
+    "entity": "enrollment_grade",
+    "rule": "total_score đúng công thức; grade_value, letter_grade đúng bảng quy đổi",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "academic",
+    "id": "ACA-DQ-11",
+    "entity": "enrollment_grade",
+    "rule": "Học kỳ đã xong thì đủ điểm; đang học thì chưa có điểm; registration_date (nếu có) = enrollment.enrollment_date",
+    "severity": "warning",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "academic",
+    "id": "ACA-DQ-12",
+    "entity": "enrollment",
+    "rule": "Học phần đăng ký có trong khung của sinh viên (trừ học lại, tự chọn tự do)",
+    "severity": "warning",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "academic",
+    "id": "ACA-DQ-13",
+    "entity": "student",
+    "rule": "Active thì có đăng ký ở học kỳ hiện tại; Dropped/Suspended thì không",
+    "severity": "warning",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-01",
+    "entity": "*",
+    "rule": "PK (kể cả PK ghép) và cột unique không null, không trùng",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-02",
+    "entity": "*",
+    "rule": "FK trỏ tới bản ghi có thật",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-03",
+    "entity": "*",
+    "rule": "Đúng kiểu, độ dài, null, giá trị trạng thái, pattern, min/max",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-04",
+    "entity": "department",
+    "rule": "Một gốc, không chu trình; department_type khớp tiền tố mã; bộ môn (Division) thuộc khoa (Faculty)",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-05",
+    "entity": "employee",
+    "rule": "Khi có ngày sinh và hire_date: tuổi khi tuyển 20 - 60; hire_date = start_date sớm nhất trong assignment",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-06",
+    "entity": "assignment",
+    "rule": "start_date >= hire_date (nếu có); end_date >= start_date; vị trí chính không chồng lấn",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-07",
+    "entity": "assignment",
+    "rule": "Active có đúng một vị trí chính đang hiệu lực; Resigned/Retired không còn assignment mở",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-08",
+    "entity": "assignment",
+    "rule": "HT, TK, TP, TBM: một người/đơn vị/thời điểm; chức vụ đúng loại đơn vị",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-09",
+    "entity": "assignment",
+    "rule": "Chức vụ giảng dạy chỉ cho giảng viên; CV, NV, TP chỉ cho cán bộ hành chính",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-10",
+    "entity": "employee_qualification",
+    "rule": "Năm cấp sau 18 tuổi, không sau ngày chốt; Cử nhân/Kỹ sư < Thạc sĩ < Tiến sĩ",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-11",
+    "entity": "lecturer",
+    "rule": "academic_degree khớp văn bằng cao nhất; academic_title (Assoc. Prof., Prof.) chỉ khi academic_degree = Ph.D.",
+    "severity": "warning",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-12",
+    "entity": "assignment",
+    "rule": "assignment_status khớp end_date (Active khi end_date null hoặc sau ngày chốt)",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-13",
+    "entity": "qualification",
+    "rule": "qualification_name không trùng",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  },
+  {
+    "domain": "hr",
+    "id": "HR-DQ-14",
+    "entity": "class_lecturer (Academic)",
+    "rule": "Giảng viên có assignment hiệu lực suốt khoảng phụ trách lớp (assigned_from..assigned_to, mặc định là học kỳ của lớp)",
+    "severity": "error",
+    "implementation": "NOT_IMPLEMENTED",
+    "review": "REQUIRES_DOMAIN_REVIEW",
+    "evaluation_stage": "restricted_source_or_silver_as_applicable"
+  }
+]

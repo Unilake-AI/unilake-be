@@ -1,0 +1,11 @@
+{
+  "warning": "SYNTHETIC ONLY. Not an approved production dictionary or crosswalk.",
+  "version": "synthetic-s4-1",
+  "crosswalk_version": "synthetic-crosswalk-1",
+  "effective_at": "2026-01-01T00:00:00+00:00",
+  "profiles": {
+    "admission_method": {"namespace": "SYNTH_admissions", "source_id": "007", "canonical_id": 100007, "dictionaries": {}},
+    "semester": {"namespace": "SYNTH_academic", "source_id": "008", "canonical_id": 200008, "dictionaries": {"status": {"Đang diễn ra": "Ongoing"}}},
+    "position": {"namespace": "SYNTH_hr", "source_id": "009", "canonical_id": 300009, "dictionaries": {"position_level": {"Nhân viên": "Staff"}}}
+  }
+}

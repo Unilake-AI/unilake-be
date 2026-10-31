@@ -1,0 +1,404 @@
+{
+  "baseline_date": "2026-10-14",
+  "hashes": {
+    "docs/data-schema/academic_v1.schema.json": "e600df57f0f513a25e74b4ce288c28a35827609ddbc17a6a9be35f5c9292642c",
+    "docs/data-schema/academic_v1.sql": "f3719772f65b2867c1bbb5d97bc898c7f8ce01d2e6ee2906bad9f9b69896336b",
+    "docs/data-schema/admissions_v1.schema.json": "39f1a20177bff2e6f7be7ba420a2eb326bd8189df4e2ffba4c4546bb8832ff3a",
+    "docs/data-schema/admissions_v1.sql": "15032db2c21b1442325a5bca5c14cb6f4fb03663eace11bea6a7af1e352a0047",
+    "docs/data-schema/hr_v1.schema.json": "c8b3f6736918b2ebf2dc6f90837d6377b0c58c0fb797c454008958d3f452799b",
+    "docs/data-schema/hr_v1.sql": "2edc6963cde801da62a84757ae0005af2194a82f231c9487aacc455957c35bd6",
+    "docs/data-schema/unilake-db-architecture.txt": "b9ff1d925cfeadcde9108cbda9425b71b5b40da3dbfdb7d8391a0848d5da25e1",
+    "docs/data-schema/unilake_v1.sql": "55d8630814e012946ec965907b5d3540bbe2ea34a00eb08fdbfc6ff0dde5f179"
+  },
+  "entities": [
+    {
+      "domain": "admissions",
+      "entity": "major",
+      "version": "1.3.0",
+      "primary_key": [
+        "major_id"
+      ],
+      "columns": 5,
+      "sample": "admissions/major.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "status"
+      ],
+      "extra_columns": []
+    },
+    {
+      "domain": "admissions",
+      "entity": "program",
+      "version": "1.3.0",
+      "primary_key": [
+        "program_id"
+      ],
+      "columns": 8,
+      "sample": "admissions/program.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "status"
+      ],
+      "extra_columns": []
+    },
+    {
+      "domain": "admissions",
+      "entity": "admission_method",
+      "version": "1.3.0",
+      "primary_key": [
+        "admission_method_id"
+      ],
+      "columns": 6,
+      "sample": "admissions/admission_method.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "is_active",
+        "max_score"
+      ],
+      "extra_columns": []
+    },
+    {
+      "domain": "admissions",
+      "entity": "admission_year",
+      "version": "1.3.0",
+      "primary_key": [
+        "admission_year_id"
+      ],
+      "columns": 6,
+      "sample": "admissions/admission_year.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "created_at",
+        "status"
+      ],
+      "extra_columns": []
+    },
+    {
+      "domain": "admissions",
+      "entity": "applicant",
+      "version": "1.3.0",
+      "primary_key": [
+        "applicant_id"
+      ],
+      "columns": 10,
+      "sample": "admissions/applicant.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "created_at"
+      ],
+      "extra_columns": []
+    },
+    {
+      "domain": "admissions",
+      "entity": "admission",
+      "version": "1.3.0",
+      "primary_key": [
+        "admission_id"
+      ],
+      "columns": 10,
+      "sample": "admissions/admission.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "created_at",
+        "preference_rank"
+      ],
+      "extra_columns": []
+    },
+    {
+      "domain": "academic",
+      "entity": "student",
+      "version": "1.2.0",
+      "primary_key": [
+        "student_id"
+      ],
+      "columns": 11,
+      "sample": "training/student.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "admission_id",
+        "created_at"
+      ],
+      "extra_columns": []
+    },
+    {
+      "domain": "academic",
+      "entity": "course",
+      "version": "1.2.0",
+      "primary_key": [
+        "course_id"
+      ],
+      "columns": 5,
+      "sample": "training/course.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "status"
+      ],
+      "extra_columns": [
+        "major_id"
+      ]
+    },
+    {
+      "domain": "academic",
+      "entity": "curriculum",
+      "version": "1.2.0",
+      "primary_key": [
+        "curriculum_id"
+      ],
+      "columns": 8,
+      "sample": "training/curriculum.csv",
+      "sample_exists": false,
+      "header_matches": false,
+      "missing_columns": [
+        "curriculum_code",
+        "curriculum_id",
+        "curriculum_name",
+        "effective_from",
+        "effective_to",
+        "program_id",
+        "status",
+        "version"
+      ],
+      "extra_columns": []
+    },
+    {
+      "domain": "academic",
+      "entity": "curriculum_course",
+      "version": "1.2.0",
+      "primary_key": [
+        "curriculum_course_id"
+      ],
+      "columns": 7,
+      "sample": "training/curriculum_course.csv",
+      "sample_exists": false,
+      "header_matches": false,
+      "missing_columns": [
+        "course_id",
+        "course_type",
+        "curriculum_course_id",
+        "curriculum_id",
+        "is_required",
+        "prerequisite_course_id",
+        "semester_no"
+      ],
+      "extra_columns": []
+    },
+    {
+      "domain": "academic",
+      "entity": "semester",
+      "version": "1.2.0",
+      "primary_key": [
+        "semester_id"
+      ],
+      "columns": 6,
+      "sample": "training/semester.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "status"
+      ],
+      "extra_columns": []
+    },
+    {
+      "domain": "academic",
+      "entity": "class",
+      "version": "1.2.0",
+      "primary_key": [
+        "class_id"
+      ],
+      "columns": 7,
+      "sample": "training/class.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "class_status"
+      ],
+      "extra_columns": [
+        "lecturer_id"
+      ]
+    },
+    {
+      "domain": "academic",
+      "entity": "class_lecturer",
+      "version": "1.2.0",
+      "primary_key": [
+        "class_lecturer_id"
+      ],
+      "columns": 7,
+      "sample": "training/class_lecturer.csv",
+      "sample_exists": false,
+      "header_matches": false,
+      "missing_columns": [
+        "assigned_from",
+        "assigned_to",
+        "class_id",
+        "class_lecturer_id",
+        "is_primary",
+        "lecturer_id",
+        "teaching_role"
+      ],
+      "extra_columns": []
+    },
+    {
+      "domain": "academic",
+      "entity": "enrollment",
+      "version": "1.2.0",
+      "primary_key": [
+        "enrollment_id"
+      ],
+      "columns": 6,
+      "sample": "training/enrollment.csv",
+      "sample_exists": false,
+      "header_matches": false,
+      "missing_columns": [
+        "class_id",
+        "created_at",
+        "enrollment_date",
+        "enrollment_id",
+        "enrollment_status",
+        "student_id"
+      ],
+      "extra_columns": []
+    },
+    {
+      "domain": "academic",
+      "entity": "enrollment_grade",
+      "version": "1.2.0",
+      "primary_key": [
+        "enrollment_grade_id"
+      ],
+      "columns": 8,
+      "sample": "training/enrollment_grade.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "enrollment_grade_id",
+        "enrollment_id",
+        "total_score"
+      ],
+      "extra_columns": [
+        "class_id",
+        "student_id"
+      ]
+    },
+    {
+      "domain": "hr",
+      "entity": "department",
+      "version": "1.2.0",
+      "primary_key": [
+        "department_id"
+      ],
+      "columns": 7,
+      "sample": "hr/department.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "created_at",
+        "department_type",
+        "status"
+      ],
+      "extra_columns": []
+    },
+    {
+      "domain": "hr",
+      "entity": "position",
+      "version": "1.2.0",
+      "primary_key": [
+        "position_id"
+      ],
+      "columns": 4,
+      "sample": "hr/position.csv",
+      "sample_exists": true,
+      "header_matches": true,
+      "missing_columns": [],
+      "extra_columns": []
+    },
+    {
+      "domain": "hr",
+      "entity": "qualification",
+      "version": "1.2.0",
+      "primary_key": [
+        "qualification_id"
+      ],
+      "columns": 3,
+      "sample": "hr/qualification.csv",
+      "sample_exists": true,
+      "header_matches": true,
+      "missing_columns": [],
+      "extra_columns": []
+    },
+    {
+      "domain": "hr",
+      "entity": "employee",
+      "version": "1.2.0",
+      "primary_key": [
+        "employee_id"
+      ],
+      "columns": 9,
+      "sample": "hr/employee.csv",
+      "sample_exists": true,
+      "header_matches": true,
+      "missing_columns": [],
+      "extra_columns": []
+    },
+    {
+      "domain": "hr",
+      "entity": "lecturer",
+      "version": "1.2.0",
+      "primary_key": [
+        "employee_id"
+      ],
+      "columns": 4,
+      "sample": "hr/lecturer.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "academic_degree",
+        "academic_title",
+        "employee_id"
+      ],
+      "extra_columns": [
+        "academic_rank",
+        "lecturer_id"
+      ]
+    },
+    {
+      "domain": "hr",
+      "entity": "employee_qualification",
+      "version": "1.2.0",
+      "primary_key": [
+        "employee_id",
+        "qualification_id"
+      ],
+      "columns": 4,
+      "sample": "hr/employee_qualification.csv",
+      "sample_exists": true,
+      "header_matches": true,
+      "missing_columns": [],
+      "extra_columns": []
+    },
+    {
+      "domain": "hr",
+      "entity": "assignment",
+      "version": "1.2.0",
+      "primary_key": [
+        "assignment_id"
+      ],
+      "columns": 8,
+      "sample": "hr/assignment.csv",
+      "sample_exists": true,
+      "header_matches": false,
+      "missing_columns": [
+        "assignment_status"
+      ],
+      "extra_columns": []
+    }
+  ]
+}

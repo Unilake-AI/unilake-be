@@ -1,0 +1,121 @@
+applicant_id,national_id,full_name,date_of_birth,gender,phone,email,high_school_name,province
+1,001306835348,Hồ Phương Vy,2006-10-17,Female,0376045419,vy.hp1710@example.com,THPT Việt Đức,Hà Nội
+2,056306243379,Võ Khánh Ngân,2006-04-29,Female,0866681670,,THPT Lý Tự Trọng,Khánh Hòa
+3,066306570914,Đặng Minh Phương,2006-09-08,Female,,phuong.dm0809@example.com,THPT Buôn Ma Thuột,Đắk Lắk
+4,040306245095,Huỳnh Bảo Chi,2006-08-14,Female,0384517562,chi.hb1408@example.com,THPT Hà Huy Tập,Nghệ An
+5,048206948388,Phan Đức Nam,2006-12-24,Male,0881985086,nam.pd2412@example.com,THPT Thái Phiên,Đà Nẵng
+6,048206852511,Huỳnh Quốc Tuấn,2006-04-25,Male,0898836359,tuan.hq2504@example.com,THPT Phan Châu Trinh,Đà Nẵng
+7,066206440812,Đỗ Minh Nam,2006-10-30,Male,0772977669,nam.dm3010@example.com,THPT Chu Văn An,Đắk Lắk
+8,048306736926,Đặng Thu Trang,2006-10-04,Female,0881357603,trang.dt0410@example.com,THPT Thái Phiên,Đà Nẵng
+9,048306335879,Lê Thị Hân,2006-05-07,Female,0942535815,han.lt0705@example.com,THPT Chuyên Lê Quý Đôn,Đà Nẵng
+10,051306298828,Trần Minh Anh,2006-07-05,Female,0980861072,anh.tm0507@example.com,THPT Trần Quốc Tuấn,
+11,040306780109,Nguyễn Phương Chi,2006-06-10,Female,0917408547,,THPT Huỳnh Thúc Kháng,Nghệ An
+12,056206114430,Lê Quốc An,2006-05-12,Male,0907639942,an.lq1205@example.com,THPT Lý Tự Trọng,Khánh Hòa
+13,046306501673,Nguyễn Khánh Nhi,2006-09-15,Female,0906505430,nhi.nk1509@example.com,THPT Hai Bà Trưng,Huế
+14,045306226647,Trần Thị Trang,2006-06-09,Female,0876260181,trang.tt0906@example.com,THPT Lê Lợi,Quảng Trị
+15,051306231572,Nguyễn Phương Hân,2006-06-29,Female,0824436287,,THPT Số 1 Tư Nghĩa,Quảng Ngãi
+16,048205875635,Đỗ Đức Quân,2005-05-31,Male,0901204335,quan.dd3105@example.com,THPT Chuyên Lê Quý Đôn,Đà Nẵng
+17,064306018705,Nguyễn Ngọc Uyên,2006-05-03,Female,0875788215,uyen.nn0305@example.com,THPT Pleiku,Gia Lai
+18,040306760079,Nguyễn Bảo Thảo,2006-05-24,Female,0305967296,thao.nb2405@example.com,THPT Huỳnh Thúc Kháng,Nghệ An
+19,046306810816,Phạm Minh Linh,2006-01-24,Female,0834381996,linh.pm2401@example.com,THPT Quốc Học,Huế
+20,051306409787,Huỳnh Thị Ngân,2006-09-20,Female,0877209025,ngan.ht2009@example.com,THPT Số 1 Tư Nghĩa,Quảng Ngãi
+21,051206479558,Nguyễn Quốc Khang,2006-06-26,Male,0874479469,khang.nq2606@example.com,THPT Trần Quốc Tuấn,Quảng Ngãi
+22,040306365656,Huỳnh Bảo Hân,2006-11-29,Female,0309621340,,THPT Hà Huy Tập,Nghệ An
+23,048205502779,Lê Văn Nhật,2005-09-02,Male,0779329021,nhat.lv0209@example.com,,Đà Nẵng
+24,066206969377,Võ Minh Hùng,2006-09-20,Male,0325677712,,THPT Chu Văn An,Đắk Lắk
+25,079206985561,Phạm Hữu Nam,2006-02-16,Male,,nam.ph1602@example.com,THPT Lê Quý Đôn,Thành phố Hồ Chí Minh
+26,045306893190,Võ Thị Anh,2006-05-26,Female,,anh.vt2605@example.com,THPT Lê Lợi,Quảng Trị
+27,048306598212,Huỳnh Bảo Chi,2006-03-14,Female,0934071125,chi.hb1403@example.com,THPT Hoàng Hoa Thám,Đà Nẵng
+28,048206727329,Nguyễn Quốc Phúc,2006-03-29,Male,0754521612,phuc.nq2903@example.com,THPT Chuyên Lê Quý Đôn,Đà Nẵng
+29,051306843599,Trần Khánh Ngân,2006-01-27,Female,0324683616,ngan.tk2701@example.com,THPT Trần Quốc Tuấn,Quảng Ngãi
+30,045206616346,Trần Minh Khoa,2006-02-16,Male,0794256515,khoa.tm1602@example.com,THPT Đông Hà,Quảng Trị
+31,001206213210,Đặng Gia An,2006-12-20,Male,0339759512,,THPT Việt Đức,Hà Nội
+32,056206887835,Phan Đức Huy,2006-12-28,Male,0721590096,huy.pd2812@example.com,THPT Lý Tự Trọng,Khánh Hòa
+33,066306834452,Nguyễn Bảo Hân,2006-11-30,Female,0739610036,han.nb3011@example.com,THPT Chu Văn An,Đắk Lắk
+34,046206474576,Nguyễn Gia Nam,2006-09-28,Male,0847945179,nam.ng2809@example.com,THPT Hai Bà Trưng,Huế
+35,046306898584,Nguyễn Khánh Vy,2006-03-03,Female,0879844043,,THPT Quốc Học,Huế
+36,048206401664,Trần Thành Quân,2006-12-04,Male,0881903909,,THPT Chuyên Lê Quý Đôn,Đà Nẵng
+37,040206477116,Huỳnh Gia Quân,2006-08-13,Male,0821113402,quan.hg1308@example.com,THPT Hà Huy Tập,Nghệ An
+38,064206691874,Nguyễn Quốc Tuấn,2006-03-06,Male,0305874327,tuan.nq0603@example.com,THPT Pleiku,Gia Lai
+39,051306838038,Phạm Ngọc Vy,2006-08-16,Female,0971647078,,THPT Trần Quốc Tuấn,Quảng Ngãi
+40,048306462794,Phan Ngọc Linh,2006-01-11,Female,0967505792,linh.pn1101@example.com,THPT Phan Châu Trinh,Đà Nẵng
+41,048207769443,Nguyễn Đức Huy,2007-03-19,Male,0305149434,huy.nd1903@example.com,THPT Hoàng Hoa Thám,Đà Nẵng
+42,064307136269,Phan Ngọc Vy,2007-06-17,Female,0749621780,,THPT Hùng Vương,Gia Lai
+43,051307522258,Võ Ngọc Uyên,2007-05-24,Female,0886855797,uyen.vn2405@example.com,THPT Số 1 Tư Nghĩa,Quảng Ngãi
+44,051307135952,Đỗ Khánh Chi,2007-10-01,Female,,chi.dk0110@example.com,THPT Số 1 Tư Nghĩa,Quảng Ngãi
+45,048207249906,Bùi Đức Khoa,2007-02-07,Male,0980534936,khoa.bd0702@example.com,THPT Thái Phiên,Đà Nẵng
+46,048307591935,Lê Bảo Thảo,2007-04-15,Female,0700279418,thao.lb1504@example.com,THPT Phan Châu Trinh,Đà Nẵng
+47,048207227133,Đặng Minh Bảo,2007-07-04,Male,0711579089,bao.dm0407@example.com,THPT Thái Phiên,Đà Nẵng
+48,040307261468,Lê Thu Anh,2007-09-18,Female,0894538251,anh.lt1809@example.com,THPT Huỳnh Thúc Kháng,Nghệ An
+49,051207109063,Lê Văn An,2007-10-26,Male,0318944205,an.lv2610@example.com,,Quảng Ngãi
+50,046206120778,Nguyễn Quốc Nhật,2006-06-20,Male,0771709948,,THPT Quốc Học,Huế
+51,046307156875,Lê Thị Vy,2007-12-05,Female,,vy.lt0512@example.com,THPT Hai Bà Trưng,
+52,040306850101,Huỳnh Minh Hân,2006-03-10,Female,0988604568,,THPT Huỳnh Thúc Kháng,Nghệ An
+53,048307732158,Phạm Bảo Yến,2007-12-22,Female,,yen.pb2212@example.com,THPT Hoàng Hoa Thám,Đà Nẵng
+54,079207556269,Trần Quốc Dũng,2007-03-31,Male,0387451266,dung.tq3103@example.com,THPT Nguyễn Thị Minh Khai,Thành phố Hồ Chí Minh
+55,046207426637,Đỗ Gia Quân,2007-04-06,Male,0870989285,quan.dg0604@example.com,THPT Hai Bà Trưng,Huế
+56,048207232943,Đặng Quốc Khang,2007-04-02,Male,0810216285,khang.dq0204@example.com,THPT Thái Phiên,Đà Nẵng
+57,066307934896,Võ Khánh Hân,2007-05-15,Female,0718106616,,THPT Buôn Ma Thuột,Đắk Lắk
+58,048307746558,Trần Thị My,2007-02-09,Female,0784571534,my.tt0902@example.com,THPT Thái Phiên,Đà Nẵng
+59,046307693325,Dương Minh Hà,2007-11-09,Female,0975337076,ha.dm0911@example.com,THPT Hai Bà Trưng,Huế
+60,040207514417,Nguyễn Văn Hùng,2007-12-20,Male,0861169272,hung.nv2012@example.com,THPT Hà Huy Tập,Nghệ An
+61,048307495303,Trần Bảo Yến,2007-01-26,Female,,,THPT Hoàng Hoa Thám,Đà Nẵng
+62,064307905216,Lê Thu Anh,2007-12-29,Female,0819561404,anh.lt2912@example.com,THPT Hùng Vương,
+63,048207539505,Nguyễn Thành Phúc,2007-10-14,Male,0720932533,phuc.nt1410@example.com,THPT Thái Phiên,Đà Nẵng
+64,056307081944,Nguyễn Thu My,2007-09-11,Female,0302892217,my.nt1109@example.com,,Khánh Hòa
+65,056206894818,Nguyễn Văn Khang,2006-02-22,Male,,khang.nv2202@example.com,THPT Nguyễn Văn Trỗi,Khánh Hòa
+66,048307207535,Nguyễn Khánh Linh,2007-08-12,Female,0718764565,,THPT Thái Phiên,Đà Nẵng
+67,048207198896,Hoàng Đức Tuấn,2007-12-07,Male,0927200957,,THPT Hoàng Hoa Thám,Đà Nẵng
+68,056307285722,Nguyễn Khánh Phương,2007-02-24,Female,0809796385,,THPT Lý Tự Trọng,Khánh Hòa
+69,046207560538,Lê Đức Long,2007-01-31,Male,0892491953,long.ld3101@example.com,THPT Quốc Học,Huế
+70,046307524160,Trần Thị Nhi,2007-06-23,Female,0786965634,nhi.tt2306@example.com,THPT Quốc Học,Huế
+71,048207105311,Nguyễn Đức Nam,2007-09-14,Male,0803218483,nam.nd1409@example.com,THPT Thái Phiên,Đà Nẵng
+72,040207483329,Nguyễn Minh Phúc,2007-12-13,Male,0706468430,,THPT Hà Huy Tập,Nghệ An
+73,064207642660,Phạm Minh Dũng,2007-06-29,Male,0736518783,,THPT Pleiku,Gia Lai
+74,056207150870,Hoàng Đức Bảo,2007-12-25,Male,0702304718,,THPT Nguyễn Văn Trỗi,Khánh Hòa
+75,048207688607,Nguyễn Gia Nhật,2007-04-18,Male,0382420494,,THPT Hoàng Hoa Thám,Đà Nẵng
+76,048206366356,Võ Hữu Huy,2006-07-09,Male,0393152205,huy.vh0907@example.com,THPT Chuyên Lê Quý Đôn,Đà Nẵng
+77,046207533439,Nguyễn Minh Khoa,2007-10-23,Male,0831380219,khoa.nm2310@example.com,THPT Hai Bà Trưng,Huế
+78,066206995021,Bùi Minh Tuấn,2006-05-12,Male,0382230693,tuan.bm1205@example.com,THPT Chu Văn An,Đắk Lắk
+79,051207026927,Nguyễn Quốc Quân,2007-04-29,Male,0800746709,quan.nq2904@example.com,THPT Trần Quốc Tuấn,Quảng Ngãi
+80,056306553991,Lê Thu Chi,2006-10-15,Female,0837986431,chi.lt1510@example.com,THPT Nguyễn Văn Trỗi,Khánh Hòa
+81,048308365375,Nguyễn Thị My,2008-05-03,Female,0766614617,my.nt0305@example.com,THPT Chuyên Lê Quý Đôn,Đà Nẵng
+82,040308283754,Lê Khánh Vy,2008-07-24,Female,0387873789,vy.lk2407@example.com,THPT Huỳnh Thúc Kháng,Nghệ An
+83,048208419047,Hồ Thành Huy,2008-07-22,Male,,huy.ht2207@example.com,THPT Chuyên Lê Quý Đôn,Đà Nẵng
+84,046208078032,Hồ Văn Bảo,2008-02-20,Male,0953636189,bao.hv2002@example.com,THPT Quốc Học,Huế
+85,046208251034,Nguyễn Đức Hùng,2008-10-02,Male,0768151584,hung.nd0210@example.com,THPT Hai Bà Trưng,Huế
+86,066308323669,Trần Thu My,2008-11-01,Female,0354252672,my.tt0111@example.com,THPT Buôn Ma Thuột,Đắk Lắk
+87,046308755249,Nguyễn Phương Trang,2008-04-08,Female,0333444998,trang.np0804@example.com,THPT Hai Bà Trưng,Huế
+88,046308851416,Võ Thị Phương,2008-03-18,Female,0901283963,phuong.vt1803@example.com,THPT Hai Bà Trưng,Huế
+89,048208266408,Đỗ Minh Hùng,2008-05-09,Male,0771137746,hung.dm0905@example.com,THPT Hoàng Hoa Thám,Đà Nẵng
+90,046208462958,Huỳnh Hữu Khoa,2008-04-02,Male,0312350280,,THPT Hai Bà Trưng,Huế
+91,048208712750,Nguyễn Thành An,2008-03-01,Male,0347207839,an.nt0103@example.com,THPT Chuyên Lê Quý Đôn,Đà Nẵng
+92,051208194030,Võ Văn Bảo,2008-11-05,Male,0806735490,bao.vv0511@example.com,THPT Số 1 Tư Nghĩa,Quảng Ngãi
+93,045308880236,Trần Ngọc Thảo,2008-01-13,Female,0388186977,thao.tn1301@example.com,THPT Đông Hà,Quảng Trị
+94,048308220575,Lê Bảo Ngân,2008-06-24,Female,,ngan.lb2406@example.com,THPT Hoàng Hoa Thám,Đà Nẵng
+95,048208058432,Nguyễn Gia Thịnh,2008-07-11,Male,0949371488,,THPT Chuyên Lê Quý Đôn,Đà Nẵng
+96,048308182414,Huỳnh Minh My,2008-07-03,Female,0802846871,my.hm0307@example.com,THPT Chuyên Lê Quý Đôn,
+97,066308984791,Lê Thu Ngân,2008-10-09,Female,0723414028,,THPT Chu Văn An,Đắk Lắk
+98,046308152021,Huỳnh Thị Ngân,2008-11-29,Female,,ngan.ht2911@example.com,THPT Hai Bà Trưng,Huế
+99,048308835360,Trần Thị Vy,2008-04-08,Female,0959463494,,THPT Thái Phiên,Đà Nẵng
+100,066207102492,Dương Văn Khang,2007-04-21,Male,0343918037,khang.dv2104@example.com,THPT Chu Văn An,Đắk Lắk
+101,046308565733,Võ Ngọc Yến,2008-12-13,Female,0800471532,yen.vn1312@example.com,THPT Hai Bà Trưng,Huế
+102,056208751987,Huỳnh Hữu Phúc,2008-05-19,Male,0820225292,phuc.hh1905@example.com,THPT Nguyễn Văn Trỗi,Khánh Hòa
+103,045308324860,Đặng Minh Linh,2008-10-12,Female,0370301951,linh.dm1210@example.com,THPT Lê Lợi,Quảng Trị
+104,048308472455,Huỳnh Minh Ngân,2008-05-20,Female,0768426855,ngan.hm2005@example.com,THPT Chuyên Lê Quý Đôn,Đà Nẵng
+105,048308147378,Nguyễn Khánh Hân,2008-04-17,Female,0322123811,han.nk1704@example.com,THPT Thái Phiên,Đà Nẵng
+106,051307806231,Nguyễn Thu Chi,2007-04-16,Female,0350271778,chi.nt1604@example.com,THPT Số 1 Tư Nghĩa,Quảng Ngãi
+107,079208362602,Đặng Đức Hùng,2008-06-21,Male,0844225935,hung.dd2106@example.com,THPT Nguyễn Thị Minh Khai,Thành phố Hồ Chí Minh
+108,066208316994,Hồ Đức Hùng,2008-03-24,Male,0353599652,hung.hd2403@example.com,,Đắk Lắk
+109,045308194706,Nguyễn Bảo Linh,2008-02-09,Female,0969311779,linh.nb0902@example.com,THPT Lê Lợi,Quảng Trị
+110,066208775581,Lê Văn Hùng,2008-09-29,Male,,,THPT Buôn Ma Thuột,Đắk Lắk
+111,040308875925,Nguyễn Thu Nhi,2008-03-13,Female,0896914449,nhi.nt1303@example.com,THPT Hà Huy Tập,Nghệ An
+112,048208285842,Hoàng Hữu Tuấn,2008-03-20,Male,0743971102,tuan.hh2003@example.com,THPT Phan Châu Trinh,Đà Nẵng
+113,048208057249,Phạm Minh Dũng,2008-11-05,Male,0302064250,dung.pm0511@example.com,THPT Thái Phiên,Đà Nẵng
+114,051308693238,Đỗ Thị Hà,2008-02-26,Female,0939766025,,THPT Trần Quốc Tuấn,Quảng Ngãi
+115,046207208580,Phạm Đức Long,2007-03-24,Male,0805098640,long.pd2403@example.com,THPT Hai Bà Trưng,Huế
+116,048308489913,Phan Phương Vy,2008-07-12,Female,0320503310,vy.pp1207@example.com,THPT Thái Phiên,
+117,001208292682,Phạm Minh Thịnh,2008-11-11,Male,0744912808,thinh.pm1111@example.com,THPT Kim Liên,Hà Nội
+118,064208114421,Trần Văn Hùng,2008-10-02,Male,0779609186,hung.tv0210@example.com,THPT Hùng Vương,Gia Lai
+119,066308346755,Võ Thu Thảo,2008-03-02,Female,,thao.vt0203@example.com,THPT Chu Văn An,Đắk Lắk
+120,048208998030,Hồ Thành Tuấn,2008-03-03,Male,0874742480,tuan.ht0303@example.com,THPT Hoàng Hoa Thám,

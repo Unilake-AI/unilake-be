@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "UniLake AI V1.0 – Data Flow Bronze, Silver, Gold",
+    "output": "unilake-data-flow.html",
+    "viewBox": [1080, 490],
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "ingest-bronze", "label": "Nạp vào Bronze", "focus": ["src_db", "src_files", "bronze"], "note": "Dữ liệu gốc từ ba domain và các file khác được lưu nguyên vẹn vào Bronze." },
+      { "id": "quality-silver", "label": "Kiểm tra & Silver", "focus": ["bronze", "dq", "silver"], "note": "Chỉ dữ liệu vượt quality rules mới được làm sạch, chuẩn hóa và ghi vào Silver." },
+      { "id": "gold-consume", "label": "Gold & khai thác", "focus": ["silver", "gold", "nlq", "dashboard"], "note": "Gold là lớp duy nhất mà NLQ và Dashboard được đọc." },
+      { "id": "governance", "label": "Governance", "focus": ["bronze", "silver", "gold", "dq", "catalog"], "note": "Catalog, Lineage và Quality theo dõi cả ba lớp dữ liệu." }
+    ]
+  },
+  "stages": [
+    { "label": "Nguồn dữ liệu" },
+    { "label": "Bronze" },
+    { "label": "Silver" },
+    { "label": "Gold" },
+    { "label": "Khai thác" }
+  ],
+  "nodes": [
+    { "id": "src_db", "type": "cloud", "label": "Hệ thống nghiệp vụ", "sublabel": "Admissions, Academic, HR", "stage": 0, "row": 0 },
+    { "id": "src_files", "type": "cloud", "label": "File & tài liệu", "sublabel": "CSV, Excel, PDF, ảnh", "stage": 0, "row": 2 },
+
+    { "id": "bronze", "type": "database", "label": "Bronze", "sublabel": "dữ liệu gốc", "stage": 1, "row": 1, "tag": "MinIO / S3" },
+
+    { "id": "dq", "type": "security", "label": "Data Quality Check", "sublabel": "Great Expectations", "stage": 2, "row": 0, "tag": "DQ ≥ 90%" },
+    { "id": "silver", "type": "database", "label": "Silver", "sublabel": "đã chuẩn hóa", "stage": 2, "row": 1, "tag": "DuckDB + Delta" },
+    { "id": "catalog", "type": "backend", "label": "Catalog & Lineage", "sublabel": "OpenMetadata", "stage": 2, "row": 2, "tag": "metadata" },
+
+    { "id": "gold", "type": "database", "label": "Gold", "sublabel": "data mart, KPI", "stage": 3, "row": 1, "tag": "PostgreSQL + Delta" },
+
+    { "id": "nlq", "type": "backend", "label": "NLQ Text-to-SQL", "sublabel": "read-only SQL", "stage": 4, "row": 0, "tag": "AI Analytics" },
+    { "id": "dashboard", "type": "frontend", "label": "Dashboard & KPI", "sublabel": "bảng, biểu đồ", "stage": 4, "row": 2, "tag": "Next.js" }
+  ],
+  "flows": [
+    { "id": "db-raw", "from": "src_db", "to": "bronze", "label": "batch / SQL", "variant": "emphasis", "fromSide": "right", "toSide": "left", "via": [[205, 157], [205, 271]], "labelAt": [204, 214] },
+    { "id": "files-raw", "from": "src_files", "to": "bronze", "label": "file / OCR", "variant": "default", "fromSide": "right", "toSide": "left", "via": [[222, 385], [222, 271]], "labelAt": [220, 328] },
+
+    { "id": "raw-to-dq", "from": "bronze", "to": "dq", "label": "bản ghi thô", "variant": "security" },
+    { "id": "dq-to-silver", "from": "dq", "to": "silver", "label": "làm sạch, chuẩn hóa", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "route": "straight", "labelAt": [600, 214] },
+    { "id": "silver-to-gold", "from": "silver", "to": "gold", "label": "tổng hợp", "variant": "emphasis", "fromSide": "right", "toSide": "left", "route": "straight" },
+    { "id": "gold-to-nlq", "from": "gold", "to": "nlq", "label": "SQL read-only", "variant": "default" },
+    { "id": "gold-to-dashboard", "from": "gold", "to": "dashboard", "label": "KPI, biểu đồ", "variant": "default" },
+
+    { "id": "bronze-meta", "from": "bronze", "to": "catalog", "label": "metadata", "variant": "dashed", "fromSide": "bottom", "toSide": "left", "via": [[315, 385]], "labelAt": [385, 372] },
+    { "id": "silver-lineage", "from": "silver", "to": "catalog", "label": "lineage", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "route": "straight", "labelAt": [575, 328] },
+    { "id": "gold-lineage", "from": "gold", "to": "catalog", "label": "lineage", "variant": "dashed", "fromSide": "bottom", "toSide": "right", "via": [[745, 385]], "labelAt": [670, 372] }
+  ],
+  "cards": [
+    { "dot": "amber", "title": "Bronze: dữ liệu gốc", "items": ["Nhận Admissions, Academic, HR và file CSV, Excel, PDF, Word, ảnh", "Đọc bằng DuckDB, pdfplumber, python-docx, Tesseract OCR", "Lưu nguyên vẹn trong MinIO để truy xuất nguồn gốc (FR07)"] },
+    { "dot": "violet", "title": "Silver và Gold", "items": ["Quality rules: Completeness, Validity, Uniqueness, Consistency, Data Type", "Silver: làm sạch, xử lý trùng và thiếu, chuẩn hóa mã giữa các nguồn", "Gold: data mart cho Dashboard, KPI và Text-to-SQL, mục tiêu DQ pass ≥ 90%"] },
+    { "dot": "emerald", "title": "Governance và khai thác", "items": ["Catalog ghi metadata, Lineage theo dõi Source → Bronze → Silver → Gold", "NLQ và Dashboard chỉ đọc Gold, không đọc Bronze hay Silver", "Không có domain Tài chính, không real-time streaming"] }
+  ]
+}

@@ -1,0 +1,12 @@
+position_id,position_code,position_name,position_level
+1,HT,Hiệu trưởng,Leadership
+2,PHT,Phó Hiệu trưởng,Leadership
+3,TK,Trưởng khoa,Management
+4,PTK,Phó Trưởng khoa,Management
+5,TP,Trưởng phòng,Management
+6,TBM,Trưởng bộ môn,Management
+7,GVC,Giảng viên chính,Staff
+8,GV,Giảng viên,Staff
+9,TG,Trợ giảng,
+10,CV,Chuyên viên,Staff
+11,NV,Nhân viên,Staff

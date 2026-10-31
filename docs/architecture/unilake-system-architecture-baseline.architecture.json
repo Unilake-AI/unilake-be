@@ -1,0 +1,370 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "UniLake AI V1.0 – System Architecture Baseline",
+    "output": "unilake-system-architecture-baseline.html",
+    "quality_profile": "showcase",
+    "viewBox": [1380, 770],
+    "views": [
+      {
+        "id": "request",
+        "label": "Luồng request",
+        "focus": [
+          "web",
+          "shell",
+          "auth",
+          "nlq",
+          "dashboard",
+          "governance"
+        ],
+        "note": "Frontend chỉ gọi REST /api/v1 qua FastAPI App Shell; Shell chuyển request tới router của từng module."
+      },
+      {
+        "id": "nlq",
+        "label": "AI Analytics",
+        "focus": [
+          "nlq",
+          "governance",
+          "gold",
+          "llm_api",
+          "history"
+        ],
+        "note": "NLQ lấy schema từ Governance Catalog, gọi LLM chỉ để sinh SQL, validate rồi chạy read-only trên Gold."
+      },
+      {
+        "id": "lake",
+        "label": "Data Lake & Governance",
+        "focus": [
+          "ingestion",
+          "datasources",
+          "governance",
+          "bronze",
+          "silver",
+          "gold"
+        ],
+        "note": "Ingestion đẩy dữ liệu qua Bronze, Silver, Gold; Governance ghi catalog, lineage và DQ trên cả ba lớp."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "Next.js Web Application",
+      "sublabel": "Dashboard · KPI · Chatbot NLQ · Governance View",
+      "tag": "frontend/",
+      "pos": [520, 30],
+      "size": [340, 66]
+    },
+    {
+      "id": "shell",
+      "type": "backend",
+      "label": "FastAPI App Shell",
+      "sublabel": "main.py · /api/v1 · JWT/RBAC · request-id · lỗi chuẩn",
+      "tag": "app/main.py + core/",
+      "pos": [420, 180],
+      "size": [540, 66]
+    },
+    {
+      "id": "ingestion",
+      "type": "backend",
+      "label": "ingestion",
+      "sublabel": "Trigger pipeline, theo dõi job",
+      "tag": "modules/",
+      "pos": [60, 340],
+      "size": [180, 64]
+    },
+    {
+      "id": "datasources",
+      "type": "backend",
+      "label": "datasources",
+      "sublabel": "Dataset: nguồn dữ liệu",
+      "tag": "modules/",
+      "pos": [335, 340],
+      "size": [180, 64]
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "auth + users",
+      "sublabel": "JWT, RBAC, hồ sơ người dùng",
+      "tag": "modules/",
+      "pos": [545, 340],
+      "size": [180, 64]
+    },
+    {
+      "id": "history",
+      "type": "backend",
+      "label": "query_history",
+      "sublabel": "Lịch sử câu hỏi và SQL",
+      "tag": "modules/",
+      "pos": [750, 340],
+      "size": [180, 64]
+    },
+    {
+      "id": "dashboard",
+      "type": "backend",
+      "label": "dashboard",
+      "sublabel": "KPI aggregate, Dashboard API",
+      "tag": "modules/",
+      "pos": [1185, 340],
+      "size": [160, 64]
+    },
+    {
+      "id": "governance",
+      "type": "backend",
+      "label": "governance",
+      "sublabel": "Catalog · Metadata · Lineage · Quality",
+      "tag": "modules/",
+      "pos": [235, 500],
+      "size": [220, 70]
+    },
+    {
+      "id": "nlq",
+      "type": "backend",
+      "label": "nlq (AI Analytics)",
+      "sublabel": "Intent · Schema · SQL · Validate · Execute",
+      "tag": "modules/",
+      "pos": [705, 500],
+      "size": [270, 70]
+    },
+    {
+      "id": "llm_api",
+      "type": "external",
+      "label": "LLM API",
+      "sublabel": "qua infra/llm",
+      "pos": [1095, 500],
+      "size": [140, 70]
+    },
+    {
+      "id": "bronze",
+      "type": "cloud",
+      "label": "Bronze",
+      "sublabel": "Raw · MinIO / S3",
+      "pos": [40, 660],
+      "size": [220, 64]
+    },
+    {
+      "id": "silver",
+      "type": "database",
+      "label": "Silver",
+      "sublabel": "Cleaned · DuckDB + Delta",
+      "pos": [380, 660],
+      "size": [220, 64]
+    },
+    {
+      "id": "gold",
+      "type": "database",
+      "label": "Gold",
+      "sublabel": "Data marts · PostgreSQL + Delta",
+      "pos": [715, 660],
+      "size": [250, 64]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "1 · Presentation Layer",
+      "wraps": [
+        "web"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "2 · Backend / Application Layer – Modular Monolith (một process FastAPI)",
+      "wraps": [
+        "shell",
+        "ingestion",
+        "datasources",
+        "auth",
+        "history",
+        "dashboard"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "3 · Data Governance Layer",
+      "wraps": [
+        "governance"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "4 · AI Analytics Layer",
+      "wraps": [
+        "nlq"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "5 · Data Layer – Bronze → Silver → Gold",
+      "wraps": [
+        "bronze",
+        "silver",
+        "gold"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "web-shell",
+      "from": "web",
+      "to": "shell",
+      "label": "HTTPS REST /api/v1 · JWT Bearer · JSON",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [690, 138]
+    },
+    {
+      "id": "shell-ing",
+      "from": "shell",
+      "to": "ingestion",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "shell-ds",
+      "from": "shell",
+      "to": "datasources",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "shell-auth",
+      "from": "shell",
+      "to": "auth",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "shell-hist",
+      "from": "shell",
+      "to": "history",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "shell-dash",
+      "from": "shell",
+      "to": "dashboard",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "ing-ds",
+      "from": "ingestion",
+      "to": "datasources",
+      "label": "cấu hình nguồn",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "ing-gov",
+      "from": "ingestion",
+      "to": "governance",
+      "label": "ghi lineage · chạy DQ",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "nlq-gov",
+      "from": "nlq",
+      "to": "governance",
+      "label": "schema context từ Catalog",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "nlq-hist",
+      "from": "nlq",
+      "to": "history",
+      "label": "lưu câu hỏi + SQL",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "labelAt": [840, 452]
+    },
+    {
+      "id": "nlq-llm",
+      "from": "nlq",
+      "to": "llm_api",
+      "label": "prompt → SQL",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "ing-bronze",
+      "from": "ingestion",
+      "to": "bronze",
+      "label": "ghi raw",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [150, 600]
+    },
+    {
+      "id": "gov-bronze",
+      "from": "governance",
+      "to": "bronze",
+      "label": "catalog · lineage · DQ",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "gov-silver",
+      "from": "governance",
+      "to": "silver",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "gov-gold",
+      "from": "governance",
+      "to": "gold",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "bronze-silver",
+      "from": "bronze",
+      "to": "silver",
+      "label": "clean · chuẩn hóa",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "silver-gold",
+      "from": "silver",
+      "to": "gold",
+      "label": "aggregate",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "nlq-gold",
+      "from": "nlq",
+      "to": "gold",
+      "label": "SELECT read-only",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [840, 600]
+    },
+    {
+      "id": "dash-gold",
+      "from": "dashboard",
+      "to": "gold",
+      "label": "KPI read-only",
+      "fromSide": "bottom",
+      "toSide": "right",
+      "via": [[1265, 692]]
+    }
+  ]
+}

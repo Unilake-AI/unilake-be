@@ -1,0 +1,33 @@
+# Môi trường ảo và bộ nhớ đệm Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Môi trường và thông tin bí mật
+.env
+.env.local
+.env.*.local
+
+# IDE và hệ điều hành
+.vscode/
+.idea/
+.DS_Store
+
+# Kiểm thử và tài liệu
+tests/
+alembic/versions/__pycache__/
+
+.git/
+.github/
+.local/
+.env*
+*.db
+*.sqlite*
+*.parquet

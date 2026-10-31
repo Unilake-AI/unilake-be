@@ -1,0 +1,117 @@
+employee_id,qualification_id,institution,year_obtained
+1,2,Trường ĐH Bách khoa Hà Nội,1990
+1,3,Trường ĐH Bách khoa - ĐH Đà Nẵng,1996
+1,4,Asian Institute of Technology,2003
+1,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,1996
+1,7,Học viện Chính trị Quốc gia Hồ Chí Minh,2016
+2,1,Trường ĐH Kinh tế - ĐH Đà Nẵng,1994
+2,3,Trường ĐH Kinh tế TP.HCM,2000
+2,4,University of Queensland,2007
+2,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,1999
+2,7,Học viện Chính trị Quốc gia Hồ Chí Minh,2019
+3,1,Trường ĐH Sư phạm - ĐH Đà Nẵng,1997
+3,3,Trường ĐH Sư phạm - ĐH Đà Nẵng,2008
+4,1,Trường ĐH Khoa học - ĐH Huế,2002
+5,1,Trường ĐH Luật - ĐH Huế,2000
+5,3,Học viện Hành chính Quốc gia,2010
+6,1,Trường ĐH Kinh tế - ĐH Đà Nẵng,2001
+6,8,Học viện Tài chính,2015
+7,1,Trường ĐH Sư phạm - ĐH Đà Nẵng,2012
+8,2,Trường ĐH Bách khoa - ĐH Đà Nẵng,2015
+9,1,Trường ĐH Kinh tế - ĐH Đà Nẵng,2017
+10,1,Trường ĐH Luật - ĐH Huế,2010
+11,1,Trường ĐH Kinh tế - ĐH Đà Nẵng,2015
+12,1,Trường ĐH Ngoại ngữ - ĐH Đà Nẵng,2018
+13,2,Trường ĐH Bách khoa - ĐH Đà Nẵng,2001
+13,3,Trường ĐH Bách khoa Hà Nội,2005
+13,4,National Taiwan University,2010
+13,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2004
+13,6,British Council,2008
+14,2,Trường ĐH Bách khoa - ĐH Đà Nẵng,2008
+14,3,Trường ĐH Bách khoa - ĐH Đà Nẵng,2012
+14,4,University of Melbourne,2018
+14,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2011
+14,6,IDP Education,2014
+15,2,Trường ĐH Bách khoa - ĐH Đà Nẵng,2013
+15,3,Trường ĐH Bách khoa - ĐH Đà Nẵng,2017
+15,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2016
+15,9,Amazon Web Services,2022
+16,1,Trường ĐH Khoa học Tự nhiên - ĐHQG TP.HCM,2011
+16,3,Trường ĐH Khoa học Tự nhiên - ĐHQG TP.HCM,2014
+16,4,KAIST,2020
+16,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2014
+16,6,British Council,2015
+17,2,Trường ĐH Bách khoa - ĐH Đà Nẵng,2007
+17,3,Trường ĐH Bách khoa - ĐH Đà Nẵng,2011
+17,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2010
+18,2,Trường ĐH Bách khoa Hà Nội,2009
+18,3,Trường ĐH Bách khoa Hà Nội,2013
+18,4,Trường ĐH Bách khoa Hà Nội,2019
+18,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2013
+19,2,Trường ĐH Bách khoa - ĐH Đà Nẵng,2017
+19,3,Trường ĐH Bách khoa - ĐH Đà Nẵng,2019
+19,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2021
+20,1,Trường ĐH Kinh tế - ĐH Đà Nẵng,2001
+20,3,Trường ĐH Kinh tế TP.HCM,2006
+20,4,Trường ĐH Kinh tế Quốc dân,2012
+20,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2005
+21,1,Trường ĐH Kinh tế - ĐH Đà Nẵng,2009
+21,3,Trường ĐH Kinh tế - ĐH Đà Nẵng,2013
+21,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2012
+22,1,Trường ĐH Kinh tế - ĐH Đà Nẵng,2004
+22,3,Học viện Tài chính,2009
+22,4,Học viện Tài chính,2015
+22,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2008
+22,8,Học viện Tài chính,2011
+23,1,Học viện Tài chính,2007
+23,3,Trường ĐH Kinh tế TP.HCM,2011
+23,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2013
+24,1,Trường ĐH Ngoại ngữ - ĐH Đà Nẵng,2003
+24,3,University of Queensland,2008
+24,4,Trường ĐH KHXH&NV - ĐHQG TP.HCM,2014
+24,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2007
+24,6,British Council,2006
+25,1,Trường ĐH Ngoại ngữ - ĐH Đà Nẵng,2013
+25,3,Trường ĐH Ngoại ngữ - ĐH Đà Nẵng,2016
+25,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2017
+25,6,IDP Education,2013
+26,1,Trường ĐH Ngoại ngữ - ĐH Đà Nẵng,2005
+26,3,Trường ĐH Ngoại ngữ - ĐHQG Hà Nội,2010
+26,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2009
+26,6,British Council,2011
+27,1,Trường ĐH Ngoại ngữ - ĐH Huế,2010
+27,3,Trường ĐH Ngoại ngữ - ĐH Huế,2013
+27,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2014
+27,6,IDP Education,2012
+28,2,Trường ĐH Xây dựng Hà Nội,1986
+28,3,Trường ĐH Xây dựng Hà Nội,1995
+28,4,Trường ĐH Xây dựng Hà Nội,2001
+28,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,1991
+29,2,Trường ĐH Bách khoa - ĐH Đà Nẵng,1999
+29,3,Trường ĐH Bách khoa - ĐH Đà Nẵng,2004
+29,4,Trường ĐH Bách khoa - ĐH Đà Nẵng,2010
+29,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2003
+30,2,Trường ĐH Bách khoa - ĐH Đà Nẵng,2009
+30,3,Trường ĐH Bách khoa - ĐH Đà Nẵng,2014
+30,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2013
+31,2,Trường ĐH Xây dựng Hà Nội,2013
+31,3,Trường ĐH Xây dựng Hà Nội,2016
+31,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2017
+32,1,Trường ĐH KHXH&NV - ĐHQG Hà Nội,1994
+32,3,Trường ĐH KHXH&NV - ĐHQG Hà Nội,2001
+32,4,Học viện Chính trị Quốc gia Hồ Chí Minh,2009
+32,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,1999
+32,7,Học viện Chính trị Quốc gia Hồ Chí Minh,2014
+33,1,Trường ĐH Sư phạm - ĐH Huế,2002
+33,3,Trường ĐH Sư phạm - ĐH Huế,2009
+33,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2006
+34,1,Trường ĐH Luật - ĐH Huế,2007
+34,3,Trường ĐH Luật TP.HCM,2011
+34,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2012
+35,1,Trường ĐH Sư phạm - ĐH Đà Nẵng,1997
+35,3,Trường ĐH Khoa học Tự nhiên - ĐHQG Hà Nội,2002
+35,4,Viện Toán học,2008
+35,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2001
+36,1,Trường ĐH Sư phạm - ĐH Đà Nẵng,2013
+36,3,Trường ĐH Khoa học Tự nhiên - ĐHQG TP.HCM,2016
+36,5,Trường ĐH Sư phạm - ĐH Đà Nẵng,2017

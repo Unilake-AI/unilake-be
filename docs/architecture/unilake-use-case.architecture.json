@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "UniLake AI V1.0 – Use Case Diagram",
+    "output": "unilake-use-case.html",
+    "quality_profile": "showcase",
+    "viewBox": [1250, 510],
+    "views": [
+      { "id": "admin-users", "label": "Người dùng quản trị", "focus": ["univ_admin", "uc_login", "uc_nlq", "uc_dashboard", "uc_history", "llm_api"], "note": "Lãnh đạo và các phòng ban khai thác dữ liệu qua NLQ và Dashboard." },
+      { "id": "data-admin", "label": "Data Administrator", "focus": ["data_admin", "uc_datasource", "uc_ingest", "uc_catalog", "uc_quality", "data_sources"], "note": "Quản lý nguồn dữ liệu, nạp dữ liệu vào Data Lake và giám sát governance." },
+      { "id": "operators", "label": "Vận hành và AI", "focus": ["sys_admin", "ai_dev", "uc_users", "uc_ai_config"], "note": "Quản trị hệ thống và cấu hình, đánh giá thành phần AI." }
+    ]
+  },
+  "components": [
+    { "id": "univ_admin", "type": "external", "label": "University Administrators", "sublabel": "Lãnh đạo & các phòng ban", "pos": [30, 232], "size": [180, 60] },
+    { "id": "sys_admin", "type": "external", "label": "System Administrator", "sublabel": "Người dùng, hệ thống, log", "pos": [30, 422], "size": [180, 60] },
+
+    { "id": "llm_api", "type": "external", "label": "LLM API", "sublabel": "Text-to-SQL provider", "pos": [310, 14], "size": [180, 50] },
+    { "id": "data_sources", "type": "external", "label": "Hệ thống nghiệp vụ / file", "sublabel": "Admissions, Academic, HR", "pos": [700, 14], "size": [180, 50] },
+
+    { "id": "uc_nlq", "type": "backend", "label": "Truy vấn ngôn ngữ tự nhiên", "sublabel": "FR13–FR17 · Text-to-SQL", "pos": [300, 120], "size": [200, 50], "tag": "AI Analytics" },
+    { "id": "uc_login", "type": "security", "label": "Đăng nhập & phân quyền", "sublabel": "FR01, FR23 · JWT / RBAC", "pos": [300, 196], "size": [200, 50] },
+    { "id": "uc_dashboard", "type": "frontend", "label": "Xem Dashboard & KPI", "sublabel": "FR18, FR19 · bảng, biểu đồ", "pos": [300, 272], "size": [200, 50] },
+    { "id": "uc_history", "type": "frontend", "label": "Xem lịch sử truy vấn", "sublabel": "FR20 · câu hỏi, SQL, kết quả", "pos": [300, 348], "size": [200, 50] },
+    { "id": "uc_users", "type": "security", "label": "Quản lý người dùng & log", "sublabel": "FR24 · monitoring, logs", "pos": [300, 424], "size": [200, 50] },
+
+    { "id": "uc_ingest", "type": "database", "label": "Nạp & chuẩn hóa dữ liệu", "sublabel": "FR03–FR09 · Bronze→Silver→Gold", "pos": [690, 120], "size": [200, 50], "tag": "Data Lake" },
+    { "id": "uc_quality", "type": "backend", "label": "Giám sát Data Quality", "sublabel": "FR12 · Completeness, Validity", "pos": [690, 196], "size": [200, 50], "tag": "Governance" },
+    { "id": "uc_datasource", "type": "database", "label": "Quản lý nguồn dữ liệu", "sublabel": "FR02 · Admissions, Academic, HR", "pos": [690, 272], "size": [200, 50] },
+    { "id": "uc_catalog", "type": "backend", "label": "Xem Data Catalog & Lineage", "sublabel": "FR10, FR11 · Source → Gold", "pos": [690, 348], "size": [200, 50], "tag": "Governance" },
+    { "id": "uc_ai_config", "type": "backend", "label": "Cấu hình & đánh giá AI", "sublabel": "prompt, schema, accuracy", "pos": [690, 424], "size": [200, 50], "tag": "AI Analytics" },
+
+    { "id": "data_admin", "type": "external", "label": "Data Administrator", "sublabel": "Catalog, Quality, Lineage", "pos": [1050, 232], "size": [180, 60] },
+    { "id": "ai_dev", "type": "external", "label": "AI / Analytics Developer", "sublabel": "Cấu hình và đánh giá AI", "pos": [1050, 422], "size": [180, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "UniLake AI V1.0 (System boundary)", "wraps": ["uc_nlq", "uc_login", "uc_dashboard", "uc_history", "uc_users", "uc_ingest", "uc_quality", "uc_datasource", "uc_catalog", "uc_ai_config"] }
+  ],
+  "connections": [
+    { "id": "admin-nlq", "from": "univ_admin", "to": "uc_nlq", "variant": "emphasis" },
+    { "id": "admin-login", "from": "univ_admin", "to": "uc_login" },
+    { "id": "admin-dashboard", "from": "univ_admin", "to": "uc_dashboard" },
+    { "id": "admin-history", "from": "univ_admin", "to": "uc_history" },
+    { "id": "sysadmin-users", "from": "sys_admin", "to": "uc_users" },
+
+    { "id": "dadmin-ingest", "from": "data_admin", "to": "uc_ingest" },
+    { "id": "dadmin-quality", "from": "data_admin", "to": "uc_quality" },
+    { "id": "dadmin-datasource", "from": "data_admin", "to": "uc_datasource" },
+    { "id": "dadmin-catalog", "from": "data_admin", "to": "uc_catalog" },
+    { "id": "aidev-config", "from": "ai_dev", "to": "uc_ai_config" },
+
+    { "id": "nlq-llm", "from": "uc_nlq", "to": "llm_api", "label": "sinh SQL", "variant": "dashed", "fromSide": "top", "toSide": "bottom", "labelAt": [400, 78] },
+    { "id": "sources-ingest", "from": "data_sources", "to": "uc_ingest", "label": "batch / file / API", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "labelAt": [790, 78] },
+    { "id": "nlq-history", "from": "uc_nlq", "to": "uc_history", "label": "«include» lưu lịch sử", "variant": "dashed", "fromSide": "right", "toSide": "right", "via": [[600, 145], [600, 373]] },
+    { "id": "ingest-quality", "from": "uc_ingest", "to": "uc_quality", "label": "«include»", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "labelAt": [935, 186] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Actors (proposal §9, §12.1)", "items": ["University Administrators: Ban Giám hiệu, Phòng Đào tạo, Tuyển sinh, Nhân sự, Trưởng khoa", "Data Administrator, System Administrator, AI/Analytics Developer", "External: LLM API và hệ thống nghiệp vụ Admissions / Academic / HR"] },
+    { "dot": "emerald", "title": "Use case chính (FR01–FR24)", "items": ["NLQ: Intent → Schema Retrieval → Text-to-SQL → SQL Validation → Execution trên Gold", "Data Lake: nạp, làm sạch, chuẩn hóa theo Bronze → Silver → Gold", "Governance: Catalog, Lineage, Data Quality report"] },
+    { "dot": "amber", "title": "Ngoài phạm vi V1.0 (§6.4)", "items": ["Không có domain Tài chính / Kế toán", "Không Constraint Optimization, What-If nâng cao, LLM fine-tuning", "Không real-time streaming, không kết nối dữ liệu production"] }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "version": "0.1.0-draft",
+  "status": "TECHNICAL_CLASSIFICATION_PENDING_DOMAIN_REVIEW",
+  "activation_allowed": false,
+  "approved_by": null,
+  "source": "business-rule-review.json",
+  "groups": {
+    "normalization_gate": [
+      "ADM-DQ-01", "ADM-DQ-02", "ADM-DQ-03", "ADM-DQ-04", "ADM-DQ-05",
+      "ADM-DQ-06", "ADM-DQ-07", "ADM-DQ-08", "ADM-DQ-10", "ADM-DQ-11",
+      "ACA-DQ-01", "ACA-DQ-02", "ACA-DQ-03", "ACA-DQ-04", "ACA-DQ-05",
+      "ACA-DQ-06", "ACA-DQ-07", "ACA-DQ-08", "ACA-DQ-09",
+      "HR-DQ-01", "HR-DQ-02", "HR-DQ-03", "HR-DQ-04", "HR-DQ-06",
+      "HR-DQ-07", "HR-DQ-08", "HR-DQ-09", "HR-DQ-11", "HR-DQ-12",
+      "HR-DQ-13", "HR-DQ-14"
+    ],
+    "restricted_pre_projection": ["ADM-DQ-09", "ADM-DQ-12", "HR-DQ-05", "HR-DQ-10"],
+    "downstream_policy": ["ACA-DQ-10", "ACA-DQ-11", "ACA-DQ-12", "ACA-DQ-13"]
+  }
+}

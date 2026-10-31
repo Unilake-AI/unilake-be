@@ -1,0 +1,170 @@
+{
+  "dataset": "hr",
+  "version": "1.2.0",
+  "description": "Human Resources Dataset Schema V1 - UniLake AI V1.0. Bám đúng DB nguồn docs/data-schema/unilake-db-architecture.txt (tên cột, thứ tự, db_type, nullable, PK, UNIQUE, FK). type là kiểu SQL đề xuất cho DDL vì DB chỉ khai báo kiểu chung (string, decimal). Xem docs/data-schema/hr-dataset-v1.md.",
+  "source_db": "docs/data-schema/unilake-db-architecture.txt",
+  "file_format": {
+    "type": "csv",
+    "encoding": "utf-8",
+    "delimiter": ",",
+    "header": true,
+    "null_value": "",
+    "date_format": "YYYY-MM-DD",
+    "timestamp_format": "YYYY-MM-DD HH:MM:SS",
+    "decimal_separator": ".",
+    "boolean_values": ["true", "false"]
+  },
+  "load_order": ["department", "position", "qualification", "employee", "lecturer", "employee_qualification", "assignment"],
+  "audit_columns": [
+    {"name": "_source_system", "type": "varchar(50)", "nullable": false, "description": "Hệ thống nguồn"},
+    {"name": "_batch_id", "type": "varchar(64)", "nullable": false, "description": "ID lô ingestion"},
+    {"name": "_ingested_at", "type": "timestamp", "nullable": false, "description": "Thời điểm ghi vào Bronze (UTC)"}
+  ],
+  "entities": {
+    "department": {
+      "domain": "hr",
+      "owned_by_dataset": true,
+      "description": "Đơn vị tổ chức dạng cây: trường -> ban giám hiệu/phòng/khoa -> bộ môn. Được major (Admissions), source_system và dataset (governance) tham chiếu.",
+      "file": "hr/department.csv",
+      "primary_key": ["department_id"],
+      "columns": [
+        {"name": "department_id", "db_type": "bigint", "type": "bigint", "nullable": false},
+        {"name": "department_code", "db_type": "string", "type": "varchar(30)", "nullable": false, "unique": true, "pattern": "^(UNI|BGH|P[A-Z]+|K[A-Z]+|BM[A-Z]+)$", "description": "Tiền tố khớp department_type: UNI, BGH, P (phòng), K (khoa), BM (bộ môn)"},
+        {"name": "department_name", "db_type": "string", "type": "varchar(200)", "nullable": false},
+        {"name": "department_type", "db_type": "string", "type": "varchar(30)", "nullable": false, "enum": ["University", "Board", "Office", "Faculty", "Division"], "description": "Trường, Ban, Phòng, Khoa, Bộ môn"},
+        {"name": "parent_department_id", "db_type": "bigint", "type": "bigint", "nullable": true, "references": {"entity": "department", "column": "department_id"}, "description": "Null = đơn vị gốc"},
+        {"name": "status", "db_type": "string", "type": "varchar(20)", "nullable": false, "enum": ["Active", "Inactive"]},
+        {"name": "created_at", "db_type": "timestamp", "type": "timestamp", "nullable": false}
+      ]
+    },
+    "position": {
+      "domain": "hr",
+      "owned_by_dataset": true,
+      "description": "Chức danh/chức vụ.",
+      "file": "hr/position.csv",
+      "primary_key": ["position_id"],
+      "columns": [
+        {"name": "position_id", "db_type": "bigint", "type": "bigint", "nullable": false},
+        {"name": "position_code", "db_type": "string", "type": "varchar(30)", "nullable": false, "unique": true, "pattern": "^[A-Z]{2,5}$"},
+        {"name": "position_name", "db_type": "string", "type": "varchar(150)", "nullable": false},
+        {"name": "position_level", "db_type": "string", "type": "varchar(50)", "nullable": true, "enum": ["Leadership", "Management", "Staff"]}
+      ]
+    },
+    "qualification": {
+      "domain": "hr",
+      "owned_by_dataset": true,
+      "description": "Danh mục văn bằng và chứng chỉ. DB không còn UNIQUE trên qualification_name; HR-DQ-13 kiểm tra trùng.",
+      "file": "hr/qualification.csv",
+      "primary_key": ["qualification_id"],
+      "columns": [
+        {"name": "qualification_id", "db_type": "bigint", "type": "bigint", "nullable": false},
+        {"name": "qualification_name", "db_type": "string", "type": "varchar(150)", "nullable": false},
+        {"name": "qualification_type", "db_type": "string", "type": "varchar(100)", "nullable": true, "enum": ["Degree", "Certificate"]}
+      ]
+    },
+    "employee": {
+      "domain": "hr",
+      "owned_by_dataset": true,
+      "pii_columns": ["full_name", "date_of_birth", "email", "phone"],
+      "description": "Nhân sự (giảng viên và cán bộ hành chính). Đơn vị và chức vụ lấy qua assignment.",
+      "file": "hr/employee.csv",
+      "primary_key": ["employee_id"],
+      "columns": [
+        {"name": "employee_id", "db_type": "bigint", "type": "bigint", "nullable": false},
+        {"name": "employee_code", "db_type": "string", "type": "varchar(30)", "nullable": false, "unique": true, "pattern": "^NV[0-9]{4}$"},
+        {"name": "full_name", "db_type": "string", "type": "varchar(200)", "nullable": false},
+        {"name": "date_of_birth", "db_type": "date", "type": "date", "nullable": true},
+        {"name": "gender", "db_type": "string", "type": "varchar(20)", "nullable": true, "enum": ["Male", "Female"]},
+        {"name": "email", "db_type": "string", "type": "varchar(150)", "nullable": true, "unique": true, "pattern": "^[a-z0-9._]+@[a-z0-9.-]+\\.[a-z]{2,}$"},
+        {"name": "phone", "db_type": "string", "type": "varchar(30)", "nullable": true, "pattern": "^0[0-9]{9}$"},
+        {"name": "hire_date", "db_type": "date", "type": "date", "nullable": true, "description": "Khi có thì bằng start_date sớm nhất trong assignment"},
+        {"name": "employee_status", "db_type": "string", "type": "varchar(30)", "nullable": false, "enum": ["Active", "Resigned", "Retired"]}
+      ]
+    },
+    "lecturer": {
+      "domain": "hr",
+      "owned_by_dataset": true,
+      "description": "Giảng viên: kiểu con của employee, khóa chính employee_id dùng chung (quan hệ 1 - 0..1).",
+      "file": "hr/lecturer.csv",
+      "primary_key": ["employee_id"],
+      "columns": [
+        {"name": "employee_id", "db_type": "bigint", "type": "bigint", "nullable": false, "references": {"entity": "employee", "column": "employee_id"}},
+        {"name": "academic_degree", "db_type": "string", "type": "varchar(50)", "nullable": true, "enum": ["B.Sc.", "M.Sc.", "Ph.D."], "description": "Học vị cao nhất"},
+        {"name": "academic_title", "db_type": "string", "type": "varchar(50)", "nullable": true, "enum": ["Assoc. Prof.", "Prof."], "description": "Học hàm; null nếu chưa có"},
+        {"name": "research_field", "db_type": "string", "type": "varchar(250)", "nullable": true}
+      ]
+    },
+    "employee_qualification": {
+      "domain": "hr",
+      "owned_by_dataset": true,
+      "description": "Văn bằng/chứng chỉ của nhân sự (N-N giữa employee và qualification).",
+      "file": "hr/employee_qualification.csv",
+      "primary_key": ["employee_id", "qualification_id"],
+      "columns": [
+        {"name": "employee_id", "db_type": "bigint", "type": "bigint", "nullable": false, "references": {"entity": "employee", "column": "employee_id"}},
+        {"name": "qualification_id", "db_type": "bigint", "type": "bigint", "nullable": false, "references": {"entity": "qualification", "column": "qualification_id"}},
+        {"name": "institution", "db_type": "string", "type": "varchar(250)", "nullable": true},
+        {"name": "year_obtained", "db_type": "int", "type": "int", "nullable": true, "min": 1960, "max": 2100}
+      ]
+    },
+    "assignment": {
+      "domain": "hr",
+      "owned_by_dataset": true,
+      "description": "Quá trình công tác: nhân sự giữ chức vụ tại đơn vị trong một khoảng thời gian. end_date null = đang giữ. is_primary false = kiêm nhiệm.",
+      "file": "hr/assignment.csv",
+      "primary_key": ["assignment_id"],
+      "columns": [
+        {"name": "assignment_id", "db_type": "bigint", "type": "bigint", "nullable": false},
+        {"name": "employee_id", "db_type": "bigint", "type": "bigint", "nullable": false, "references": {"entity": "employee", "column": "employee_id"}},
+        {"name": "department_id", "db_type": "bigint", "type": "bigint", "nullable": false, "references": {"entity": "department", "column": "department_id"}},
+        {"name": "position_id", "db_type": "bigint", "type": "bigint", "nullable": false, "references": {"entity": "position", "column": "position_id"}},
+        {"name": "start_date", "db_type": "date", "type": "date", "nullable": false},
+        {"name": "end_date", "db_type": "date", "type": "date", "nullable": true},
+        {"name": "is_primary", "db_type": "boolean", "type": "boolean", "nullable": false},
+        {"name": "assignment_status", "db_type": "string", "type": "varchar(30)", "nullable": false, "enum": ["Active", "Ended"], "description": "Active khi end_date null hoặc sau ngày chốt"}
+      ]
+    }
+  },
+  "department_type_prefix": {"University": "UNI", "Board": "BGH", "Office": "P", "Faculty": "K", "Division": "BM"},
+  "position_rules": {
+    "unique_holder_per_department": ["HT", "TK", "TP", "TBM"],
+    "allowed_department_types": {
+      "HT": ["Board"], "PHT": ["Board"],
+      "TK": ["Faculty"], "PTK": ["Faculty"],
+      "TP": ["Office"],
+      "TBM": ["Division"],
+      "GV": ["Faculty", "Division"], "GVC": ["Faculty", "Division"], "TG": ["Faculty", "Division"],
+      "CV": ["Office"], "NV": ["Office"]
+    },
+    "lecturer_only": ["GV", "GVC", "TG", "TK", "PTK", "TBM"],
+    "staff_only": ["CV", "NV", "TP"]
+  },
+  "silver_derived_columns": {
+    "employee": [
+      {"name": "birth_year", "type": "int", "rule": "Thay date_of_birth (PII)"},
+      {"name": "is_lecturer", "type": "boolean", "rule": "Có dòng trong lecturer"},
+      {"name": "primary_department_id", "type": "bigint", "rule": "department_id của assignment is_primary đang hiệu lực"},
+      {"name": "faculty_id", "type": "bigint", "rule": "Đơn vị con trực tiếp của đơn vị gốc chứa primary_department_id"},
+      {"name": "current_position_id", "type": "bigint", "rule": "position_id của assignment is_primary đang hiệu lực"},
+      {"name": "seniority_years", "type": "decimal(4,1)", "rule": "Từ hire_date (hoặc assignment sớm nhất) tới ngày chốt hoặc ngày nghỉ"},
+      {"name": "highest_degree", "type": "varchar(30)", "rule": "Tiến sĩ > Thạc sĩ > Kỹ sư/Cử nhân theo employee_qualification"},
+      {"name": "leave_date", "type": "date", "rule": "end_date lớn nhất của assignment khi Resigned/Retired"}
+    ]
+  },
+  "quality_rules": [
+    {"id": "HR-DQ-01", "entity": "*", "rule": "PK (kể cả PK ghép) và cột unique không null, không trùng", "severity": "error"},
+    {"id": "HR-DQ-02", "entity": "*", "rule": "FK trỏ tới bản ghi có thật", "severity": "error"},
+    {"id": "HR-DQ-03", "entity": "*", "rule": "Đúng kiểu, độ dài, null, giá trị trạng thái, pattern, min/max", "severity": "error"},
+    {"id": "HR-DQ-04", "entity": "department", "rule": "Một gốc, không chu trình; department_type khớp tiền tố mã; bộ môn (Division) thuộc khoa (Faculty)", "severity": "error"},
+    {"id": "HR-DQ-05", "entity": "employee", "rule": "Khi có ngày sinh và hire_date: tuổi khi tuyển 20 - 60; hire_date = start_date sớm nhất trong assignment", "severity": "error"},
+    {"id": "HR-DQ-06", "entity": "assignment", "rule": "start_date >= hire_date (nếu có); end_date >= start_date; vị trí chính không chồng lấn", "severity": "error"},
+    {"id": "HR-DQ-07", "entity": "assignment", "rule": "Active có đúng một vị trí chính đang hiệu lực; Resigned/Retired không còn assignment mở", "severity": "error"},
+    {"id": "HR-DQ-08", "entity": "assignment", "rule": "HT, TK, TP, TBM: một người/đơn vị/thời điểm; chức vụ đúng loại đơn vị", "severity": "error"},
+    {"id": "HR-DQ-09", "entity": "assignment", "rule": "Chức vụ giảng dạy chỉ cho giảng viên; CV, NV, TP chỉ cho cán bộ hành chính", "severity": "error"},
+    {"id": "HR-DQ-10", "entity": "employee_qualification", "rule": "Năm cấp sau 18 tuổi, không sau ngày chốt; Cử nhân/Kỹ sư < Thạc sĩ < Tiến sĩ", "severity": "error"},
+    {"id": "HR-DQ-11", "entity": "lecturer", "rule": "academic_degree khớp văn bằng cao nhất; academic_title (Assoc. Prof., Prof.) chỉ khi academic_degree = Ph.D.", "severity": "warning"},
+    {"id": "HR-DQ-12", "entity": "assignment", "rule": "assignment_status khớp end_date (Active khi end_date null hoặc sau ngày chốt)", "severity": "error"},
+    {"id": "HR-DQ-13", "entity": "qualification", "rule": "qualification_name không trùng", "severity": "error"},
+    {"id": "HR-DQ-14", "entity": "class_lecturer (Academic)", "rule": "Giảng viên có assignment hiệu lực suốt khoảng phụ trách lớp (assigned_from..assigned_to, mặc định là học kỳ của lớp)", "severity": "error"}
+  ]
+}

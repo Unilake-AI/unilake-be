@@ -1,0 +1,47 @@
+{
+  "version": "0.1.0",
+  "purpose": "Synthetic P0 acceptance examples; not engine output and not approved production mapping",
+  "publish_policy": "strict_snapshot",
+  "cases": [
+    {
+      "id": "ADM-VALID",
+      "domain": "admissions",
+      "entity": "admission_method",
+      "namespace": "SYNTH_ADM",
+      "field_map": {"id": "admission_method_id", "ma": "method_code", "ten": "method_name", "diem_toi_da": "max_score", "mo_ta": "description", "hoat_dong": "is_active"},
+      "input": {"id": "007", "ma": " THPT ", "ten": "Xét tuyển giả lập", "diem_toi_da": "30,00", "mo_ta": "", "hoat_dong": "Có"},
+      "rules": {"decimal_separator": ",", "null_tokens": [""], "boolean_map": {"Có": true, "Không": false}, "trim_fields": ["method_code"], "crosswalk": {"007": 1001}},
+      "expected": {"status": "ACCEPT", "record": {"admission_method_id": 1001, "method_code": "THPT", "method_name": "Xét tuyển giả lập", "max_score": "30.00", "is_active": true}, "decimal_fields": ["max_score"], "dropped_fields": ["description"], "issues": []}
+    },
+    {
+      "id": "ACA-VALID",
+      "domain": "academic",
+      "entity": "semester",
+      "namespace": "SYNTH_ACA",
+      "field_map": {"id": "semester_id", "code": "semester_code", "year": "academic_year", "start": "start_date", "end": "end_date", "state": "status"},
+      "input": {"id": "007", "code": "2026-1", "year": "2026-2027", "start": "01/09/2026", "end": "15/01/2027", "state": "Đang diễn ra"},
+      "rules": {"date_format": "%d/%m/%Y", "status_map": {"Đang diễn ra": "Ongoing"}, "crosswalk": {"007": 2001}},
+      "expected": {"status": "ACCEPT", "record": {"semester_id": 2001, "semester_code": "2026-1", "academic_year": "2026-2027", "start_date": "2026-09-01", "end_date": "2027-01-15", "status": "Ongoing"}, "date_fields": ["start_date", "end_date"], "issues": []}
+    },
+    {
+      "id": "HR-VALID",
+      "domain": "hr",
+      "entity": "position",
+      "namespace": "SYNTH_HR",
+      "field_map": {"id": "position_id", "code": "position_code", "name": "position_name", "level": "position_level"},
+      "input": {"id": "007", "code": " GV ", "name": "Giảng viên giả lập", "level": "Nhân viên"},
+      "rules": {"trim_fields": ["position_code"], "level_map": {"Nhân viên": "Staff"}, "crosswalk": {"007": 3001}},
+      "expected": {"status": "ACCEPT", "record": {"position_id": 3001, "position_code": "GV", "position_name": "Giảng viên giả lập", "position_level": "Staff"}, "issues": []}
+    },
+    {"id": "ACA-BAD-DATE", "base_case": "ACA-VALID", "input_patch": {"start": "31/02/2026"}, "expected": {"status": "QUARANTINE", "code": "DATE_PARSE_ERROR", "field": "start_date", "publish_snapshot": false}},
+    {"id": "ADM-BAD-BOOL", "base_case": "ADM-VALID", "input_patch": {"hoat_dong": "maybe"}, "expected": {"status": "QUARANTINE", "code": "INVALID_BOOLEAN", "field": "is_active", "publish_snapshot": false}},
+    {"id": "HR-UNKNOWN-CODE", "base_case": "HR-VALID", "input_patch": {"level": "Không xác định"}, "expected": {"status": "QUARANTINE", "code": "UNKNOWN_REFERENCE_CODE", "field": "position_level", "publish_snapshot": false}},
+    {"id": "HR-MISSING-FIELD", "base_case": "HR-VALID", "remove_input_fields": ["name"], "expected": {"status": "REJECT_BATCH", "code": "REQUIRED_SOURCE_FIELD_MISSING", "field": "position_name", "publish_snapshot": false}}
+  ],
+  "identity_cases": [
+    {"id": "SAME-KEY-DIFFERENT-SYSTEM", "left": ["SYNTH_ADM_A", "applicant", "007"], "right": ["SYNTH_ADM_B", "applicant", "007"], "expected": "DISTINCT_UNTIL_VERIFIED_CROSSWALK"},
+    {"id": "SAME-IDENTITY-REPLAY", "left": ["SYNTH_HR", "position", "007"], "right": ["SYNTH_HR", "position", "007"], "expected": "SAME_CANONICAL_ID_3001"},
+    {"id": "FK-NOT-FOUND", "entity": "major", "source_fk": {"namespace": "SYNTH_HR", "entity": "department", "key": "missing"}, "expected": "REFERENCE_PENDING_BLOCKS_SNAPSHOT"},
+    {"id": "APPLICANT-STUDENT-LINK", "expected": "KEEP_SEPARATE_ENTITY_IDS_AND_RESOLVE_APPLICANT_FK"}
+  ]
+}

@@ -1,0 +1,11 @@
+program_id,program_code,program_name,major_id,degree_level,duration_years,tuition_fee_per_credit
+1,CNTT-CQ,Công nghệ thông tin,1,Bachelor,4.0,520000.00
+2,CNTT-CLC,Công nghệ thông tin - Chất lượng cao,1,Bachelor,4.0,980000.00
+3,KTPM-CQ,Kỹ thuật phần mềm,2,Engineer,4.5,520000.00
+4,KHDL-CQ,Khoa học dữ liệu,3,Bachelor,4.0,540000.00
+5,QTKD-CQ,Quản trị kinh doanh,4,Bachelor,4.0,460000.00
+6,QTKD-CLC,Quản trị kinh doanh - Chất lượng cao,4,Bachelor,4.0,900000.00
+7,KT-CQ,Kế toán,5,Bachelor,4.0,450000.00
+8,NNA-CQ,Ngôn ngữ Anh,6,Bachelor,4.0,440000.00
+9,KTXD-KS,Kỹ thuật xây dựng,7,Engineer,4.5,480000.00
+10,KHMT-THS,Thạc sĩ Khoa học máy tính,8,Master,2.0,750000.00

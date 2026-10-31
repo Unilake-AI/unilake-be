@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "UniLake AI V1.0 – NLQ Sequence Diagram",
+    "output": "unilake-nlq-flow.html",
+    "viewBox": [1250, 495],
+    "column_fit": "spread",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "request-auth", "label": "Yêu cầu & xác thực", "focus": ["user", "web", "api", "auth"], "note": "Câu hỏi đi từ Chatbot UI vào NLQ API và được kiểm tra JWT, RBAC." },
+      { "id": "text-to-sql", "label": "Text-to-SQL", "focus": ["api", "gold", "llm"], "note": "Intent quyết định schema context, LLM sinh SQL từ schema và câu hỏi." },
+      { "id": "validate-execute", "label": "Kiểm tra & thực thi", "focus": ["api", "validator", "gold", "history", "web", "user"], "note": "Chỉ SELECT hợp lệ mới chạy trên Gold, kết quả được lưu lịch sử và trả về." }
+    ]
+  },
+  "participants": [
+    { "id": "user", "type": "external", "label": "Người dùng" },
+    { "id": "web", "type": "frontend", "label": "Web App" },
+    { "id": "api", "type": "backend", "label": "NLQ API" },
+    { "id": "auth", "type": "security", "label": "Auth (JWT)" },
+    { "id": "validator", "type": "security", "label": "SQL Validator" },
+    { "id": "llm", "type": "external", "label": "LLM API" },
+    { "id": "gold", "type": "database", "label": "Gold Layer" },
+    { "id": "history", "type": "database", "label": "Query History" }
+  ],
+  "segments": [
+    { "from": 150, "to": 230, "label": "Yêu cầu & xác thực" },
+    { "from": 234, "to": 286, "label": "Intent → Schema → Text-to-SQL" },
+    { "from": 290, "to": 342, "label": "Validation & Execution" },
+    { "from": 346, "to": 420, "label": "Lịch sử & phản hồi" }
+  ],
+  "messages": [
+    { "id": "ask-question", "from": "user", "to": "web", "y": 160, "label": "nhập câu hỏi ngôn ngữ tự nhiên", "variant": "default" },
+    { "id": "post-ask", "from": "web", "to": "api", "y": 188, "label": "POST /api/v1/nlq/ask", "variant": "emphasis" },
+    { "id": "verify-token", "from": "api", "to": "auth", "y": 216, "label": "verify JWT, RBAC", "variant": "security" },
+    { "id": "schema-context", "from": "api", "to": "gold", "y": 244, "label": "parse intent → lấy schema context", "variant": "default" },
+    { "id": "llm-prompt", "from": "api", "to": "llm", "y": 272, "label": "prompt: schema + câu hỏi → SQL candidate", "variant": "emphasis" },
+    { "id": "validate-sql", "from": "api", "to": "validator", "y": 300, "label": "validate read-only SQL", "variant": "security" },
+    { "id": "execute-sql", "from": "api", "to": "gold", "y": 328, "label": "execute SELECT (read-only) → rows", "variant": "emphasis" },
+    { "id": "save-history", "from": "api", "to": "history", "y": 356, "label": "lưu question, SQL, rows", "variant": "dashed" },
+    { "id": "api-response", "from": "api", "to": "web", "y": 384, "label": "200 {sql, rows}", "variant": "return" },
+    { "id": "render-result", "from": "web", "to": "user", "y": 412, "label": "bảng / KPI / biểu đồ", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "web", "from": 176, "to": 418, "type": "frontend" },
+    { "participant": "api", "from": 188, "to": 394, "type": "backend" },
+    { "participant": "auth", "from": 212, "to": 222, "type": "security" },
+    { "participant": "gold", "from": 240, "to": 250, "type": "database" },
+    { "participant": "llm", "from": 268, "to": 278, "type": "external" },
+    { "participant": "validator", "from": 296, "to": 306, "type": "security" },
+    { "participant": "gold", "from": 324, "to": 334, "type": "database" },
+    { "participant": "history", "from": 352, "to": 362, "type": "database" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Luồng chính (proposal §12.4)", "items": ["Question → Intent Detection → Schema Retrieval → Text-to-SQL → SQL Validation → Query Execution → Result", "Kết quả hiển thị dạng bảng, KPI hoặc biểu đồ (FR18)", "Mục tiêu: phản hồi dưới 5 giây, Text-to-SQL accuracy ≥ 85%"] },
+    { "dot": "rose", "title": "An toàn", "items": ["JWT và RBAC kiểm tra trước khi xử lý câu hỏi (FR01, FR23)", "SQL do LLM sinh ra không được chạy trực tiếp, phải qua SQL Validation (FR16)", "Chỉ SELECT read-only trên Gold Layer, chặn INSERT/UPDATE/DELETE/DROP"] },
+    { "dot": "cyan", "title": "Ánh xạ code backend", "items": ["app/modules/nlq/router.py điều phối toàn bộ luồng trong một request", "intent_parser, schema_retriever, sql_generator, sql_validator, executor là các bước tương ứng", "Hiện tại LLM client, schema retriever và executor còn là stub"] }
+  ]
+}

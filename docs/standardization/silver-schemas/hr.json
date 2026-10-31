@@ -1,0 +1,845 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:unilake:silver:hr:0.1.0-draft",
+  "title": "hr Silver snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "department",
+    "position",
+    "qualification",
+    "employee",
+    "lecturer",
+    "employee_qualification",
+    "assignment"
+  ],
+  "properties": {
+    "department": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/department"
+      }
+    },
+    "position": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/position"
+      }
+    },
+    "qualification": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/qualification"
+      }
+    },
+    "employee": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/employee"
+      }
+    },
+    "lecturer": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/lecturer"
+      }
+    },
+    "employee_qualification": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/employee_qualification"
+      }
+    },
+    "assignment": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/assignment"
+      }
+    }
+  },
+  "$defs": {
+    "department": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "department_id",
+        "department_code",
+        "department_name",
+        "department_type",
+        "parent_department_id",
+        "status",
+        "created_at",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "department_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "department_code": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "pattern": "^(UNI|BGH|P[A-Z]+|K[A-Z]+|BM[A-Z]+)$",
+          "description": "Tiền tố khớp department_type: UNI, BGH, P (phòng), K (khoa), BM (bộ môn)",
+          "x-unique-non-null": true
+        },
+        "department_name": {
+          "type": "string",
+          "x-physical-type": "varchar(200)",
+          "maxLength": 200
+        },
+        "department_type": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "enum": [
+            "University",
+            "Board",
+            "Office",
+            "Faculty",
+            "Division"
+          ],
+          "description": "Trường, Ban, Phòng, Khoa, Bộ môn"
+        },
+        "parent_department_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "description": "Null = đơn vị gốc",
+          "x-references": {
+            "entity": "department",
+            "column": "department_id"
+          }
+        },
+        "status": {
+          "type": "string",
+          "x-physical-type": "varchar(20)",
+          "maxLength": 20,
+          "enum": [
+            "Active",
+            "Inactive"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Đơn vị tổ chức dạng cây: trường -> ban giám hiệu/phòng/khoa -> bộ môn. Được major (Admissions), source_system và dataset (governance) tham chiếu.",
+      "x-owner": "hr",
+      "x-primary-key": [
+        "department_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "position_id",
+        "position_code",
+        "position_name",
+        "position_level",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "position_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "position_code": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "pattern": "^[A-Z]{2,5}$",
+          "x-unique-non-null": true
+        },
+        "position_name": {
+          "type": "string",
+          "x-physical-type": "varchar(150)",
+          "maxLength": 150
+        },
+        "position_level": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(50)",
+          "maxLength": 50,
+          "enum": [
+            "Leadership",
+            "Management",
+            "Staff",
+            null
+          ]
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Chức danh/chức vụ.",
+      "x-owner": "hr",
+      "x-primary-key": [
+        "position_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "qualification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qualification_id",
+        "qualification_name",
+        "qualification_type",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "qualification_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "qualification_name": {
+          "type": "string",
+          "x-physical-type": "varchar(150)",
+          "maxLength": 150
+        },
+        "qualification_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(100)",
+          "maxLength": 100,
+          "enum": [
+            "Degree",
+            "Certificate",
+            null
+          ]
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Danh mục văn bằng và chứng chỉ. DB không còn UNIQUE trên qualification_name; HR-DQ-13 kiểm tra trùng.",
+      "x-owner": "hr",
+      "x-primary-key": [
+        "qualification_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "employee": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "employee_id",
+        "employee_code",
+        "gender",
+        "hire_date",
+        "employee_status",
+        "birth_year",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "employee_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "employee_code": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "pattern": "^NV[0-9]{4}$",
+          "x-unique-non-null": true
+        },
+        "gender": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(20)",
+          "maxLength": 20,
+          "enum": [
+            "Male",
+            "Female",
+            null
+          ]
+        },
+        "hire_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "date32",
+          "format": "date",
+          "description": "Khi có thì bằng start_date sớm nhất trong assignment"
+        },
+        "employee_status": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "enum": [
+            "Active",
+            "Resigned",
+            "Retired"
+          ]
+        },
+        "birth_year": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 9999,
+          "x-physical-type": "int32",
+          "x-derived-from": "date_of_birth",
+          "x-rule": "PII-02"
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Nhân sự (giảng viên và cán bộ hành chính). Đơn vị và chức vụ lấy qua assignment.",
+      "x-owner": "hr",
+      "x-primary-key": [
+        "employee_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "lecturer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "employee_id",
+        "academic_degree",
+        "academic_title",
+        "research_field",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "employee_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "employee",
+            "column": "employee_id"
+          }
+        },
+        "academic_degree": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(50)",
+          "maxLength": 50,
+          "enum": [
+            "B.Sc.",
+            "M.Sc.",
+            "Ph.D.",
+            null
+          ],
+          "description": "Học vị cao nhất"
+        },
+        "academic_title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(50)",
+          "maxLength": 50,
+          "enum": [
+            "Assoc. Prof.",
+            "Prof.",
+            null
+          ],
+          "description": "Học hàm; null nếu chưa có"
+        },
+        "research_field": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(250)",
+          "maxLength": 250
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Giảng viên: kiểu con của employee, khóa chính employee_id dùng chung (quan hệ 1 - 0..1).",
+      "x-owner": "hr",
+      "x-primary-key": [
+        "employee_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "shared_fk"
+    },
+    "employee_qualification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "employee_id",
+        "qualification_id",
+        "institution",
+        "year_obtained",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "employee_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "employee",
+            "column": "employee_id"
+          }
+        },
+        "qualification_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "qualification",
+            "column": "qualification_id"
+          }
+        },
+        "institution": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(250)",
+          "maxLength": 250
+        },
+        "year_obtained": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-physical-type": "int",
+          "minimum": 1960,
+          "maximum": 2100
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Văn bằng/chứng chỉ của nhân sự (N-N giữa employee và qualification).",
+      "x-owner": "hr",
+      "x-primary-key": [
+        "employee_id",
+        "qualification_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "composite_fk"
+    },
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assignment_id",
+        "employee_id",
+        "department_id",
+        "position_id",
+        "start_date",
+        "end_date",
+        "is_primary",
+        "assignment_status",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "assignment_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "employee_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "employee",
+            "column": "employee_id"
+          }
+        },
+        "department_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "department",
+            "column": "department_id"
+          }
+        },
+        "position_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "position",
+            "column": "position_id"
+          }
+        },
+        "start_date": {
+          "type": "string",
+          "x-physical-type": "date32",
+          "format": "date"
+        },
+        "end_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "date32",
+          "format": "date"
+        },
+        "is_primary": {
+          "type": "boolean",
+          "x-physical-type": "boolean"
+        },
+        "assignment_status": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "enum": [
+            "Active",
+            "Ended"
+          ],
+          "description": "Active khi end_date null hoặc sau ngày chốt"
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Quá trình công tác: nhân sự giữ chức vụ tại đơn vị trong một khoảng thời gian. end_date null = đang giữ. is_primary false = kiêm nhiệm.",
+      "x-owner": "hr",
+      "x-primary-key": [
+        "assignment_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    }
+  },
+  "x-version": "0.1.0-draft",
+  "x-approval": "PENDING_DOMAIN_AND_PII_REVIEW",
+  "x-source-version": "1.2.0",
+  "x-source-sha256": "c8b3f6736918b2ebf2dc6f90837d6377b0c58c0fb797c454008958d3f452799b",
+  "x-publish-policy": "strict_snapshot",
+  "x-json-decimal-encoding": "string"
+}

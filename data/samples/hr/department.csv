@@ -1,0 +1,15 @@
+department_id,department_code,department_name,parent_department_id
+1,UNI,Trường Đại học UniLake,
+2,BGH,Ban Giám hiệu,1
+3,PDT,Phòng Đào tạo,1
+4,PTS,Phòng Tuyển sinh và Truyền thông,1
+5,PTCNS,Phòng Tổ chức - Nhân sự,1
+6,PKHTC,Phòng Kế hoạch - Tài chính,1
+7,KCNTT,Khoa Công nghệ Thông tin,1
+8,KKT,Khoa Kinh tế,1
+9,KNN,Khoa Ngoại ngữ,1
+10,KXD,Khoa Xây dựng,1
+11,KLLCT,Khoa Lý luận chính trị,1
+12,KKHCB,Khoa Khoa học cơ bản,1
+13,BMKHMT,Bộ môn Khoa học máy tính,7
+14,BMHTTT,Bộ môn Hệ thống thông tin,7

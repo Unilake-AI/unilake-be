@@ -1,0 +1,1289 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:unilake:silver:academic:0.1.0-draft",
+  "title": "academic Silver snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "student",
+    "course",
+    "curriculum",
+    "curriculum_course",
+    "semester",
+    "class",
+    "class_lecturer",
+    "enrollment",
+    "enrollment_grade"
+  ],
+  "properties": {
+    "student": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/student"
+      }
+    },
+    "course": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/course"
+      }
+    },
+    "curriculum": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/curriculum"
+      }
+    },
+    "curriculum_course": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/curriculum_course"
+      }
+    },
+    "semester": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/semester"
+      }
+    },
+    "class": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/class"
+      }
+    },
+    "class_lecturer": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/class_lecturer"
+      }
+    },
+    "enrollment": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/enrollment"
+      }
+    },
+    "enrollment_grade": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/enrollment_grade"
+      }
+    }
+  },
+  "$defs": {
+    "student": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "student_id",
+        "student_code",
+        "applicant_id",
+        "admission_id",
+        "gender",
+        "program_id",
+        "admission_year_id",
+        "student_status",
+        "created_at",
+        "birth_year",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "student_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "student_code": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "pattern": "^[0-9]{10}$",
+          "description": "Năm nhập học (4) + mã chương trình (2) + số thứ tự (4)",
+          "x-unique-non-null": true
+        },
+        "applicant_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-unique-non-null": true,
+          "x-references": {
+            "entity": "applicant",
+            "column": "applicant_id"
+          }
+        },
+        "admission_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "description": "Hồ sơ trúng tuyển dẫn tới nhập học",
+          "x-unique-non-null": true,
+          "x-references": {
+            "entity": "admission",
+            "column": "admission_id"
+          }
+        },
+        "gender": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(20)",
+          "maxLength": 20,
+          "enum": [
+            "Male",
+            "Female",
+            null
+          ]
+        },
+        "program_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "program",
+            "column": "program_id"
+          }
+        },
+        "admission_year_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "description": "Khóa (cohort)",
+          "x-references": {
+            "entity": "admission_year",
+            "column": "admission_year_id"
+          }
+        },
+        "student_status": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "enum": [
+            "Active",
+            "Graduated",
+            "Suspended",
+            "Dropped"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "birth_year": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 9999,
+          "x-physical-type": "int32",
+          "x-derived-from": "date_of_birth",
+          "x-rule": "PII-02"
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Sinh viên. Tạo khi thí sinh trúng tuyển nhập học (admission_id, applicant_id); cả hai để trống với sinh viên nhập từ hệ thống cũ.",
+      "x-owner": "academic",
+      "x-primary-key": [
+        "student_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "course": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "course_id",
+        "course_code",
+        "course_name",
+        "credit_hours",
+        "status",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "course_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "course_code": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "pattern": "^[A-Z]{2,4}[0-9]{3}$",
+          "x-unique-non-null": true
+        },
+        "course_name": {
+          "type": "string",
+          "x-physical-type": "varchar(200)",
+          "maxLength": 200
+        },
+        "credit_hours": {
+          "type": "integer",
+          "x-physical-type": "int",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Số tín chỉ"
+        },
+        "status": {
+          "type": "string",
+          "x-physical-type": "varchar(20)",
+          "maxLength": 20,
+          "enum": [
+            "Active",
+            "Inactive"
+          ]
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Học phần. Không gắn ngành; ngành/khung chứa học phần lấy qua curriculum_course.",
+      "x-owner": "academic",
+      "x-primary-key": [
+        "course_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "curriculum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "curriculum_id",
+        "program_id",
+        "curriculum_code",
+        "curriculum_name",
+        "version",
+        "effective_from",
+        "effective_to",
+        "status",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "curriculum_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "program_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "program",
+            "column": "program_id"
+          }
+        },
+        "curriculum_code": {
+          "type": "string",
+          "x-physical-type": "varchar(50)",
+          "maxLength": 50,
+          "pattern": "^[A-Z]+-[A-Z]+-[0-9]{4}$",
+          "description": "<program_code>-<năm áp dụng>"
+        },
+        "curriculum_name": {
+          "type": "string",
+          "x-physical-type": "varchar(250)",
+          "maxLength": 250
+        },
+        "version": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30
+        },
+        "effective_from": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "date32",
+          "format": "date"
+        },
+        "effective_to": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "date32",
+          "format": "date",
+          "description": "Null = đang áp dụng"
+        },
+        "status": {
+          "type": "string",
+          "x-physical-type": "varchar(20)",
+          "maxLength": 20,
+          "enum": [
+            "Draft",
+            "Active",
+            "Retired"
+          ]
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Chương trình khung: một phiên bản kế hoạch đào tạo của một chương trình.",
+      "x-owner": "academic",
+      "x-primary-key": [
+        "curriculum_id"
+      ],
+      "x-unique-together": [
+        [
+          "curriculum_code"
+        ],
+        [
+          "program_id",
+          "version"
+        ]
+      ],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "curriculum_course": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "curriculum_course_id",
+        "curriculum_id",
+        "course_id",
+        "semester_no",
+        "course_type",
+        "is_required",
+        "prerequisite_course_id",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "curriculum_course_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "curriculum_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "curriculum",
+            "column": "curriculum_id"
+          }
+        },
+        "course_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "course",
+            "column": "course_id"
+          }
+        },
+        "semester_no": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-physical-type": "int",
+          "minimum": 1,
+          "maximum": 12,
+          "description": "Học kỳ gợi ý"
+        },
+        "course_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "enum": [
+            "General",
+            "Foundation",
+            "Major",
+            "Elective",
+            null
+          ]
+        },
+        "is_required": {
+          "type": "boolean",
+          "x-physical-type": "boolean"
+        },
+        "prerequisite_course_id": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "course",
+            "column": "course_id"
+          }
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Học phần trong chương trình khung: học kỳ gợi ý, loại, bắt buộc, một học phần tiên quyết.",
+      "x-owner": "academic",
+      "x-primary-key": [
+        "curriculum_course_id"
+      ],
+      "x-unique-together": [
+        [
+          "curriculum_id",
+          "course_id"
+        ]
+      ],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "semester": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "semester_id",
+        "semester_code",
+        "academic_year",
+        "start_date",
+        "end_date",
+        "status",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "semester_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "semester_code": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "pattern": "^[0-9]{4}-[1-3]$",
+          "x-unique-non-null": true
+        },
+        "academic_year": {
+          "type": "string",
+          "x-physical-type": "varchar(20)",
+          "maxLength": 20,
+          "pattern": "^[0-9]{4}-[0-9]{4}$",
+          "description": "Khớp admission_year.year_label"
+        },
+        "start_date": {
+          "type": "string",
+          "x-physical-type": "date32",
+          "format": "date"
+        },
+        "end_date": {
+          "type": "string",
+          "x-physical-type": "date32",
+          "format": "date"
+        },
+        "status": {
+          "type": "string",
+          "x-physical-type": "varchar(20)",
+          "maxLength": 20,
+          "enum": [
+            "Planned",
+            "Ongoing",
+            "Completed"
+          ]
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Học kỳ. semester_code = <năm bắt đầu năm học>-<1: HK1, 2: HK2, 3: học kỳ hè>.",
+      "x-owner": "academic",
+      "x-primary-key": [
+        "semester_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "class": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class_id",
+        "class_code",
+        "course_id",
+        "semester_id",
+        "max_capacity",
+        "room",
+        "class_status",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "class_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "class_code": {
+          "type": "string",
+          "x-physical-type": "varchar(50)",
+          "maxLength": 50,
+          "pattern": "^[A-Z]{2,4}[0-9]{3}-[0-9]{4}-[1-3]-[0-9]{2}$",
+          "description": "<course_code>-<semester_code>-<nhóm>",
+          "x-unique-non-null": true
+        },
+        "course_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "course",
+            "column": "course_id"
+          }
+        },
+        "semester_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "semester",
+            "column": "semester_id"
+          }
+        },
+        "max_capacity": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "x-physical-type": "int",
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Null = không giới hạn/chưa chốt"
+        },
+        "room": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(50)",
+          "maxLength": 50,
+          "description": "Null = chưa xếp phòng hoặc học trực tuyến"
+        },
+        "class_status": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "enum": [
+            "Open",
+            "InProgress",
+            "Completed",
+            "Cancelled"
+          ]
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Lớp học phần: một học phần mở trong một học kỳ. Giảng viên gắn qua class_lecturer.",
+      "x-owner": "academic",
+      "x-primary-key": [
+        "class_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "class_lecturer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class_lecturer_id",
+        "class_id",
+        "lecturer_id",
+        "teaching_role",
+        "is_primary",
+        "assigned_from",
+        "assigned_to",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "class_lecturer_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "class_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "class",
+            "column": "class_id"
+          }
+        },
+        "lecturer_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "lecturer",
+            "column": "employee_id"
+          }
+        },
+        "teaching_role": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(50)",
+          "maxLength": 50,
+          "enum": [
+            "Lecturer",
+            "Assistant",
+            "Lab",
+            null
+          ]
+        },
+        "is_primary": {
+          "type": "boolean",
+          "x-physical-type": "boolean",
+          "description": "Mỗi lớp đúng một dòng true"
+        },
+        "assigned_from": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "date32",
+          "format": "date",
+          "description": "Null = từ đầu học kỳ"
+        },
+        "assigned_to": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "date32",
+          "format": "date",
+          "description": "Null = tới hết học kỳ"
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Giảng viên phụ trách lớp (N-N giữa class và lecturer).",
+      "x-owner": "academic",
+      "x-primary-key": [
+        "class_lecturer_id"
+      ],
+      "x-unique-together": [
+        [
+          "class_id",
+          "lecturer_id"
+        ]
+      ],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "enrollment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enrollment_id",
+        "student_id",
+        "class_id",
+        "enrollment_date",
+        "enrollment_status",
+        "created_at",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "enrollment_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "student_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "student",
+            "column": "student_id"
+          }
+        },
+        "class_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "class",
+            "column": "class_id"
+          }
+        },
+        "enrollment_date": {
+          "type": "string",
+          "x-physical-type": "date32",
+          "format": "date"
+        },
+        "enrollment_status": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "enum": [
+            "Registered",
+            "Withdrawn",
+            "Completed"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Đăng ký lớp học phần (sinh viên x lớp).",
+      "x-owner": "academic",
+      "x-primary-key": [
+        "enrollment_id"
+      ],
+      "x-unique-together": [
+        [
+          "student_id",
+          "class_id"
+        ]
+      ],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "enrollment_grade": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enrollment_grade_id",
+        "enrollment_id",
+        "midterm_score",
+        "final_score",
+        "total_score",
+        "grade_value",
+        "letter_grade",
+        "registration_date",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "enrollment_grade_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "enrollment_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-unique-non-null": true,
+          "x-references": {
+            "entity": "enrollment",
+            "column": "enrollment_id"
+          }
+        },
+        "midterm_score": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "decimal(5,2)",
+          "pattern": "^-?(?:0|[1-9][0-9]{0,2})\\.[0-9]{2}$",
+          "x-precision": 5,
+          "x-scale": 2,
+          "x-rounding": "reject_excess_scale",
+          "x-minimum": 0,
+          "x-maximum": 10
+        },
+        "final_score": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "decimal(5,2)",
+          "pattern": "^-?(?:0|[1-9][0-9]{0,2})\\.[0-9]{2}$",
+          "x-precision": 5,
+          "x-scale": 2,
+          "x-rounding": "reject_excess_scale",
+          "x-minimum": 0,
+          "x-maximum": 10
+        },
+        "total_score": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "decimal(5,2)",
+          "pattern": "^-?(?:0|[1-9][0-9]{0,2})\\.[0-9]{2}$",
+          "x-precision": 5,
+          "x-scale": 2,
+          "x-rounding": "reject_excess_scale",
+          "description": "round(0.3 x midterm + 0.7 x final, 1)",
+          "x-minimum": 0,
+          "x-maximum": 10
+        },
+        "grade_value": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "decimal(4,2)",
+          "pattern": "^-?(?:0|[1-9][0-9]{0,1})\\.[0-9]{2}$",
+          "x-precision": 4,
+          "x-scale": 2,
+          "x-rounding": "reject_excess_scale",
+          "description": "Điểm hệ 4 quy đổi từ total_score",
+          "x-minimum": 0,
+          "x-maximum": 4
+        },
+        "letter_grade": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(5)",
+          "maxLength": 5,
+          "enum": [
+            "A",
+            "B+",
+            "B",
+            "C+",
+            "C",
+            "D+",
+            "D",
+            "F",
+            null
+          ]
+        },
+        "registration_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "date32",
+          "format": "date",
+          "description": "Khi có thì bằng enrollment.enrollment_date"
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Kết quả học tập của một lượt đăng ký lớp (quan hệ 1 - 0..1 với enrollment). Điểm thành phần và total_score thang 10; grade_value hệ 4.",
+      "x-owner": "academic",
+      "x-primary-key": [
+        "enrollment_grade_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    }
+  },
+  "x-version": "0.1.0-draft",
+  "x-approval": "PENDING_DOMAIN_AND_PII_REVIEW",
+  "x-source-version": "1.2.0",
+  "x-source-sha256": "e600df57f0f513a25e74b4ce288c28a35827609ddbc17a6a9be35f5c9292642c",
+  "x-publish-policy": "strict_snapshot",
+  "x-json-decimal-encoding": "string"
+}

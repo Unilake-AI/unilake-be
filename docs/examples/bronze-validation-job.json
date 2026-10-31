@@ -1,0 +1,35 @@
+{
+  "data_source_id": 1,
+  "dataset_id": 2,
+  "source_table": "input.csv",
+  "validation_policy": {
+    "policy_id": "demo-csv-input",
+    "version": "1",
+    "source_system_id": 1,
+    "data_source_id": 1,
+    "dataset_id": 2,
+    "parser": {
+      "kind": "CSV",
+      "delimiter": ",",
+      "encoding": "utf-8",
+      "has_header": true,
+      "quote_char": "\"",
+      "skip_rows": 0
+    },
+    "columns": [
+      {"name": "id", "required": true},
+      {"name": "name", "required": true}
+    ],
+    "column_order": "any",
+    "allow_extra_columns": false,
+    "allow_empty_records": false,
+    "limits": {
+      "max_file_bytes": 10485760,
+      "max_columns": 100,
+      "max_records": 100000,
+      "max_cell_chars": 10000,
+      "timeout_seconds": 60,
+      "memory_limit_bytes": 67108864
+    }
+  }
+}

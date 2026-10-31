@@ -1,0 +1,789 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:unilake:silver:admissions:0.1.0-draft",
+  "title": "admissions Silver snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "major",
+    "program",
+    "admission_method",
+    "admission_year",
+    "applicant",
+    "admission"
+  ],
+  "properties": {
+    "major": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/major"
+      }
+    },
+    "program": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/program"
+      }
+    },
+    "admission_method": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/admission_method"
+      }
+    },
+    "admission_year": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/admission_year"
+      }
+    },
+    "applicant": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/applicant"
+      }
+    },
+    "admission": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/admission"
+      }
+    }
+  },
+  "$defs": {
+    "major": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "major_id",
+        "major_code",
+        "major_name",
+        "department_id",
+        "status",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "major_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "major_code": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "pattern": "^[0-9]{7}$",
+          "description": "Mã ngành Bộ GD&ĐT (7 chữ số)",
+          "x-unique-non-null": true
+        },
+        "major_name": {
+          "type": "string",
+          "x-physical-type": "varchar(200)",
+          "maxLength": 200
+        },
+        "department_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "description": "Khoa quản lý ngành (department_type = Faculty)",
+          "x-references": {
+            "entity": "department",
+            "column": "department_id"
+          }
+        },
+        "status": {
+          "type": "string",
+          "x-physical-type": "varchar(20)",
+          "maxLength": 20,
+          "enum": [
+            "Active",
+            "Inactive"
+          ]
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Ngành đào tạo, do một khoa quản lý. major_code dùng mã ngành Bộ GD&ĐT. Dùng chung với Academic.",
+      "x-owner": "admissions",
+      "x-primary-key": [
+        "major_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "program": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "program_id",
+        "program_code",
+        "program_name",
+        "major_id",
+        "degree_level",
+        "duration_years",
+        "tuition_fee_per_credit",
+        "status",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "program_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "program_code": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "pattern": "^[A-Z]+-[A-Z]+$",
+          "x-unique-non-null": true
+        },
+        "program_name": {
+          "type": "string",
+          "x-physical-type": "varchar(200)",
+          "maxLength": 200
+        },
+        "major_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "major",
+            "column": "major_id"
+          }
+        },
+        "degree_level": {
+          "type": "string",
+          "x-physical-type": "varchar(50)",
+          "maxLength": 50,
+          "enum": [
+            "Bachelor",
+            "Engineer",
+            "Master"
+          ]
+        },
+        "duration_years": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "decimal(4,1)",
+          "pattern": "^-?(?:0|[1-9][0-9]{0,2})\\.[0-9]{1}$",
+          "x-precision": 4,
+          "x-scale": 1,
+          "x-rounding": "reject_excess_scale",
+          "x-minimum": 1,
+          "x-maximum": 6
+        },
+        "tuition_fee_per_credit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "decimal(15,2)",
+          "pattern": "^-?(?:0|[1-9][0-9]{0,12})\\.[0-9]{2}$",
+          "x-precision": 15,
+          "x-scale": 2,
+          "x-rounding": "reject_excess_scale",
+          "description": "VND/tín chỉ",
+          "x-minimum": 0
+        },
+        "status": {
+          "type": "string",
+          "x-physical-type": "varchar(20)",
+          "maxLength": 20,
+          "enum": [
+            "Active",
+            "Inactive",
+            "Deprecated"
+          ]
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Chương trình đào tạo thuộc một ngành (chuẩn, CLC, kỹ sư, thạc sĩ). Thí sinh đăng ký theo chương trình. Dùng chung với Academic.",
+      "x-owner": "admissions",
+      "x-primary-key": [
+        "program_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "admission_method": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "admission_method_id",
+        "method_code",
+        "method_name",
+        "max_score",
+        "is_active",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "admission_method_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "method_code": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "pattern": "^[A-Z0-9_]{2,30}$",
+          "description": "Hiện dùng THPT, HOCBA, XTT",
+          "x-unique-non-null": true
+        },
+        "method_name": {
+          "type": "string",
+          "x-physical-type": "varchar(150)",
+          "maxLength": 150
+        },
+        "max_score": {
+          "type": "string",
+          "x-physical-type": "decimal(6,2)",
+          "pattern": "^-?(?:0|[1-9][0-9]{0,3})\\.[0-9]{2}$",
+          "x-precision": 6,
+          "x-scale": 2,
+          "x-rounding": "reject_excess_scale",
+          "description": "Thang điểm tối đa: 30 (THPT, HOCBA), 1200 (ĐGNL), 0 = không xét điểm (XTT)",
+          "x-minimum": 0
+        },
+        "is_active": {
+          "type": "boolean",
+          "x-physical-type": "boolean"
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Phương thức xét tuyển. max_score là thang điểm của phương thức; XTT không xét điểm nên quy ước max_score = 0.",
+      "x-owner": "admissions",
+      "x-primary-key": [
+        "admission_method_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "admission_year": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "admission_year_id",
+        "year_label",
+        "start_date",
+        "end_date",
+        "status",
+        "created_at",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "admission_year_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "year_label": {
+          "type": "string",
+          "x-physical-type": "varchar(20)",
+          "maxLength": 20,
+          "pattern": "^[0-9]{4}-[0-9]{4}$",
+          "x-unique-non-null": true
+        },
+        "start_date": {
+          "type": "string",
+          "x-physical-type": "date32",
+          "format": "date"
+        },
+        "end_date": {
+          "type": "string",
+          "x-physical-type": "date32",
+          "format": "date"
+        },
+        "status": {
+          "type": "string",
+          "x-physical-type": "varchar(20)",
+          "maxLength": 20,
+          "enum": [
+            "Upcoming",
+            "Open",
+            "Closed"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Mùa tuyển sinh. start_date..end_date bao trọn nhận hồ sơ, xét tuyển và nhập học.",
+      "x-owner": "admissions",
+      "x-primary-key": [
+        "admission_year_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "applicant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applicant_id",
+        "gender",
+        "high_school_name",
+        "province",
+        "created_at",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "applicant_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "gender": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(20)",
+          "maxLength": 20,
+          "enum": [
+            "Male",
+            "Female",
+            null
+          ]
+        },
+        "high_school_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(250)",
+          "maxLength": 250
+        },
+        "province": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "varchar(100)",
+          "maxLength": 100
+        },
+        "created_at": {
+          "type": "string",
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Thí sinh. Có dữ liệu cá nhân (PII); dữ liệu mẫu là giả lập, email dùng tên miền example.com.",
+      "x-owner": "admissions",
+      "x-primary-key": [
+        "applicant_id"
+      ],
+      "x-unique-together": [],
+      "x-identity-mode": "canonical_surrogate"
+    },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "admission_id",
+        "applicant_id",
+        "program_id",
+        "preference_rank",
+        "admission_method_id",
+        "admission_year_id",
+        "application_date",
+        "admission_score",
+        "admission_status",
+        "created_at",
+        "_source_system_id",
+        "_source_record_id",
+        "_batch_id",
+        "_run_id",
+        "_processed_at",
+        "_schema_version",
+        "_mapping_version"
+      ],
+      "properties": {
+        "admission_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807
+        },
+        "applicant_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "applicant",
+            "column": "applicant_id"
+          }
+        },
+        "program_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "program",
+            "column": "program_id"
+          }
+        },
+        "preference_rank": {
+          "type": "integer",
+          "x-physical-type": "int",
+          "minimum": 1,
+          "maximum": 99,
+          "description": "Thứ tự nguyện vọng, 1 = cao nhất"
+        },
+        "admission_method_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "admission_method",
+            "column": "admission_method_id"
+          }
+        },
+        "admission_year_id": {
+          "type": "integer",
+          "x-physical-type": "bigint",
+          "minimum": -9223372036854775808,
+          "maximum": 9223372036854775807,
+          "x-references": {
+            "entity": "admission_year",
+            "column": "admission_year_id"
+          }
+        },
+        "application_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "date32",
+          "format": "date"
+        },
+        "admission_score": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "x-physical-type": "decimal(6,2)",
+          "pattern": "^-?(?:0|[1-9][0-9]{0,3})\\.[0-9]{2}$",
+          "x-precision": 6,
+          "x-scale": 2,
+          "x-rounding": "reject_excess_scale",
+          "description": "Theo thang max_score của phương thức, đã cộng ưu tiên; null khi XTT hoặc chưa có điểm",
+          "x-minimum": 0
+        },
+        "admission_status": {
+          "type": "string",
+          "x-physical-type": "varchar(30)",
+          "maxLength": 30,
+          "enum": [
+            "Applied",
+            "Accepted",
+            "Rejected",
+            "Waitlisted"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_source_system_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_source_record_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_run_id": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        },
+        "_processed_at": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "timestamp[us,UTC]",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "_schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8",
+          "const": "0.1.0-draft"
+        },
+        "_mapping_version": {
+          "type": "string",
+          "minLength": 1,
+          "x-physical-type": "utf8"
+        }
+      },
+      "x-grain": "Hồ sơ/nguyện vọng xét tuyển: một thí sinh đăng ký một chương trình theo một phương thức, ở một thứ tự nguyện vọng, trong một mùa tuyển sinh.",
+      "x-owner": "admissions",
+      "x-primary-key": [
+        "admission_id"
+      ],
+      "x-unique-together": [
+        [
+          "applicant_id",
+          "admission_year_id",
+          "preference_rank"
+        ],
+        [
+          "applicant_id",
+          "program_id",
+          "admission_year_id",
+          "admission_method_id"
+        ]
+      ],
+      "x-identity-mode": "canonical_surrogate"
+    }
+  },
+  "x-version": "0.1.0-draft",
+  "x-approval": "PENDING_DOMAIN_AND_PII_REVIEW",
+  "x-source-version": "1.3.0",
+  "x-source-sha256": "39f1a20177bff2e6f7be7ba420a2eb326bd8189df4e2ffba4c4546bb8832ff3a",
+  "x-publish-policy": "strict_snapshot",
+  "x-json-decimal-encoding": "string"
+}

@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "UniLake AI V1.0 – System Context Diagram",
+    "output": "unilake-system-context-v1.html",
+    "quality_profile": "showcase",
+    "viewBox": [1250, 440],
+    "views": [
+      { "id": "users", "label": "Người dùng", "focus": ["univ_admin", "sys_admin", "data_admin", "ai_dev", "unilake"], "note": "Bốn nhóm người dùng tương tác với UniLake AI qua Web Application." },
+      { "id": "sources", "label": "Nguồn dữ liệu", "focus": ["admissions", "academic", "hr", "other", "unilake"], "note": "Dữ liệu nghiệp vụ được nạp vào Data Lake theo batch, file hoặc API." },
+      { "id": "external", "label": "Dịch vụ ngoài", "focus": ["unilake", "llm_api", "object_storage"], "note": "UniLake AI gọi LLM API cho Text-to-SQL và dùng object storage để lưu dữ liệu." }
+    ]
+  },
+  "components": [
+    { "id": "univ_admin", "type": "external", "label": "University Administrators", "sublabel": "Lãnh đạo & các phòng ban", "pos": [320, 20], "size": [170, 56] },
+    { "id": "sys_admin", "type": "external", "label": "System Administrator", "sublabel": "Vận hành nền tảng", "pos": [510, 20], "size": [170, 56] },
+    { "id": "data_admin", "type": "external", "label": "Data Administrator", "sublabel": "Catalog, Quality, Lineage", "pos": [700, 20], "size": [170, 56] },
+    { "id": "ai_dev", "type": "external", "label": "AI / Analytics Developer", "sublabel": "Cấu hình & đánh giá AI", "pos": [890, 20], "size": [170, 56] },
+
+    { "id": "admissions", "type": "cloud", "label": "Admissions System", "sublabel": "thí sinh, hồ sơ, nhập học", "pos": [30, 110], "size": [180, 50] },
+    { "id": "academic", "type": "cloud", "label": "Academic System", "sublabel": "sinh viên, môn học, điểm", "pos": [30, 186], "size": [180, 50] },
+    { "id": "hr", "type": "cloud", "label": "Human Resources System", "sublabel": "giảng viên, đơn vị, chức vụ", "pos": [30, 262], "size": [180, 50] },
+    { "id": "other", "type": "cloud", "label": "Other Data Sources", "sublabel": "CSV / Excel / API", "pos": [30, 338], "size": [180, 50] },
+
+    { "id": "unilake", "type": "backend", "label": "UniLake AI", "sublabel": "Data Lake · Governance · AI Analytics", "pos": [420, 220], "size": [400, 120], "tag": "V1.0" },
+
+    { "id": "llm_api", "type": "external", "label": "LLM API", "sublabel": "Text-to-SQL provider", "pos": [1050, 200], "size": [180, 56] },
+    { "id": "object_storage", "type": "external", "label": "Cloud / Object Storage", "sublabel": "S3-compatible", "pos": [1050, 300], "size": [180, 56] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Hệ thống nghiệp vụ của trường", "wraps": ["admissions", "academic", "hr", "other"] }
+  ],
+  "connections": [
+    { "id": "univ-admin-uses", "from": "univ_admin", "to": "unilake", "label": "câu hỏi NLQ, Dashboard, KPI", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "labelAt": [405, 112] },
+    { "id": "sys-admin-uses", "from": "sys_admin", "to": "unilake", "label": "người dùng, cấu hình, log", "fromSide": "bottom", "toSide": "top", "labelAt": [595, 112] },
+    { "id": "data-admin-uses", "from": "data_admin", "to": "unilake", "label": "metadata, quality rules", "fromSide": "bottom", "toSide": "top", "labelAt": [785, 112] },
+    { "id": "ai-dev-uses", "from": "ai_dev", "to": "unilake", "label": "prompt, schema, evaluation", "fromSide": "bottom", "toSide": "top", "labelAt": [975, 112] },
+
+    { "id": "admissions-feed", "from": "admissions", "to": "unilake", "label": "batch / file", "fromSide": "right", "toSide": "left" },
+    { "id": "academic-feed", "from": "academic", "to": "unilake", "label": "batch / file", "fromSide": "right", "toSide": "left", "labelAt": [250, 204] },
+    { "id": "hr-feed", "from": "hr", "to": "unilake", "label": "batch / file", "fromSide": "right", "toSide": "left", "labelAt": [250, 280] },
+    { "id": "other-feed", "from": "other", "to": "unilake", "label": "file / API", "fromSide": "right", "toSide": "left", "labelAt": [250, 356] },
+
+    { "id": "llm-call", "from": "unilake", "to": "llm_api", "label": "schema context → SQL", "variant": "dashed", "fromSide": "right", "toSide": "left" },
+    { "id": "storage-io", "from": "unilake", "to": "object_storage", "label": "đọc / ghi dữ liệu", "variant": "dashed", "fromSide": "right", "toSide": "left" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Người dùng (proposal §12.1)", "items": ["University Administrators: gửi câu hỏi NLQ, xem Dashboard, KPI, báo cáo", "System Administrator: quản lý người dùng, cấu hình, theo dõi log", "Data Administrator: Catalog, Quality rules, Lineage. AI Developer: prompt, schema, đánh giá"] },
+    { "dot": "amber", "title": "Nguồn dữ liệu", "items": ["Admissions, Academic, HR: ba domain trong phạm vi V1.0", "Other Sources: CSV / Excel / API bổ sung trong tương lai", "Nạp theo batch, API hoặc file, không real-time streaming"] },
+    { "dot": "violet", "title": "Dịch vụ ngoài & phạm vi", "items": ["LLM API phục vụ Natural Language Query và Text-to-SQL", "Cloud / Object Storage lưu trữ dữ liệu", "Không kết nối dữ liệu production, không có domain Tài chính"] }
+  ]
+}

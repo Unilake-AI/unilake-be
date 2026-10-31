@@ -1,0 +1,10 @@
+qualification_id,qualification_name,qualification_type
+1,Cử nhân,Degree
+2,Kỹ sư,Degree
+3,Thạc sĩ,Degree
+4,Tiến sĩ,Degree
+5,Chứng chỉ Nghiệp vụ sư phạm,Certificate
+6,IELTS Academic,Certificate
+7,Cao cấp lý luận chính trị,Certificate
+8,Chứng chỉ Kế toán trưởng,Certificate
+9,AWS Certified Solutions Architect - Associate,Certificate

@@ -1,0 +1,60 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "UniLake AI V1.0 – AI Analytics Flow",
+    "output": "unilake-ai-analytics-flow.html",
+    "quality_profile": "showcase",
+    "legend": { "mode": "auto", "entries": { "frontend": { "label": "Giao diện kết quả" }, "backend": { "label": "Xử lý NLQ" }, "security": { "label": "Kiểm soát an toàn" }, "database": { "label": "Dữ liệu" }, "external": { "label": "Người dùng, dịch vụ ngoài" } } },
+    "views": [
+      { "id": "happy-path", "label": "Từ câu hỏi đến kết quả", "focus": ["question", "intent", "schema", "sqlgen", "validate", "execute", "result"], "note": "Đường chính: hiểu câu hỏi, lấy schema, sinh SQL, kiểm tra, thực thi và trả kết quả." },
+      { "id": "grounding", "label": "Schema và LLM", "focus": ["catalog", "schema", "sqlgen", "llm"], "note": "Schema từ Catalog giúp LLM sinh SQL đúng bảng và cột, giảm lỗi Text-to-SQL." },
+      { "id": "safety", "label": "An toàn và phục hồi", "focus": ["validate", "sqlgen", "error", "result"], "note": "SQL không hợp lệ được sửa và thử lại có giới hạn, hết lượt thì trả lỗi có kiểm soát." }
+    ]
+  },
+  "lanes": [
+    { "id": "ai", "label": "Người dùng và NLQ Engine" },
+    { "id": "policy", "label": "Kiểm soát an toàn", "variant": "exception" },
+    { "id": "data", "label": "Dữ liệu và dịch vụ ngoài" }
+  ],
+  "phases": [
+    { "id": "understand", "label": "Hiểu câu hỏi", "fromCol": 0, "toCol": 2 },
+    { "id": "generate", "label": "Sinh và kiểm tra SQL", "fromCol": 3, "toCol": 4, "variant": "emphasis" },
+    { "id": "answer", "label": "Phản hồi", "fromCol": 5, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": ["question", "intent", "schema", "sqlgen", "validate", "execute", "result"],
+  "nodes": [
+    { "id": "question", "lane": "ai", "col": 0, "type": "external", "label": "Câu hỏi", "sublabel": "ngôn ngữ tự nhiên", "width": 132 },
+    { "id": "intent", "lane": "ai", "col": 1, "type": "backend", "label": "Intent Parser", "sublabel": "aggregate / lookup", "width": 132 },
+    { "id": "schema", "lane": "ai", "col": 2, "type": "backend", "label": "Schema Retrieval", "sublabel": "bảng, cột, quan hệ", "width": 132 },
+    { "id": "sqlgen", "lane": "ai", "col": 3, "type": "backend", "label": "Text-to-SQL", "sublabel": "prompt + LLM", "tag": "AI", "width": 132 },
+    { "id": "error", "lane": "ai", "col": 4, "type": "security", "label": "Thông báo lỗi", "sublabel": "lỗi có kiểm soát", "width": 132 },
+    { "id": "result", "lane": "ai", "col": 5, "type": "frontend", "label": "Kết quả", "sublabel": "bảng, KPI, biểu đồ", "width": 132 },
+
+    { "id": "validate", "lane": "policy", "col": 4, "type": "security", "label": "SQL Validation", "sublabel": "chỉ SELECT hợp lệ", "tag": "read-only", "width": 132 },
+
+    { "id": "catalog", "lane": "data", "col": 2, "type": "database", "label": "Data Catalog", "sublabel": "metadata Gold", "width": 132 },
+    { "id": "llm", "lane": "data", "col": 3, "type": "external", "label": "LLM API", "sublabel": "provider, fallback", "width": 132 },
+    { "id": "history", "lane": "data", "col": 4, "type": "database", "label": "Query History", "sublabel": "PostgreSQL", "width": 132 },
+    { "id": "execute", "lane": "data", "col": 5, "type": "database", "label": "Query Execution", "sublabel": "DuckDB read-only", "tag": "Gold", "width": 132 }
+  ],
+  "edges": [
+    { "id": "ask", "from": "question", "to": "intent", "variant": "emphasis" },
+    { "id": "parse", "from": "intent", "to": "schema", "label": "intent", "variant": "emphasis" },
+    { "id": "ground-schema", "from": "catalog", "to": "schema", "label": "metadata", "variant": "dashed" },
+    { "id": "build-prompt", "from": "schema", "to": "sqlgen", "label": "context", "variant": "emphasis" },
+    { "id": "call-llm", "from": "sqlgen", "to": "llm", "label": "prompt", "variant": "dashed" },
+    { "id": "check-sql", "from": "sqlgen", "to": "validate", "label": "SQL", "variant": "security" },
+    { "id": "retry-sql", "from": "validate", "to": "sqlgen", "label": "thử lại", "variant": "dashed", "role": "return", "fromSide": "left", "toSide": "bottom" },
+    { "id": "run-sql", "from": "validate", "to": "execute", "label": "hợp lệ", "variant": "emphasis" },
+    { "id": "reject-sql", "from": "validate", "to": "error", "label": "hết lượt", "variant": "security", "role": "error" },
+    { "id": "show-error", "from": "error", "to": "result", "variant": "security", "role": "error" },
+    { "id": "return-rows", "from": "execute", "to": "result", "label": "rows", "variant": "emphasis" },
+    { "id": "save-history", "from": "execute", "to": "history", "label": "lưu", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Pipeline NLQ (proposal §12.4)", "items": ["Question, Intent, Schema Retrieval, Text-to-SQL, SQL Validation, Execution, Result", "Mục tiêu: Text-to-SQL accuracy ≥ 85%, phản hồi dưới 5 giây"] },
+    { "dot": "rose", "title": "An toàn và phục hồi", "items": ["SQL do LLM sinh phải qua SQL Validation trước khi chạy", "SQL sai được sửa và thử lại có giới hạn, đề xuất tối đa 2 lần, hết lượt thì báo lỗi (FR21)"] },
+    { "dot": "cyan", "title": "Grounding và ổn định", "items": ["Schema từ Data Catalog đi vào prompt, LLM không đoán bảng", "LLM gọi qua lớp trừu tượng có fallback, mọi truy vấn lưu Query History (FR20)"] }
+  ]
+}

@@ -1,0 +1,37 @@
+employee_id,employee_code,full_name,date_of_birth,gender,email,phone,hire_date,employee_status
+1,NV0001,Nguyễn Hữu Phước,1968-05-12,Male,phuoc.nh@example.com,0909569287,1995-08-15,Active
+2,NV0002,Trần Thị Mỹ Hạnh,1972-09-03,Female,hanh.ttm@example.com,0791484821,1998-08-15,Active
+3,NV0003,Lê Văn Hòa,1975-02-18,Male,hoa.lv@example.com,,2001-03-01,Active
+4,NV0004,Võ Thị Thanh Tâm,1980-11-07,Female,tam.vtt@example.com,0700947471,2006-03-01,Active
+5,NV0005,Đỗ Minh Khôi,1978-06-25,Male,khoi.dm@example.com,0385467182,2004-03-01,Active
+6,NV0006,Bùi Thị Kim Oanh,1979-01-30,Female,,0937899767,2003-03-01,Active
+7,NV0007,Ngô Thị Hồng Nhung,1990-04-14,Female,nhung.nth@example.com,0956895991,2014-03-01,Active
+8,NV0008,Phan Quốc Việt,1992-12-02,Male,viet.pq@example.com,0993426768,2017-03-01,Active
+9,NV0009,Huỳnh Thị Diễm,1995-08-19,Female,diem.ht@example.com,,2019-03-01,Active
+10,NV0010,Trương Văn Lực,1988-03-09,Male,luc.tv@example.com,0703836491,2012-03-01,Active
+11,NV0011,Lý Thị Ngọc Hà,1993-10-11,Female,ha.ltn@example.com,0317448800,2016-03-01,Resigned
+12,NV0012,Đinh Công Sơn,1996-07-27,Male,son.dc@example.com,,2021-03-01,Active
+13,NV0013,Đặng Quốc Bảo,1978-03-21,Male,bao.dq@example.com,0980517898,2003-08-15,Active
+14,NV0014,Bùi Thu Trang,1986-07-02,Female,trang.bt@example.com,,2010-08-15,Active
+15,NV0015,Huỳnh Gia Khang,1990-12-15,Male,khang.hg@example.com,,2015-08-15,Active
+16,NV0016,Ngô Khánh Linh,1989-05-28,Female,linh.nk@example.com,0876399577,2013-08-15,Active
+17,NV0017,Phan Hữu Nghĩa,1984-09-09,Male,nghia.ph@example.com,0331720791,2009-08-15,Active
+18,NV0018,Trịnh Minh Đức,1987-01-17,Male,duc.tm@example.com,0794621092,2012-08-15,Resigned
+19,NV0019,Mai Thị Thu Hà,1994-06-06,Female,ha.mtt@example.com,0310585494,2020-08-15,Active
+20,NV0020,Dương Minh Quân,1979-10-04,Male,quan.dm@example.com,0843338806,2004-08-15,Active
+21,NV0021,Lê Thị Phương,1987-02-26,Female,phuong.lt@example.com,0801696300,2011-08-15,Active
+22,NV0022,Trần Bảo Ngân,1982-11-19,Female,ngan.tb@example.com,0899244852,2007-08-15,Active
+23,NV0023,Hà Văn Thắng,1985-08-08,Male,thang.hv@example.com,0751266213,2012-08-15,Active
+24,NV0024,Nguyễn Thị Yến,1981-04-03,Female,yen.nt@example.com,0354554732,2006-08-15,Active
+25,NV0025,Hồ Minh Nhật,1991-09-22,Male,nhat.hm@example.com,0961907286,2016-08-15,Active
+26,NV0026,Phạm Thị Lan,1983-12-12,Female,lan.pt@example.com,0948373711,2008-08-15,Active
+27,NV0027,Hoàng Ngọc Mai,1988-07-30,Female,mai.hn@example.com,0938768390,2013-08-15,Active
+28,NV0028,Phạm Văn Dũng,1963-10-20,Male,dung.pv@example.com,0886261538,1990-08-15,Retired
+29,NV0029,Tạ Quang Huy,1976-05-16,Male,huy.tq@example.com,0737807678,2002-08-15,Active
+30,NV0030,Đỗ Thành Long,1986-03-05,Male,long.dt@example.com,0390391414,2012-08-15,Active
+31,NV0031,Châu Thị Bích Ngọc,1990-10-24,Female,ngoc.ctb@example.com,0372409901,2016-08-15,Active
+32,NV0032,Nguyễn Văn Thành,1972-01-08,Male,thanh.nv@example.com,,1998-08-15,Active
+33,NV0033,Trần Thị Hương,1980-06-17,Female,huong.tt@example.com,0392264763,2005-08-15,Active
+34,NV0034,Lê Minh Tâm,1985-11-29,Male,tam.lm@example.com,0845547604,2011-08-15,Active
+35,NV0035,Võ Đức Hải,1975-08-11,Male,hai.vd@example.com,0319675680,2000-08-15,Active
+36,NV0036,Kiều Thị Minh Thư,1991-02-13,Female,thu.ktm@example.com,0787591583,2017-08-15,Active

@@ -1,0 +1,576 @@
+title UniLake AI Database Architecture
+
+admission_year [icon: calendar, color: blue] {
+  admission_year_id bigint pk
+  year_label string unique
+  start_date date
+  end_date date
+  status string
+  created_at timestamp
+}
+
+admission_method [icon: book, color: blue] {
+  admission_method_id bigint pk
+  method_code string unique
+  method_name string
+  max_score decimal
+  description text nullable
+  is_active boolean
+}
+
+applicant [icon: user, color: blue] {
+  applicant_id bigint pk
+  national_id string unique nullable
+  full_name string
+  date_of_birth date nullable
+  gender string nullable
+  phone string nullable
+  email string nullable
+  high_school_name string nullable
+  province string nullable
+  created_at timestamp
+}
+
+admission [icon: file-text, color: blue] {
+  admission_id bigint pk
+  applicant_id bigint fk
+  program_id bigint fk
+  preference_rank int
+  admission_method_id bigint fk
+  admission_year_id bigint fk
+  application_date date nullable
+  admission_score decimal nullable
+  admission_status string
+  created_at timestamp
+}
+
+student [icon: user, color: blue] {
+  student_id bigint pk
+  student_code string unique
+  applicant_id bigint fk unique nullable
+  admission_id bigint fk unique nullable
+  full_name string
+  date_of_birth date nullable
+  gender string nullable
+  program_id bigint fk
+  admission_year_id bigint fk
+  student_status string
+  created_at timestamp
+}
+
+enrollment [icon: clipboard, color: purple] {
+  enrollment_id bigint pk
+  student_id bigint fk
+  class_id bigint fk
+  enrollment_date date
+  enrollment_status string
+  created_at timestamp
+}
+
+department [icon: home, color: purple] {
+  department_id bigint pk
+  department_code string unique
+  department_name string
+  department_type string
+  parent_department_id bigint fk nullable
+  status string
+  created_at timestamp
+}
+
+major [icon: book-open, color: purple] {
+  major_id bigint pk
+  major_code string unique
+  major_name string
+  department_id bigint fk
+  status string
+}
+
+program [icon: award, color: purple] {
+  program_id bigint pk
+  program_code string unique
+  program_name string
+  major_id bigint fk
+  degree_level string
+  duration_years decimal nullable
+  tuition_fee_per_credit decimal nullable
+  status string
+}
+
+curriculum [icon: book-open, color: purple] {
+  curriculum_id bigint pk
+  program_id bigint fk
+  curriculum_code string
+  curriculum_name string
+  version string
+  effective_from date nullable
+  effective_to date nullable
+  status string
+}
+
+course [icon: book, color: purple] {
+  course_id bigint pk
+  course_code string unique
+  course_name string
+  credit_hours int
+  status string
+}
+
+curriculum_course [icon: list, color: purple] {
+  curriculum_course_id bigint pk
+  curriculum_id bigint fk
+  course_id bigint fk
+  semester_no int nullable
+  course_type string nullable
+  is_required boolean
+  prerequisite_course_id bigint fk nullable
+}
+
+semester [icon: calendar, color: purple] {
+  semester_id bigint pk
+  semester_code string unique
+  academic_year string
+  start_date date
+  end_date date
+  status string
+}
+
+class [icon: users, color: purple] {
+  class_id bigint pk
+  class_code string unique
+  course_id bigint fk
+  semester_id bigint fk
+  max_capacity int nullable
+  room string nullable
+  class_status string
+}
+
+class_lecturer [icon: user, color: purple] {
+  class_lecturer_id bigint pk
+  class_id bigint fk
+  lecturer_id bigint fk
+  teaching_role string nullable
+  is_primary boolean
+  assigned_from date nullable
+  assigned_to date nullable
+}
+
+enrollment_grade [icon: edit, color: purple] {
+  enrollment_grade_id bigint pk
+  enrollment_id bigint fk unique
+  midterm_score decimal nullable
+  final_score decimal nullable
+  total_score decimal nullable
+  grade_value decimal nullable
+  letter_grade string nullable
+  registration_date date nullable
+}
+
+employee [icon: briefcase, color: purple] {
+  employee_id bigint pk
+  employee_code string unique
+  full_name string
+  date_of_birth date nullable
+  gender string nullable
+  email string unique nullable
+  phone string nullable
+  hire_date date nullable
+  employee_status string
+}
+
+position [icon: briefcase, color: purple] {
+  position_id bigint pk
+  position_code string unique
+  position_name string
+  position_level string nullable
+}
+
+assignment [icon: git-branch, color: purple] {
+  assignment_id bigint pk
+  employee_id bigint fk
+  department_id bigint fk
+  position_id bigint fk
+  start_date date
+  end_date date nullable
+  is_primary boolean
+  assignment_status string
+}
+
+lecturer [icon: user, color: purple] {
+  employee_id bigint pk fk
+  academic_degree string nullable
+  academic_title string nullable
+  research_field string nullable
+}
+
+qualification [icon: award, color: purple] {
+  qualification_id bigint pk
+  qualification_name string
+  qualification_type string nullable
+}
+
+employee_qualification [icon: file-text, color: purple] {
+  employee_id bigint pk fk
+  qualification_id bigint pk fk
+  institution string nullable
+  year_obtained int nullable
+}
+
+source_system [icon: server, color: orange] {
+  source_system_id bigint pk
+  source_code string unique
+  source_name string
+  source_type string
+  description text nullable
+  owner_department_id bigint fk nullable
+  is_active boolean
+  created_at timestamp
+}
+
+data_source [icon: hard-drive, color: orange] {
+  data_source_id bigint pk
+  source_system_id bigint fk
+  source_name string
+  source_type string
+  connection_type string nullable
+  location text nullable
+  description text nullable
+  is_active boolean
+  created_at timestamp
+}
+
+data_layer [icon: layers, color: orange] {
+  data_layer_id bigint pk
+  layer_code string unique
+  layer_name string
+  storage_type string nullable
+  description text nullable
+}
+
+dataset [icon: database, color: orange] {
+  dataset_id bigint pk
+  dataset_code string unique
+  dataset_name string
+  domain string
+  source_system_id bigint fk nullable
+  data_layer_id bigint fk
+  owner_department_id bigint fk nullable
+  storage_format string nullable
+  location text nullable
+  version string nullable
+  status string
+  description text nullable
+  created_at timestamp
+  updated_at timestamp nullable
+}
+
+ingestion_job [icon: download, color: orange] {
+  ingestion_job_id bigint pk
+  data_source_id bigint fk
+  dataset_id bigint fk
+  target_layer_id bigint fk
+  job_type string nullable
+  started_at timestamp nullable
+  finished_at timestamp nullable
+  status string
+  rows_read bigint nullable
+  rows_written bigint nullable
+  rows_rejected bigint nullable
+  error_message text nullable
+}
+
+transformation_step [icon: shuffle, color: orange] {
+  transformation_step_id bigint pk
+  ingestion_job_id bigint fk nullable
+  source_dataset_id bigint fk
+  target_dataset_id bigint fk
+  step_name string
+  step_order int
+  transformation_type string
+  transformation_expression text nullable
+  rows_input bigint nullable
+  rows_output bigint nullable
+  status string
+  executed_at timestamp nullable
+}
+
+data_processing_run [icon: activity, color: orange] {
+  run_id bigint pk
+  run_type string
+  started_at timestamp nullable
+  finished_at timestamp nullable
+  status string
+  triggered_by bigint fk nullable
+  error_message text nullable
+}
+
+catalog_table [icon: table, color: orange] {
+  catalog_table_id bigint pk
+  dataset_id bigint fk
+  table_name string
+  source_table_name string nullable
+  description text nullable
+  owner string nullable
+  created_at timestamp
+  updated_at timestamp nullable
+}
+
+catalog_column [icon: columns, color: orange] {
+  catalog_column_id bigint pk
+  catalog_table_id bigint fk
+  column_name string
+  data_type string
+  description text nullable
+  is_nullable boolean nullable
+  is_primary_key boolean
+  is_foreign_key boolean
+}
+
+data_lineage [icon: git-branch, color: orange] {
+  data_lineage_id bigint pk
+  transformation_step_id bigint fk
+  source_column_id bigint fk
+  target_column_id bigint fk
+  lineage_type string
+  transformation_expression text nullable
+  created_at timestamp
+}
+
+data_quality_rule [icon: check-circle, color: orange] {
+  data_quality_rule_id bigint pk
+  catalog_column_id bigint fk
+  rule_code string unique
+  rule_name string
+  rule_type string
+  rule_expression text
+  severity string
+  is_active boolean
+}
+
+data_quality_run [icon: activity, color: orange] {
+  data_quality_run_id bigint pk
+  data_quality_rule_id bigint fk
+  ingestion_job_id bigint fk nullable
+  run_at timestamp
+  total_records bigint
+  passed_records bigint
+  failed_records bigint
+  pass_rate decimal
+  execution_status string
+  failure_sample_ref text nullable
+}
+
+ai_model [icon: cpu, color: green] {
+  ai_model_id bigint pk
+  provider string
+  model_name string
+  model_version string nullable
+  is_active boolean
+  created_at timestamp
+}
+
+prompt_template [icon: file-text, color: green] {
+  prompt_template_id bigint pk
+  template_name string
+  version string
+  template_text text
+  is_active boolean
+  created_at timestamp
+}
+
+query_request [icon: message-square, color: green] {
+  query_request_id bigint pk
+  app_user_id bigint fk
+  question_text text
+  language string nullable
+  detected_intent string nullable
+  submitted_at timestamp
+  status string
+}
+
+schema_retrieval [icon: search, color: green] {
+  schema_retrieval_id bigint pk
+  query_request_id bigint fk
+  catalog_table_id bigint fk
+  retrieval_rank int
+  relevance_score decimal nullable
+}
+
+generated_sql [icon: code, color: green] {
+  generated_sql_id bigint pk
+  query_request_id bigint fk
+  ai_model_id bigint fk
+  prompt_template_id bigint fk
+  sql_text text
+  generated_at timestamp
+  validation_status string
+  validation_error text nullable
+}
+
+query_execution [icon: play-circle, color: green] {
+  query_execution_id bigint pk
+  generated_sql_id bigint fk unique
+  executed_at timestamp
+  execution_status string
+  row_count bigint nullable
+  execution_time_ms int nullable
+  result_ref text nullable
+  error_message text nullable
+}
+
+app_user [icon: user, color: green] {
+  app_user_id bigint pk
+  username string unique
+  password_hash text
+  employee_id bigint fk unique nullable
+  is_active boolean
+  created_at timestamp
+}
+
+role [icon: shield, color: green] {
+  role_id bigint pk
+  role_code string unique
+  role_name string
+  description text nullable
+}
+
+permission [icon: key, color: green] {
+  permission_id bigint pk
+  permission_code string unique
+  permission_name string
+  description text nullable
+}
+
+user_role [icon: users, color: green] {
+  app_user_id bigint pk fk
+  role_id bigint pk fk
+}
+
+role_permission [icon: lock, color: green] {
+  role_id bigint pk fk
+  permission_id bigint pk fk
+}
+
+login_session [icon: log-in, color: green] {
+  login_session_id bigint pk
+  app_user_id bigint fk
+  login_at timestamp
+  logout_at timestamp nullable
+  ip_address string nullable
+  session_status string
+}
+
+dashboard [icon: layout, color: yellow] {
+  dashboard_id bigint pk
+  dashboard_name string
+  owner_app_user_id bigint fk
+  description text nullable
+  created_at timestamp
+  updated_at timestamp nullable
+}
+
+kpi [icon: trending-up, color: yellow] {
+  kpi_id bigint pk
+  kpi_code string unique
+  kpi_name string
+  domain string
+  unit string nullable
+  description text nullable
+}
+
+kpi_value [icon: bar-chart-2, color: yellow] {
+  kpi_value_id bigint pk
+  kpi_id bigint fk
+  period_date date
+  kpi_value decimal
+  dimension_json text nullable
+  created_at timestamp
+}
+
+chart_widget [icon: pie-chart, color: yellow] {
+  chart_widget_id bigint pk
+  dashboard_id bigint fk
+  widget_type string
+  title string
+  query_request_id bigint fk nullable
+  kpi_id bigint fk nullable
+  config_json text nullable
+  position_x int nullable
+  position_y int nullable
+  width int nullable
+  height int nullable
+}
+
+admission.applicant_id > applicant.applicant_id
+admission.program_id > program.program_id
+admission.admission_method_id > admission_method.admission_method_id
+admission.admission_year_id > admission_year.admission_year_id
+student.applicant_id - applicant.applicant_id
+student.admission_id - admission.admission_id
+student.program_id > program.program_id
+student.admission_year_id > admission_year.admission_year_id
+enrollment.student_id > student.student_id
+enrollment.class_id > class.class_id
+department.parent_department_id > department.department_id
+major.department_id > department.department_id
+program.major_id > major.major_id
+curriculum.program_id > program.program_id
+curriculum_course.curriculum_id > curriculum.curriculum_id
+curriculum_course.course_id > course.course_id
+curriculum_course.prerequisite_course_id > course.course_id
+class.course_id > course.course_id
+class.semester_id > semester.semester_id
+class_lecturer.class_id > class.class_id
+class_lecturer.lecturer_id > lecturer.employee_id
+enrollment_grade.enrollment_id - enrollment.enrollment_id
+assignment.employee_id > employee.employee_id
+assignment.department_id > department.department_id
+assignment.position_id > position.position_id
+lecturer.employee_id - employee.employee_id
+employee_qualification.employee_id > employee.employee_id
+employee_qualification.qualification_id > qualification.qualification_id
+source_system.owner_department_id > department.department_id
+data_source.source_system_id > source_system.source_system_id
+dataset.source_system_id > source_system.source_system_id
+dataset.data_layer_id > data_layer.data_layer_id
+dataset.owner_department_id > department.department_id
+ingestion_job.data_source_id > data_source.data_source_id
+ingestion_job.dataset_id > dataset.dataset_id
+ingestion_job.target_layer_id > data_layer.data_layer_id
+transformation_step.ingestion_job_id > ingestion_job.ingestion_job_id
+transformation_step.source_dataset_id > dataset.dataset_id
+transformation_step.target_dataset_id > dataset.dataset_id
+data_processing_run.triggered_by > app_user.app_user_id
+catalog_table.dataset_id > dataset.dataset_id
+catalog_column.catalog_table_id > catalog_table.catalog_table_id
+data_lineage.transformation_step_id > transformation_step.transformation_step_id
+data_lineage.source_column_id > catalog_column.catalog_column_id
+data_lineage.target_column_id > catalog_column.catalog_column_id
+data_quality_rule.catalog_column_id > catalog_column.catalog_column_id
+data_quality_run.data_quality_rule_id > data_quality_rule.data_quality_rule_id
+data_quality_run.ingestion_job_id > ingestion_job.ingestion_job_id
+query_request.app_user_id > app_user.app_user_id
+schema_retrieval.query_request_id > query_request.query_request_id
+schema_retrieval.catalog_table_id > catalog_table.catalog_table_id
+generated_sql.query_request_id > query_request.query_request_id
+generated_sql.ai_model_id > ai_model.ai_model_id
+generated_sql.prompt_template_id > prompt_template.prompt_template_id
+query_execution.generated_sql_id - generated_sql.generated_sql_id
+app_user.employee_id - employee.employee_id
+user_role.app_user_id > app_user.app_user_id
+user_role.role_id > role.role_id
+role_permission.role_id > role.role_id
+role_permission.permission_id > permission.permission_id
+login_session.app_user_id > app_user.app_user_id
+dashboard.owner_app_user_id > app_user.app_user_id
+kpi_value.kpi_id > kpi.kpi_id
+chart_widget.dashboard_id > dashboard.dashboard_id
+chart_widget.query_request_id > query_request.query_request_id
+chart_widget.kpi_id > kpi.kpi_id
+
+legend {
+  [color: blue, label: "Admissions"]
+  [color: purple, label: "Academic and HR"]
+  [color: orange, label: "Data platform and governance"]
+  [color: green, label: "AI analytics and security"]
+  [color: yellow, label: "Dashboard and visualization"]
+}
