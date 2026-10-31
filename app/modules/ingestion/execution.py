@@ -93,12 +93,15 @@ class IngestionExecutionService:
                 read_request = validate_context(context, request.source_table)
             except ValueError as exc:
                 error = str(exc)
-            if not error and request.validation_policy is not None:
-                try:
-                    validation_input = pin_policy(request.validation_policy, context, read_request)
-                except (ValueError, TypeError, LookupError):
-                    # Pydantic/codec errors có thể chứa đầu vào: chỉ đưa mã an toàn ra API.
-                    error = "VALIDATION_POLICY_INVALID"
+            else:
+                if request.validation_policy is not None:
+                    try:
+                        validation_input = pin_policy(
+                            request.validation_policy, context, read_request
+                        )
+                    except (ValueError, TypeError, LookupError):
+                        # Pydantic/codec errors có thể chứa đầu vào: chỉ đưa mã an toàn ra API.
+                        error = "VALIDATION_POLICY_INVALID"
         job = await repo.create(
             data_source_id=request.data_source_id,
             dataset_id=request.dataset_id,

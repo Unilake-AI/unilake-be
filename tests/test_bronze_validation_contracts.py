@@ -63,6 +63,7 @@ def test_policy_fingerprint_is_stable_and_changes_with_binding_and_rules():
     )
     assert baseline.fingerprint != policy(dataset_id=4).fingerprint
     assert baseline.fingerprint != policy(allow_empty_records=True).fingerprint
+    assert isinstance(baseline.parser, CSVOptions)
     with pytest.raises(ValidationError, match="frozen"):
         baseline.parser.encoding = "latin-1"
 
@@ -155,7 +156,7 @@ def test_report_persistence_recomputes_decision():
 def test_excel_policy_rejects_formula_evaluation_and_invalid_row():
     assert policy(parser=ExcelOptions(sheet_name="Admissions")).parser.kind == "EXCEL"
     with pytest.raises(ValidationError):
-        ExcelOptions(sheet_name="Admissions", formula_policy="evaluate")
+        ExcelOptions.model_validate({"sheet_name": "Admissions", "formula_policy": "evaluate"})
     with pytest.raises(ValidationError):
         ExcelOptions(sheet_name="Admissions", header_row=0)
 
