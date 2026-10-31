@@ -55,9 +55,9 @@ def test_schema_matches_source_db(dataset: str) -> None:
             assert col["nullable"] == db_col["nullable"], f"{where}: nullable"
             assert bool(col.get("unique")) == db_col["unique"], f"{where}: unique"
             ref = col.get("references")
-            assert (ref and (ref["entity"], ref["column"])) == (
-                db_col["references"] or None
-            ), f"{where}: references"
+            assert (ref and (ref["entity"], ref["column"])) == (db_col["references"] or None), (
+                f"{where}: references"
+            )
         db_pk = [c["name"] for c in db_cols if c["pk"]]
         assert spec["primary_key"] == db_pk, f"{name}: primary key"
 
