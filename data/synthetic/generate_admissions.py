@@ -8,9 +8,18 @@ Mọi người, mã định danh, số điện thoại và email đều là gi�
 import csv
 import random
 import sys
+import subprocess
 import unicodedata
 from datetime import date, timedelta
 from pathlib import Path
+
+# The no-argument command publishes the complete current-schema dataset.
+# The orchestrator supplies a temporary directory to stage legacy source rows.
+if __name__ == "__main__" and len(sys.argv) == 1:
+    subprocess.run(
+        [sys.executable, str(Path(__file__).with_name("generate_samples.py"))], check=True
+    )
+    raise SystemExit(0)
 
 ROOT = (
     Path(sys.argv[1])

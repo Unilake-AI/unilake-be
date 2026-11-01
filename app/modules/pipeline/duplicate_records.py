@@ -10,12 +10,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlsplit
 
-from app.modules.ingestion.readers.factory import SourceReaderFactory
-from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
+from app.modules.ingestion.contracts.readers import SourceReaderFactory, read_file_snapshot
 
 if TYPE_CHECKING:
     from app.modules.ingestion.contracts import FileProvenance
-    from app.modules.ingestion.readers.contract import ReadRequest
+    from app.modules.ingestion.contracts.readers import ReadRequest
 
 DuplicateKeyKind = Literal["PRIMARY_KEY", "UNIQUE", "COMPOSITE_UNIQUE", "BUSINESS_KEY"]
 DuplicateDisposition = Literal["COLLAPSED", "QUARANTINED"]

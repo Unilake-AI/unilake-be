@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import shutil
 from copy import deepcopy
 from dataclasses import replace
@@ -14,19 +13,12 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 from app.modules.ingestion.contracts import FileProvenance
+from app.shared.fingerprints import fingerprint as fingerprint
 
 from .minio_file_resolver import resolve_file_request
 
 if TYPE_CHECKING:
     from .contract import ReadRequest, ReadResult, SourceReader
-
-
-def fingerprint(value: object) -> str:
-    return hashlib.sha256(
-        json.dumps(
-            value, sort_keys=True, ensure_ascii=False, allow_nan=False, separators=(",", ":")
-        ).encode()
-    ).hexdigest()
 
 
 def read_file_snapshot(

@@ -17,7 +17,7 @@ Các file đi kèm:
 | [hr_v1.schema.json](hr_v1.schema.json) | Schema máy đọc: kiểu DB và kiểu SQL, null, unique, FK, quy tắc chức vụ, cột dẫn xuất ở Silver, luật DQ | Khớp DB (có test) |
 | [hr_v1.sql](hr_v1.sql) | DDL PostgreSQL cho 7 bảng HR, chạy **đầu tiên** (trước Admissions, Academic) | Khớp DB (có test) |
 | [backend/tests/test_dataset_schemas.py](../../backend/tests/test_dataset_schemas.py) | Đối chiếu JSON với DB, DDL với JSON, và kiểm tra CSV mẫu theo JSON | Đã cập nhật |
-| `data/samples/hr/*.csv` | Dữ liệu mẫu 7 bảng | Sinh theo DB cũ, cần sinh lại (mục 10) |
+| `data/samples/hr/*.csv` | Dữ liệu mẫu 7 bảng | Đã đồng bộ schema; tái tạo bằng `generate_samples.py` |
 | [data/synthetic/generate_hr.py](../../data/synthetic/generate_hr.py) | Sinh dữ liệu mẫu HR (chạy trước hai script còn lại) | Cần cập nhật theo DB mới |
 | [backend/tests/test_hr_dataset.py](../../backend/tests/test_hr_dataset.py) | Kiểm tra luật nghiệp vụ | Cần cập nhật theo DB mới |
 
@@ -334,7 +334,13 @@ Gợi ý data mart Gold: `faculty_staffing` (khoa × học vị × trạng thái
 
 ## 10. Dữ liệu mẫu
 
-Dữ liệu mẫu hiện có trong `data/samples/hr/` **được sinh theo DB cũ** (`unilake-db.dbml`), ngày chốt 25/09/2026:
+CSV trong `data/samples/` đã đồng bộ với schema hiện tại. Tái tạo bằng
+`python data/synthetic/generate_samples.py` (ngày chốt 25/09/2026). Bộ sinh
+giữ logic dữ liệu giả lập ban đầu, sau đó xuất các bảng/cột theo schema mới.
+Các mô tả chuyển đổi bên dưới ghi lại sự khác biệt so với bộ dữ liệu cũ.
+
+
+Dữ liệu mẫu hiện có trong `data/samples/hr/` **ban đầu được sinh theo DB cũ** (`unilake-db.dbml`), ngày chốt 25/09/2026:
 
 | File | Dòng | Nội dung |
 |---|---|---|
@@ -346,7 +352,7 @@ Dữ liệu mẫu hiện có trong `data/samples/hr/` **được sinh theo DB c�
 | hr/employee_qualification.csv | 116 | Bằng đại học, thạc sĩ, tiến sĩ, nghiệp vụ sư phạm, IELTS, LLCT, Kế toán trưởng, AWS |
 | hr/assignment.csv | 67 | Lịch sử từ 1990; 35 dòng đang hiệu lực; 2 kiêm nhiệm |
 
-Khi sinh lại theo DB mới cần:
+Các chuyển đổi đã áp dụng khi xuất theo schema mới:
 
 | Bảng | Thay đổi |
 |---|---|

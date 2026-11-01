@@ -1,0 +1,11 @@
+curriculum_id,program_id,curriculum_code,curriculum_name,version,effective_from,effective_to,status
+1,1,CNTT-CQ-2024,Khung Công nghệ thông tin,1,2024-01-01,,Active
+2,2,CNTT-CLC-2024,Khung Công nghệ thông tin - Chất lượng cao,1,2024-01-01,,Active
+3,3,KTPM-CQ-2024,Khung Kỹ thuật phần mềm,1,2024-01-01,,Active
+4,4,KHDL-CQ-2024,Khung Khoa học dữ liệu,1,2024-01-01,,Active
+5,5,QTKD-CQ-2024,Khung Quản trị kinh doanh,1,2024-01-01,,Active
+6,6,QTKD-CLC-2024,Khung Quản trị kinh doanh - Chất lượng cao,1,2024-01-01,,Active
+7,7,KT-CQ-2024,Khung Kế toán,1,2024-01-01,,Active
+8,8,NNA-CQ-2024,Khung Ngôn ngữ Anh,1,2024-01-01,,Active
+9,9,KTXD-KS-2024,Khung Kỹ thuật xây dựng,1,2024-01-01,,Active
+10,10,KHMT-THS-2024,Khung Thạc sĩ Khoa học máy tính,1,2024-01-01,,Active

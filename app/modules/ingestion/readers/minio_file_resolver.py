@@ -13,8 +13,8 @@ from urllib.parse import SplitResult, urlsplit
 
 from minio import Minio
 
-from app.infra.minio.client import source_reader_client
 from app.modules.ingestion.input_validator import InputValidationError
+from app.providers import source_reader_client
 
 if TYPE_CHECKING:
     from .contract import ReadRequest

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 from .contract import ReadRequest
 
 if TYPE_CHECKING:
-    from app.modules.datasources.models import DataSource
+    from app.modules.datasources.contracts import CatalogSource
 
 
 SUPPORTED_TYPES = {
@@ -23,14 +23,14 @@ FILE_SOURCE_TYPES = {"CSV", "EXCEL"}
 
 
 def build_read_request(
-    data_source: DataSource,
+    data_source: CatalogSource,
     *,
     source_table: str,
 ) -> ReadRequest:
-    """Chuyển DataSource trong catalog thành ReadRequest cho Source Reader.
+    """Chuyển cấu hình catalog công khai thành ReadRequest cho Source Reader.
 
     Hàm này là lớp nối giữa module datasources và các reader cụ thể.
-    Datasource lưu cấu hình ở dạng ORM/catalog, còn reader chỉ cần một
+    Caller chiếu ORM thành CatalogSource; reader chỉ cần một
     ReadRequest gọn hơn để biết đọc nguồn nào, ở đâu, với cấu hình gì.
     """
 

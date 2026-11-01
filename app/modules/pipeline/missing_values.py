@@ -10,9 +10,11 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 from app.modules.ingestion.contracts import FileProvenance
-from app.modules.ingestion.readers.contract import ReadRequest
-from app.modules.ingestion.readers.factory import SourceReaderFactory
-from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
+from app.modules.ingestion.contracts.readers import (
+    ReadRequest,
+    SourceReaderFactory,
+    read_file_snapshot,
+)
 
 IssueSeverity = Literal["INFO", "ERROR"]
 Disposition = Literal["PRESERVED", "QUARANTINED"]

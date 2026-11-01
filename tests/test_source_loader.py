@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.modules.datasources.contracts import CatalogSource
 from app.modules.ingestion.readers.contract import ReadRequest, ReadResult
 from app.modules.ingestion.readers.source_loader import read_data_source
 
@@ -77,7 +78,15 @@ async def test_read_data_source_success() -> None:
 
     assert actual is result
     repo.get_with_source_system.assert_awaited_once_with(7)
-    build_mock.assert_called_once_with(data_source, source_table="applicant.csv")
+    build_mock.assert_called_once_with(
+        CatalogSource(
+            is_active=True,
+            source_type="CSV",
+            location="/data/csv",
+            configuration={"delimiter": ",", "encoding": "utf-8", "has_header": True},
+        ),
+        source_table="applicant.csv",
+    )
     repo.check_exist_source_system.assert_awaited_once_with(10)
     factory_mock.assert_called_once_with("CSV")
     to_thread_mock.assert_awaited_once_with(reader.read, request)
@@ -128,7 +137,15 @@ async def test_read_data_source_rejects_inactive_source_system() -> None:
     ):
         await read_data_source(repo, data_source_id=7, source_table="applicant.csv")
 
-    build_mock.assert_called_once_with(data_source, source_table="applicant.csv")
+    build_mock.assert_called_once_with(
+        CatalogSource(
+            is_active=True,
+            source_type="CSV",
+            location="/data/csv",
+            configuration={"delimiter": ",", "encoding": "utf-8", "has_header": True},
+        ),
+        source_table="applicant.csv",
+    )
     repo.check_exist_source_system.assert_awaited_once_with(10)
 
 

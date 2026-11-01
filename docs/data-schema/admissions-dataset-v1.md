@@ -17,7 +17,7 @@ Các file đi kèm:
 | [admissions_v1.schema.json](admissions_v1.schema.json) | Schema máy đọc: kiểu DB và kiểu SQL, null, unique, giá trị hợp lệ, FK, luật DQ. Ingestion dùng để validate | Khớp DB (có test) |
 | [admissions_v1.sql](admissions_v1.sql) | DDL PostgreSQL cho 6 bảng Admissions; chạy sau `hr_v1.sql` | Khớp DB (có test) |
 | [backend/tests/test_dataset_schemas.py](../../backend/tests/test_dataset_schemas.py) | Đối chiếu JSON với DB, DDL với JSON, và kiểm tra CSV mẫu theo JSON | Đã cập nhật |
-| `data/samples/admissions/*.csv` | Dữ liệu mẫu | Sinh theo DB cũ, cần sinh lại (mục 7) |
+| `data/samples/admissions/*.csv` | Dữ liệu mẫu | Đã đồng bộ schema; tái tạo bằng `generate_samples.py` |
 | [data/synthetic/generate_admissions.py](../../data/synthetic/generate_admissions.py) | Sinh dữ liệu mẫu (seed cố định) | Cần cập nhật theo DB mới |
 | [backend/tests/test_admissions_dataset.py](../../backend/tests/test_admissions_dataset.py) | Kiểm tra luật nghiệp vụ trên dữ liệu mẫu | Cần cập nhật theo DB mới |
 
@@ -283,7 +283,13 @@ Dữ liệu mẫu là giả lập: tên ghép ngẫu nhiên, số CCCD đúng đ
 
 ## 7. Dữ liệu mẫu
 
-Dữ liệu mẫu hiện có trong `data/samples/` **được sinh theo DB cũ** (`unilake-db.dbml`, 25/09/2026): 120 thí sinh, 246 hồ sơ, 3 mùa 2024-2025 đến 2026-2027; bảng `admissions/enrollment.csv` cũ mang nghĩa nhập học (74 dòng). Khi sinh lại theo DB mới cần:
+CSV trong `data/samples/` đã đồng bộ với schema hiện tại. Tái tạo bằng
+`python data/synthetic/generate_samples.py` (ngày chốt 25/09/2026). Bộ sinh
+giữ logic dữ liệu giả lập ban đầu, sau đó xuất các bảng/cột theo schema mới.
+Các mô tả chuyển đổi bên dưới ghi lại sự khác biệt so với bộ dữ liệu cũ.
+
+
+Dữ liệu mẫu hiện có trong `data/samples/` **ban đầu được sinh theo DB cũ** (`unilake-db.dbml`, 25/09/2026): 120 thí sinh, 246 hồ sơ, 3 mùa 2024-2025 đến 2026-2027; bảng `admissions/enrollment.csv` cũ mang nghĩa nhập học (74 dòng). Các chuyển đổi đã áp dụng khi xuất theo schema mới:
 
 | Bảng | Thay đổi |
 |---|---|
@@ -307,4 +313,4 @@ Logic sinh dữ liệu giữ nguyên: mỗi thí sinh 1 - 3 nguyện vọng; đi
 5. **`application_date` được để trống.** Hồ sơ thiếu ngày nộp thì không kiểm được mùa tuyển sinh (ADM-DQ-05) và không tính được thời gian xử lý; chưa có ngày công bố kết quả.
 6. **`date_of_birth`, `gender` được để trống.** Luật tuổi (ADM-DQ-09) và thống kê theo giới chỉ áp dụng khi có dữ liệu.
 7. **Giá trị trạng thái chưa có danh mục.** Các cột `status` là `string` tự do; giá trị trong tài liệu là đề xuất, cần team chốt.
-8. **Tài liệu và mã cũ.** `unilake-db.dbml`, ERD cũ đã bị xóa khỏi thư mục; dữ liệu mẫu, script sinh dữ liệu và test luật nghiệp vụ vẫn theo DB cũ.
+8. **Tài liệu và mã cũ.** `unilake-db.dbml`, ERD cũ đã bị xóa khỏi thư mục; dữ liệu mẫu và test nghiệp vụ đã chuyển sang schema hiện tại; các script nguồn cũ chỉ chạy ở bước trung gian của `generate_samples.py`.
