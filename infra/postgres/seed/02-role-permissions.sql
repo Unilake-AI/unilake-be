@@ -1,34 +1,34 @@
--- =============================================================================
--- UniLake AI - Dữ liệu khởi tạo vai trò và phân quyền
--- =============================================================================
+-- 9 role chuẩn của UniLake. Chạy trong một transaction.
 
--- 1. Bảo đảm các vai trò tồn tại trong app.role
 INSERT INTO app.role (role_code, role_name, description) VALUES
-('ADMIN',       'Quản trị viên hệ thống', 'Toàn quyền quản trị hệ thống và phân quyền'),
-('SUPER_ADMIN', 'Super Admin',            'Toàn quyền hệ thống tối cao'),
-('DATA_ADMIN',  'Quản trị dữ liệu',       'Quản lý Data Sources, Datasets, Catalog và Data Quality'),
-('ANALYST',     'Chuyên viên phân tích',   'Xem dữ liệu, thực thi câu hỏi NLQ, xem báo cáo'),
-('MANAGER',     'Quản lý',                'Xem Datasets, Catalog và Dashboard tổng quan'),
-('VIEWER',      'Người xem',              'Quyền xem Dashboard cơ bản')
-ON CONFLICT (role_code)
-DO UPDATE SET
+('ADMIN', 'Quản trị viên hệ thống', 'Quản trị hệ thống, tài khoản và phân quyền'),
+('DATA_ADMIN', 'Quản trị dữ liệu', 'Quản lý nguồn, pipeline, chất lượng dữ liệu; truy vấn AI và phân tích xuyên phòng ban'),
+('VIEWER', 'Ban Giám hiệu', 'Xem dashboard và báo cáo tổng hợp'),
+('ADMISSIONS_MANAGER', 'Trưởng phòng Tuyển sinh', 'Trưởng phòng Tuyển sinh'),
+('ADMISSIONS_STAFF', 'Nhân viên Tuyển sinh', 'Nhân viên phòng Tuyển sinh'),
+('ACADEMIC_MANAGER', 'Trưởng phòng Đào tạo', 'Trưởng phòng Đào tạo'),
+('ACADEMIC_STAFF', 'Nhân viên Đào tạo', 'Nhân viên phòng Đào tạo'),
+('HR_MANAGER', 'Trưởng phòng Nhân sự', 'Trưởng phòng Nhân sự'),
+('HR_STAFF', 'Nhân viên Nhân sự', 'Nhân viên phòng Nhân sự')
+ON CONFLICT (role_code) DO UPDATE SET
     role_name = EXCLUDED.role_name,
     description = EXCLUDED.description;
 
--- 2. Nạp các ánh xạ vai trò và quyền
+DELETE FROM app.role_permission
+WHERE role_id IN (SELECT role_id FROM app.role WHERE role_code IN ('ADMIN', 'DATA_ADMIN', 'VIEWER', 'ADMISSIONS_MANAGER', 'ADMISSIONS_STAFF', 'ACADEMIC_MANAGER', 'ACADEMIC_STAFF', 'HR_MANAGER', 'HR_STAFF'));
 
--- ====================== ADMIN & SUPER_ADMIN (Full quyền) ======================
 INSERT INTO app.role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id
-FROM app.role r, app.permission p
-WHERE r.role_code IN ('ADMIN', 'SUPER_ADMIN')
+FROM app.role r
+CROSS JOIN app.permission p
+WHERE r.role_code IN ('ADMIN')
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
--- ====================== DATA_ADMIN ======================
 INSERT INTO app.role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id
 FROM app.role r
 JOIN app.permission p ON p.permission_code IN (
+    'auth.login',
     'data_source.read',
     'data_source.write',
     'dataset.read',
@@ -40,50 +40,33 @@ JOIN app.permission p ON p.permission_code IN (
     'quality.rule.write',
     'quality.report.read',
     'quality.check.run',
-    'query.history.read',
-    'dashboard.read'
-)
-WHERE r.role_code IN ('DATA_ADMIN', 'DATA_ENGINEER', 'DATA_GOVERNANCE')
-ON CONFLICT (role_id, permission_id) DO NOTHING;
-
--- ====================== ANALYST ======================
-INSERT INTO app.role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id
-FROM app.role r
-JOIN app.permission p ON p.permission_code IN (
-    'data_source.read',
-    'dataset.read',
-    'catalog.read',
-    'lineage.read',
-    'quality.rule.read',
-    'quality.report.read',
     'query.execute',
     'query.history.read',
     'dashboard.read'
 )
-WHERE r.role_code IN ('ANALYST', 'DATA_ANALYST')
+WHERE r.role_code IN ('DATA_ADMIN')
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
--- ====================== MANAGER ======================
 INSERT INTO app.role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id
 FROM app.role r
 JOIN app.permission p ON p.permission_code IN (
+    'auth.login',
+    'dashboard.read'
+)
+WHERE r.role_code IN ('VIEWER')
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+INSERT INTO app.role_permission (role_id, permission_id)
+SELECT r.role_id, p.permission_id
+FROM app.role r
+JOIN app.permission p ON p.permission_code IN (
+    'auth.login',
     'dataset.read',
     'catalog.read',
     'query.execute',
     'query.history.read',
     'dashboard.read'
 )
-WHERE r.role_code IN ('MANAGER', 'ACADEMIC_ADMIN')
-ON CONFLICT (role_id, permission_id) DO NOTHING;
-
--- ====================== VIEWER ======================
-INSERT INTO app.role_permission (role_id, permission_id)
-SELECT r.role_id, p.permission_id
-FROM app.role r
-JOIN app.permission p ON p.permission_code IN (
-    'dashboard.read'
-)
-WHERE r.role_code IN ('VIEWER', 'USER')
+WHERE r.role_code IN ('ADMISSIONS_MANAGER', 'ADMISSIONS_STAFF', 'ACADEMIC_MANAGER', 'ACADEMIC_STAFF', 'HR_MANAGER', 'HR_STAFF')
 ON CONFLICT (role_id, permission_id) DO NOTHING;

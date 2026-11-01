@@ -38,140 +38,139 @@ DO UPDATE SET
 
 ROLES_SEED_SQL = """
 INSERT INTO app.role (role_code, role_name, description) VALUES
-('ADMIN',       'Quản trị viên hệ thống', 'Toàn quyền quản trị hệ thống và phân quyền'),
-('SUPER_ADMIN', 'Super Admin',            'Toàn quyền hệ thống tối cao'),
-('DATA_ADMIN',  'Quản trị dữ liệu',       'Quản lý Data Sources, Datasets, Catalog và Data Quality'),
-('ANALYST',     'Chuyên viên phân tích',   'Xem dữ liệu, thực thi câu hỏi NLQ, xem báo cáo'),
-('MANAGER',     'Quản lý',                'Xem Datasets, Catalog và Dashboard tổng quan'),
-('VIEWER',      'Người xem',              'Quyền xem Dashboard cơ bản')
-ON CONFLICT (role_code)
-DO UPDATE SET
+('ADMIN', 'Quản trị viên hệ thống', 'Quản trị hệ thống, tài khoản và phân quyền'),
+('DATA_ADMIN', 'Quản trị dữ liệu', 'Quản lý nguồn, pipeline, chất lượng dữ liệu; truy vấn AI và phân tích xuyên phòng ban'),
+('VIEWER', 'Ban Giám hiệu', 'Xem dashboard và báo cáo tổng hợp'),
+('ADMISSIONS_MANAGER', 'Trưởng phòng Tuyển sinh', 'Trưởng phòng Tuyển sinh'),
+('ADMISSIONS_STAFF', 'Nhân viên Tuyển sinh', 'Nhân viên phòng Tuyển sinh'),
+('ACADEMIC_MANAGER', 'Trưởng phòng Đào tạo', 'Trưởng phòng Đào tạo'),
+('ACADEMIC_STAFF', 'Nhân viên Đào tạo', 'Nhân viên phòng Đào tạo'),
+('HR_MANAGER', 'Trưởng phòng Nhân sự', 'Trưởng phòng Nhân sự'),
+('HR_STAFF', 'Nhân viên Nhân sự', 'Nhân viên phòng Nhân sự')
+ON CONFLICT (role_code) DO UPDATE SET
     role_name = EXCLUDED.role_name,
     description = EXCLUDED.description;
 """
 
 ROLE_PERMISSIONS_SQL_LIST = [
     """
-    INSERT INTO app.role_permission (role_id, permission_id)
-    SELECT r.role_id, p.permission_id
-    FROM app.role r, app.permission p
-    WHERE r.role_code IN ('ADMIN', 'SUPER_ADMIN')
-    ON CONFLICT (role_id, permission_id) DO NOTHING;
+DELETE FROM app.role_permission
+WHERE role_id IN (SELECT role_id FROM app.role WHERE role_code IN ('ADMIN', 'DATA_ADMIN', 'VIEWER', 'ADMISSIONS_MANAGER', 'ADMISSIONS_STAFF', 'ACADEMIC_MANAGER', 'ACADEMIC_STAFF', 'HR_MANAGER', 'HR_STAFF'));
     """,
     """
-    INSERT INTO app.role_permission (role_id, permission_id)
-    SELECT r.role_id, p.permission_id
-    FROM app.role r
-    JOIN app.permission p ON p.permission_code IN (
-        'data_source.read',
-        'data_source.write',
-        'dataset.read',
-        'dataset.manage',
-        'catalog.read',
-        'catalog.write',
-        'lineage.read',
-        'quality.rule.read',
-        'quality.rule.write',
-        'quality.report.read',
-        'quality.check.run',
-        'query.history.read',
-        'dashboard.read'
-    )
-    WHERE r.role_code IN ('DATA_ADMIN', 'DATA_ENGINEER', 'DATA_GOVERNANCE')
-    ON CONFLICT (role_id, permission_id) DO NOTHING;
+INSERT INTO app.role_permission (role_id, permission_id)
+SELECT r.role_id, p.permission_id
+FROM app.role r
+CROSS JOIN app.permission p
+WHERE r.role_code IN ('ADMIN')
+ON CONFLICT (role_id, permission_id) DO NOTHING;
     """,
     """
-    INSERT INTO app.role_permission (role_id, permission_id)
-    SELECT r.role_id, p.permission_id
-    FROM app.role r
-    JOIN app.permission p ON p.permission_code IN (
-        'data_source.read',
-        'dataset.read',
-        'catalog.read',
-        'lineage.read',
-        'quality.rule.read',
-        'quality.report.read',
-        'query.execute',
-        'query.history.read',
-        'dashboard.read'
-    )
-    WHERE r.role_code IN ('ANALYST', 'DATA_ANALYST')
-    ON CONFLICT (role_id, permission_id) DO NOTHING;
+INSERT INTO app.role_permission (role_id, permission_id)
+SELECT r.role_id, p.permission_id
+FROM app.role r
+JOIN app.permission p ON p.permission_code IN (
+    'auth.login',
+    'data_source.read',
+    'data_source.write',
+    'dataset.read',
+    'dataset.manage',
+    'catalog.read',
+    'catalog.write',
+    'lineage.read',
+    'quality.rule.read',
+    'quality.rule.write',
+    'quality.report.read',
+    'quality.check.run',
+    'query.execute',
+    'query.history.read',
+    'dashboard.read'
+)
+WHERE r.role_code IN ('DATA_ADMIN')
+ON CONFLICT (role_id, permission_id) DO NOTHING;
     """,
     """
-    INSERT INTO app.role_permission (role_id, permission_id)
-    SELECT r.role_id, p.permission_id
-    FROM app.role r
-    JOIN app.permission p ON p.permission_code IN (
-        'dataset.read',
-        'catalog.read',
-        'query.execute',
-        'query.history.read',
-        'dashboard.read'
-    )
-    WHERE r.role_code IN ('MANAGER', 'ACADEMIC_ADMIN')
-    ON CONFLICT (role_id, permission_id) DO NOTHING;
+INSERT INTO app.role_permission (role_id, permission_id)
+SELECT r.role_id, p.permission_id
+FROM app.role r
+JOIN app.permission p ON p.permission_code IN (
+    'auth.login',
+    'dashboard.read'
+)
+WHERE r.role_code IN ('VIEWER')
+ON CONFLICT (role_id, permission_id) DO NOTHING;
     """,
     """
-    INSERT INTO app.role_permission (role_id, permission_id)
-    SELECT r.role_id, p.permission_id
-    FROM app.role r
-    JOIN app.permission p ON p.permission_code IN (
-        'dashboard.read'
-    )
-    WHERE r.role_code IN ('VIEWER', 'USER')
-    ON CONFLICT (role_id, permission_id) DO NOTHING;
+INSERT INTO app.role_permission (role_id, permission_id)
+SELECT r.role_id, p.permission_id
+FROM app.role r
+JOIN app.permission p ON p.permission_code IN (
+    'auth.login',
+    'dataset.read',
+    'catalog.read',
+    'query.execute',
+    'query.history.read',
+    'dashboard.read'
+)
+WHERE r.role_code IN ('ADMISSIONS_MANAGER', 'ADMISSIONS_STAFF', 'ACADEMIC_MANAGER', 'ACADEMIC_STAFF', 'HR_MANAGER', 'HR_STAFF')
+ON CONFLICT (role_id, permission_id) DO NOTHING;
     """,
 ]
 
 USERS_SEED_SQL = """
 INSERT INTO app.app_user (username, password_hash, employee_id, is_active, created_at) VALUES
-('admin',       'pbkdf2_sha256$54j20uXDDrH8EjRhaS54Cw$cNs1S4SC2nylW_QW3oZ0SZZovVdy2YhSULe_y3IJdvI', NULL, TRUE, NOW()),
-('dataadmin',   'pbkdf2_sha256$54j20uXDDrH8EjRhaS54Cw$cNs1S4SC2nylW_QW3oZ0SZZovVdy2YhSULe_y3IJdvI', NULL, TRUE, NOW()),
-('analyst',     'pbkdf2_sha256$54j20uXDDrH8EjRhaS54Cw$cNs1S4SC2nylW_QW3oZ0SZZovVdy2YhSULe_y3IJdvI', NULL, TRUE, NOW()),
-('manager',     'pbkdf2_sha256$54j20uXDDrH8EjRhaS54Cw$cNs1S4SC2nylW_QW3oZ0SZZovVdy2YhSULe_y3IJdvI', NULL, TRUE, NOW()),
-('viewer',      'pbkdf2_sha256$54j20uXDDrH8EjRhaS54Cw$cNs1S4SC2nylW_QW3oZ0SZZovVdy2YhSULe_y3IJdvI', NULL, TRUE, NOW())
-ON CONFLICT (username)
-DO UPDATE SET
-    password_hash = EXCLUDED.password_hash,
-    is_active = EXCLUDED.is_active;
+('admin', 'pbkdf2_sha256$DpYe0yDL1Z-7SLOzUTTFdA$ng82oqN5XItDwvT3kxcVrpN2HWnpaE94hOnQBYTNQJ0', NULL, TRUE, NOW()),
+('dataadmin', 'pbkdf2_sha256$9ty-J4bxZHkrWTdSiH4DPQ$0plarWnu6o4YFXxDLVR3SHuP4lMmpv3SzMBEE5IhcgY', NULL, TRUE, NOW()),
+('viewer', 'pbkdf2_sha256$nT3BFxQn5i1ivPp4Zr2xhA$WcajWOPnsZLDM0j_t55YgjTxu-6H4kqEAkzVJuPsuB8', NULL, TRUE, NOW()),
+('admissions_manager', 'pbkdf2_sha256$3Yh5tlUkIqoN0UmzgxOOKw$GGWd9HvIG_cyrvVQZPYjSX0jhPcnl0cU-61E9n-LUmw', NULL, TRUE, NOW()),
+('admissions_staff', 'pbkdf2_sha256$Wx-zjMFd6-5bLVRgRAyDRA$8zhcbL-9lPFXwybLUktd6ekpfDdHJbx8rDNT4rtB-To', NULL, TRUE, NOW()),
+('academic_manager', 'pbkdf2_sha256$9u6OxPZC0I1OipGMLjtmCg$xk9p_6HYpVbxgZoJnf5K6jNNAWqyt26nqbxb80Fuf2E', NULL, TRUE, NOW()),
+('academic_staff', 'pbkdf2_sha256$IQynN0m0aUp5ELnIWhIufg$IZ9-tRTW78JF2soIuJGugaj4R3Txu25GQ6cX7od07XM', NULL, TRUE, NOW()),
+('hr_manager', 'pbkdf2_sha256$3D0noMkkELrun02q3FHSpw$Fq8WCiEVTOJRFBskwS5x90Zm6W9zQchh3vL5FKAwzqs', NULL, TRUE, NOW()),
+('hr_staff', 'pbkdf2_sha256$fNI_xP1Sjfb_o-bJs6xJ6A$06lxrdtoz34mvaDNuLvz1Y_zy_kFA8ctykJsVxABB98', NULL, TRUE, NOW())
+ON CONFLICT (username) DO NOTHING;
 """
 
 USER_ROLES_SQL_LIST = [
     """
-    INSERT INTO app.user_role (app_user_id, role_id)
-    SELECT u.app_user_id, r.role_id
-    FROM app.app_user u, app.role r
-    WHERE u.username = 'admin' AND r.role_code IN ('ADMIN', 'SUPER_ADMIN')
-    ON CONFLICT (app_user_id, role_id) DO NOTHING;
+DELETE FROM app.user_role
+WHERE app_user_id IN (
+    SELECT app_user_id FROM app.app_user WHERE username IN ('admin', 'dataadmin', 'viewer', 'admissions_manager', 'admissions_staff', 'academic_manager', 'academic_staff', 'hr_manager', 'hr_staff', 'analyst', 'manager')
+);
     """,
     """
-    INSERT INTO app.user_role (app_user_id, role_id)
-    SELECT u.app_user_id, r.role_id
-    FROM app.app_user u, app.role r
-    WHERE u.username = 'dataadmin' AND r.role_code IN ('DATA_ADMIN', 'DATA_ENGINEER', 'DATA_GOVERNANCE')
-    ON CONFLICT (app_user_id, role_id) DO NOTHING;
+UPDATE app.app_user SET is_active = FALSE WHERE username IN ('analyst', 'manager');
     """,
     """
-    INSERT INTO app.user_role (app_user_id, role_id)
-    SELECT u.app_user_id, r.role_id
-    FROM app.app_user u, app.role r
-    WHERE u.username = 'analyst' AND r.role_code IN ('ANALYST', 'DATA_ANALYST')
-    ON CONFLICT (app_user_id, role_id) DO NOTHING;
+INSERT INTO app.user_role (app_user_id, role_id)
+SELECT u.app_user_id, r.role_id
+FROM (VALUES
+    ('admin', 'ADMIN'),
+    ('dataadmin', 'DATA_ADMIN'),
+    ('viewer', 'VIEWER'),
+    ('admissions_manager', 'ADMISSIONS_MANAGER'),
+    ('admissions_staff', 'ADMISSIONS_STAFF'),
+    ('academic_manager', 'ACADEMIC_MANAGER'),
+    ('academic_staff', 'ACADEMIC_STAFF'),
+    ('hr_manager', 'HR_MANAGER'),
+    ('hr_staff', 'HR_STAFF')
+) AS mapping(username, role_code)
+JOIN app.app_user u ON u.username = mapping.username
+JOIN app.role r ON r.role_code = mapping.role_code
+ON CONFLICT (app_user_id, role_id) DO NOTHING;
     """,
     """
-    INSERT INTO app.user_role (app_user_id, role_id)
-    SELECT u.app_user_id, r.role_id
-    FROM app.app_user u, app.role r
-    WHERE u.username = 'manager' AND r.role_code IN ('MANAGER', 'ACADEMIC_ADMIN')
-    ON CONFLICT (app_user_id, role_id) DO NOTHING;
+-- Chỉ xóa role cũ khi không còn tài khoản nào sử dụng.
+DELETE FROM app.role_permission rp USING app.role r
+WHERE rp.role_id = r.role_id
+  AND r.role_code IN ('SUPER_ADMIN', 'ANALYST', 'MANAGER')
+  AND NOT EXISTS (SELECT 1 FROM app.user_role ur WHERE ur.role_id = r.role_id);
+
     """,
     """
-    INSERT INTO app.user_role (app_user_id, role_id)
-    SELECT u.app_user_id, r.role_id
-    FROM app.app_user u, app.role r
-    WHERE u.username = 'viewer' AND r.role_code IN ('VIEWER', 'USER')
-    ON CONFLICT (app_user_id, role_id) DO NOTHING;
+DELETE FROM app.role r
+WHERE r.role_code IN ('SUPER_ADMIN', 'ANALYST', 'MANAGER')
+  AND NOT EXISTS (SELECT 1 FROM app.user_role ur WHERE ur.role_id = r.role_id);
     """,
 ]
 
