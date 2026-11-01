@@ -15,12 +15,13 @@ from uuid import uuid4
 from sqlalchemy import URL, create_engine, text
 
 from app.core.config import settings
-from app.infra.minio.client import silver_writer_client, source_reader_client
 from app.modules.ingestion.contracts import MappingBinding
-from app.modules.ingestion.reader_batch import reader_to_batch
-from app.modules.ingestion.readers.contract import ReadRequest
-from app.modules.ingestion.readers.factory import SourceReaderFactory
-from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
+from app.modules.ingestion.contracts.readers import (
+    ReadRequest,
+    SourceReaderFactory,
+    read_file_snapshot,
+    reader_to_batch,
+)
 from app.modules.pipeline.cleaning_pipeline import (
     CleaningNormalizationTask,
     CleaningPipeline,
@@ -46,6 +47,7 @@ from app.modules.pipeline.silver_publication import SilverPublicationService
 from app.modules.pipeline.silver_repository import SilverRepository
 from app.modules.pipeline.silver_storage import MinioSilverStore, SilverError
 from app.modules.pipeline.type_standardization import TypeStandardizationService
+from app.providers import silver_writer_client, source_reader_client
 
 ROOT = Path(__file__).resolve().parents[3]
 DEMO_DOMAINS = ("admissions", "academic", "hr")

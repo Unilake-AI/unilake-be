@@ -8,6 +8,7 @@ import re
 from typing import TYPE_CHECKING, Any, ParamSpec, Protocol, TypeVar
 
 from app.core.exceptions import AppException
+from app.modules.datasources.contracts import CatalogSource
 from app.modules.ingestion.contracts import BronzeWriteContext
 from app.modules.ingestion.input_validator import ValidationBlockedError, required_rule_ids
 from app.modules.ingestion.readers.request_builder import build_read_request
@@ -55,7 +56,12 @@ def validate_context(context: SourceContext, source_table: str) -> ReadRequest:
     if not re.fullmatch(r"[a-z][a-z0-9_-]{0,62}", dataset.domain):
         raise ValueError("INVALID_PARTITION_DOMAIN")
     try:
-        request = build_read_request(source, source_table=source_table)
+        request = build_read_request(
+            CatalogSource(
+                source.is_active, source.source_type, source.location, source.configuration
+            ),
+            source_table=source_table,
+        )
     except ValueError:
         raise ValueError("SOURCE_CONFIGURATION_INVALID_OR_UNSUPPORTED") from None
     if request.source_type in {"CSV", "EXCEL"}:

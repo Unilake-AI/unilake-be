@@ -5,7 +5,8 @@ Các kiểm tra schema, khóa và FK chung nằm trong test_dataset_schemas.py.
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
+from decimal import Decimal
 
 from tests.dataset_utils import index, rows
 
@@ -14,7 +15,7 @@ DS = "admissions"
 
 def test_admission_rules() -> None:
     years = index(DS, "admission_year")
-    methods = {k: v["method_code"] for k, v in index(DS, "admission_method").items()}
+    methods = index(DS, "admission_method")
     applicants = index(DS, "applicant")
     first_year: dict[str, int] = {}
     accepted: Counter[tuple[str, str]] = Counter()
@@ -25,10 +26,14 @@ def test_admission_rules() -> None:
     for a in rows(DS, "admission"):
         y = years[a["admission_year_id"]]
         assert y["start_date"] <= a["application_date"] <= y["end_date"], a  # ADM-DQ-05
-        if methods[a["admission_method_id"]] == "XTT":  # ADM-DQ-06
+        method = methods[a["admission_method_id"]]
+        assert method["is_active"] == "true", a
+        if Decimal(method["max_score"]) == 0:  # ADM-DQ-06
             assert a["admission_score"] == "", a
         elif a["admission_status"] != "Applied":
             assert a["admission_score"], a
+        if a["admission_score"]:
+            assert 0 <= Decimal(a["admission_score"]) <= Decimal(method["max_score"]), a
         if a["admission_status"] == "Accepted":
             accepted[(a["applicant_id"], a["admission_year_id"])] += 1
         start_year = int(y["year_label"][:4])
@@ -41,25 +46,25 @@ def test_admission_rules() -> None:
         assert 16 <= age <= 30, applicant_id
 
 
-def test_enrollment_and_student_rules() -> None:
+def test_student_admission_links() -> None:
     admissions = index(DS, "admission")
-    years = index(DS, "admission_year")
-    students = index(DS, "student")
     applicants = index(DS, "applicant")
+    for student in rows(DS, "student"):
+        if student["admission_id"]:
+            admission = admissions[student["admission_id"]]
+            assert admission["admission_status"] == "Accepted", student
+            for column in ("applicant_id", "program_id", "admission_year_id"):
+                assert student[column] == admission[column], (student, column)
+        if student["applicant_id"]:
+            applicant = applicants[student["applicant_id"]]
+            for column in ("full_name", "date_of_birth", "gender"):
+                assert student[column] == applicant[column], (student, column)
 
-    for e in rows(DS, "enrollment"):
-        a = admissions[e["admission_id"]]
-        assert a["admission_status"] == "Accepted", e  # ADM-DQ-09
-        season_end = years[a["admission_year_id"]]["end_date"]
-        assert a["application_date"] <= e["enrollment_date"] <= season_end, e
-        assert bool(e["student_id"]) == (e["enrollment_status"] == "Enrolled"), e  # ADM-DQ-10
-        if e["student_id"]:  # ADM-DQ-11
-            s = students[e["student_id"]]
-            for col in ("applicant_id", "program_id", "admission_year_id"):
-                assert s[col] == a[col], (e, col)
 
-    for s in rows(DS, "student"):  # ADM-DQ-12
-        if s["applicant_id"]:
-            ap = applicants[s["applicant_id"]]
-            person = (s["full_name"], s["date_of_birth"], s["gender"])
-            assert person == (ap["full_name"], ap["date_of_birth"], ap["gender"]), s
+def test_preference_ranks_are_contiguous() -> None:
+    preferences: dict[tuple[str, str], list[int]] = defaultdict(list)
+    for admission in rows(DS, "admission"):
+        key = (admission["applicant_id"], admission["admission_year_id"])
+        preferences[key].append(int(admission["preference_rank"]))
+    for ranks in preferences.values():
+        assert sorted(ranks) == list(range(1, len(ranks) + 1))

@@ -7,7 +7,6 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Protocol
 from urllib.parse import urlsplit
 
-from app.modules.ingestion.readers.file_snapshot import fingerprint
 from app.modules.pipeline.duplicate_records import (
     DuplicateIssue,
     DuplicateProfile,
@@ -23,6 +22,7 @@ from app.modules.pipeline.missing_values import (
     MissingValueProfile,
     apply_missing_value_rules,
 )
+from app.shared.fingerprints import fingerprint
 
 if TYPE_CHECKING:
     from app.modules.ingestion.contracts import BronzeBatch

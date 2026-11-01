@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import re
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from functools import cache
 from pathlib import Path
@@ -100,6 +100,8 @@ def parse(value: str, sql_type: str) -> object:
         if len(number.as_tuple().digits) > precision:
             raise ValueError(f"{value} does not fit {sql_type}")
         return number
+    if base == "timestamp":
+        return datetime.fromisoformat(value)
     if base == "date":
         return date.fromisoformat(value)
     if base == "boolean":

@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from app.modules.datasources.contracts import CatalogSource
 from app.modules.ingestion.contracts import MappingBinding
 from app.modules.ingestion.reader_batch import reader_to_batch
 
@@ -49,7 +50,12 @@ async def read_data_source(
     # build_read_request chịu trách nhiệm validate DataSource.is_active,
     # source_type, location, configuration và source_table.
     request = build_read_request(
-        data_source,
+        CatalogSource(
+            data_source.is_active,
+            data_source.source_type,
+            data_source.location,
+            data_source.configuration,
+        ),
         source_table=source_table,
     )
 
@@ -106,7 +112,15 @@ async def read_data_source_batch(
     if record is None:
         raise LookupError(f"Không tìm thấy DataSource: {data_source_id}")
     data_source, _ = record
-    request = build_read_request(data_source, source_table=source_table)
+    request = build_read_request(
+        CatalogSource(
+            data_source.is_active,
+            data_source.source_type,
+            data_source.location,
+            data_source.configuration,
+        ),
+        source_table=source_table,
+    )
     if binding.source_system_id != str(data_source.source_system_id):
         raise ValueError("SOURCE_BINDING_MISMATCH")
     if not await repo.check_exist_source_system(data_source.source_system_id):

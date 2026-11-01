@@ -10,9 +10,18 @@ Ghi data/samples/hr/*.csv. Cùng seed cho cùng kết quả. Mọi người, s�
 import csv
 import random
 import sys
+import subprocess
 import unicodedata
 from datetime import date
 from pathlib import Path
+
+# The no-argument command publishes the complete current-schema dataset.
+# The orchestrator supplies a temporary directory to stage legacy source rows.
+if __name__ == "__main__" and len(sys.argv) == 1:
+    subprocess.run(
+        [sys.executable, str(Path(__file__).with_name("generate_samples.py"))], check=True
+    )
+    raise SystemExit(0)
 
 ROOT = (
     Path(sys.argv[1])

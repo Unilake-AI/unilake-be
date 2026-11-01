@@ -100,7 +100,7 @@ def test_position_rules() -> None:  # HR-DQ-08, HR-DQ-09
     held: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
     for a in rows(DS, "assignment"):
         pos = positions[a["position_id"]]
-        dept_type = _dept_type(departments[a["department_id"]]["department_code"])
+        dept_type = departments[a["department_id"]]["department_type"]
         assert dept_type in RULES["allowed_department_types"][pos], (pos, dept_type, a)
         if pos in RULES["lecturer_only"]:
             assert a["employee_id"] in lecturers, a
@@ -131,31 +131,45 @@ def test_qualification_rules() -> None:  # HR-DQ-10, HR-DQ-11
             if DEGREE_ORDER[low] < DEGREE_ORDER[high]:
                 assert y1 < y2, (emp_id, low, high)
     for lec in rows(DS, "lecturer"):
-        got = degrees[lec["lecturer_id"]]
-        if lec["academic_rank"] in {"Ph.D.", "Assoc. Prof.", "Prof."}:
+        got = degrees[lec["employee_id"]]
+        if lec["academic_degree"] == "Ph.D.":
             assert "Tiến sĩ" in got, lec
-        elif lec["academic_rank"] == "M.Sc.":
+        elif lec["academic_degree"] == "M.Sc.":
             assert "Thạc sĩ" in got, lec
             assert "Tiến sĩ" not in got, lec
 
 
 def test_class_lecturers_are_employed_in_the_right_faculty() -> None:  # HR-DQ-12
     semesters = index("academic", "semester")
-    courses = index("academic", "course")
+    classes = index("academic", "class")
+    curricula = index("academic", "curriculum")
+    programs = index("admissions", "program")
     majors = index("admissions", "major")
+    program_faculties = {majors[p["major_id"]]["department_id"] for p in programs.values()}
+    course_faculties: dict[str, set[str]] = defaultdict(set)
+    for membership in rows("academic", "curriculum_course"):
+        curriculum = curricula[membership["curriculum_id"]]
+        program = programs[curriculum["program_id"]]
+        course_faculties[membership["course_id"]].add(majors[program["major_id"]]["department_id"])
     by_emp = _by_employee()
-    for c in rows("academic", "class"):
+    for assignment in rows("academic", "class_lecturer"):
+        c = classes[assignment["class_id"]]
         sem = semesters[c["semester_id"]]
         covering = [
             a
-            for a in by_emp[c["lecturer_id"]]
+            for a in by_emp[assignment["lecturer_id"]]
             if a["start_date"] <= sem["start_date"] and _end(a) >= sem["end_date"]
         ]
         assert covering, f"{c['class_code']}: lecturer not employed for the whole semester"
-        major_id = courses[c["course_id"]]["major_id"]
-        if major_id and majors[major_id]["department_id"]:
-            faculty = majors[major_id]["department_id"]
-            assert any(_in_subtree(a["department_id"], faculty) for a in covering), c
+        faculties = course_faculties[c["course_id"]]
+        assert faculties, c
+        # Courses shared by every program (e.g. political theory) can be taught
+        # by a faculty without its own degree program. Major-specific courses
+        # must still be taught within a faculty offering the curriculum.
+        if faculties != program_faculties:
+            assert any(
+                _in_subtree(a["department_id"], faculty) for a in covering for faculty in faculties
+            ), c
 
 
 def test_sample_has_every_status_and_a_concurrent_role() -> None:

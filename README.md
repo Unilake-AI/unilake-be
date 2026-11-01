@@ -263,6 +263,20 @@ python scripts/standardization/preview_s2.py --case admissions-flat
 
 Quy trình CI được định nghĩa tại [`.github/workflows/ci-backend.yml`](.github/workflows/ci-backend.yml). Bộ kiểm thử mặc định không xác nhận kết nối tới PostgreSQL và MinIO thực tế.
 
+## Tái tạo dữ liệu mẫu
+
+```bash
+python data/synthetic/generate_samples.py
+```
+
+Lệnh sinh dữ liệu giả lập xác định cho HR, Admissions và Academic, xuất CSV theo
+schema hiện tại trong `docs/data-schema/`. Có thể truyền thư mục đích để kiểm tra
+riêng: `python data/synthetic/generate_samples.py /tmp/unilake-samples`.
+Các script `generate_hr.py`, `generate_admissions.py`, `generate_academic.py` khi
+chạy không có tham số cũng gọi quy trình này. Dữ liệu trung gian theo cấu trúc cũ
+chỉ được tạo trong thư mục tạm. `enrollment` hiện là đăng ký lớp ở Academic;
+liên kết nhập học được lưu bằng `student.admission_id`.
+
 ## Cấu trúc dự án
 
 ```text

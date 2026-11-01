@@ -23,8 +23,9 @@ from sqlalchemy.pool import NullPool
 
 from app import ingestion_worker
 from app.core.config import settings
-from app.core.deps import get_current_user, get_db
+from app.core.deps import get_current_user
 from app.core.exceptions import AppException, app_exception_handler
+from app.dependencies import get_db
 from app.infra.minio.bronze import client
 from app.infra.minio.client import bronze_reader_client, bronze_verifier_client
 from app.modules.datasources.models import DataSource

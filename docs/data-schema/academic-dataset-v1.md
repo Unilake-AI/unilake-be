@@ -17,7 +17,7 @@ Các file đi kèm:
 | [academic_v1.schema.json](academic_v1.schema.json) | Schema máy đọc: kiểu DB và kiểu SQL, null, unique, FK, thang điểm, cột dẫn xuất ở Silver, luật DQ | Khớp DB (có test) |
 | [academic_v1.sql](academic_v1.sql) | DDL PostgreSQL cho 9 bảng Academic; chạy sau `hr_v1.sql` và `admissions_v1.sql` | Khớp DB (có test) |
 | [backend/tests/test_dataset_schemas.py](../../backend/tests/test_dataset_schemas.py) | Đối chiếu JSON với DB, DDL với JSON, và kiểm tra CSV mẫu theo JSON | Đã cập nhật |
-| `data/samples/training/*.csv` | Dữ liệu mẫu | Sinh theo DB cũ, cần sinh lại (mục 9) |
+| `data/samples/training/*.csv` | Dữ liệu mẫu | Đã đồng bộ schema; tái tạo bằng `generate_samples.py` |
 | [data/synthetic/generate_academic.py](../../data/synthetic/generate_academic.py) | Sinh dữ liệu mẫu | Cần cập nhật theo DB mới |
 | [backend/tests/test_academic_dataset.py](../../backend/tests/test_academic_dataset.py) | Kiểm tra luật nghiệp vụ | Cần cập nhật theo DB mới |
 
@@ -419,7 +419,13 @@ Gợi ý data mart Gold: `student_semester_gpa` (sinh viên × học kỳ), `cou
 
 ## 9. Dữ liệu mẫu
 
-Dữ liệu mẫu hiện có trong `data/samples/training/` **được sinh theo DB cũ** (`unilake-db.dbml`): 63 sinh viên, 7 học kỳ (2024-1 → 2026-1), 62 học phần, 111 lớp, 705 lượt đăng ký có điểm; ngày chốt 25/09/2026. Khi sinh lại theo DB mới cần:
+CSV trong `data/samples/` đã đồng bộ với schema hiện tại. Tái tạo bằng
+`python data/synthetic/generate_samples.py` (ngày chốt 25/09/2026). Bộ sinh
+giữ logic dữ liệu giả lập ban đầu, sau đó xuất các bảng/cột theo schema mới.
+Các mô tả chuyển đổi bên dưới ghi lại sự khác biệt so với bộ dữ liệu cũ.
+
+
+Dữ liệu mẫu hiện có trong `data/samples/training/` **ban đầu được sinh theo DB cũ** (`unilake-db.dbml`): 63 sinh viên, 7 học kỳ (2024-1 → 2026-1), 62 học phần, 111 lớp, 705 lượt đăng ký có điểm; ngày chốt 25/09/2026. Các chuyển đổi đã áp dụng khi xuất theo schema mới:
 
 | Bảng | Thay đổi |
 |---|---|

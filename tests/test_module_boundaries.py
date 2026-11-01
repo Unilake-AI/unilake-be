@@ -109,7 +109,14 @@ def test_modules_do_not_depend_on_concrete_infrastructure() -> None:
         for target in _imports(path):
             if not target.startswith("app.infra"):
                 continue
-            is_persistence_model = path.name == "models.py" and target == "app.infra.db.base"
+            is_orm_model = any(
+                isinstance(node, ast.ClassDef)
+                and any(isinstance(base, ast.Name) and base.id == "Base" for base in node.bases)
+                for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+            )
+            is_persistence_model = target == "app.infra.db.base" and (
+                path.name == "models.py" or is_orm_model
+            )
             if not is_persistence_model:
                 violations.append(f"{source} -> {target}")
 

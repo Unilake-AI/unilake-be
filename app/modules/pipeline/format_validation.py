@@ -13,12 +13,11 @@ from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Literal, assert_never
 from urllib.parse import urlsplit
 
-from app.modules.ingestion.readers.factory import SourceReaderFactory
-from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
+from app.modules.ingestion.contracts.readers import SourceReaderFactory, read_file_snapshot
 
 if TYPE_CHECKING:
     from app.modules.ingestion.contracts import FileProvenance
-    from app.modules.ingestion.readers.contract import ReadRequest
+    from app.modules.ingestion.contracts.readers import ReadRequest
 
 ValueKind = Literal["string", "integer", "decimal", "date", "timestamp", "boolean"]
 IssueSeverity = Literal["INFO", "ERROR"]
