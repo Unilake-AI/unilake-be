@@ -12,7 +12,9 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 
+from app.modules.governance.contracts import LineageEvidence, SnapshotLineage
 from app.modules.pipeline.identity_contracts import digest
+from app.modules.pipeline.lineage import silver_lineage
 from app.modules.pipeline.schema_mapping import MappingKey
 from app.modules.pipeline.silver_storage import ObjectRef, SilverError, checksum
 from app.modules.pipeline.silver_validation import (
@@ -195,9 +197,9 @@ class SilverPublicationService:
             reused,
         )
 
-    def _read_manifest(
-        self, ref: ObjectRef, snapshot_id: str
-    ) -> tuple[dict[str, Any], dict[str, list[dict[str, object]]]]:
+    def _read_manifest_header(self, ref: ObjectRef, snapshot_id: str) -> dict[str, Any]:
+        # Storage.get verifies the immutable manifest bytes. Metadata reads must not
+        # download all entity Parquet files just to inspect the lineage graph.
         manifest = json.loads(self.storage.get(ref))
         if (
             manifest["snapshot_id"] != snapshot_id
@@ -206,6 +208,12 @@ class SilverPublicationService:
             or manifest["schema_fingerprint"] != self.schema_fingerprint
         ):
             raise SilverError("MANIFEST_CONTRACT_MISMATCH")
+        return dict(manifest)
+
+    def _read_manifest(
+        self, ref: ObjectRef, snapshot_id: str
+    ) -> tuple[dict[str, Any], dict[str, list[dict[str, object]]]]:
+        manifest = self._read_manifest_header(ref, snapshot_id)
         specs = self._specs()
         tables = {}
         for entity, artifact in manifest["entities"].items():
@@ -225,17 +233,100 @@ class SilverPublicationService:
         head = self.repository.head(self.scope)
         return self.read_snapshot(head) if head else {}
 
+    def read_lineage(self, snapshot_id: str, *, max_depth: int = 100) -> SnapshotLineage:
+        """Resolve updated and inherited entities through published snapshots only.
+
+        This internal read method does not expose storage references through HTTP.
+        Missing legacy evidence is reported without guessing a producer.
+        """
+        if max_depth < 1:
+            raise ValueError("INVALID_LINEAGE_DEPTH")
+        current = snapshot_id
+        visited: set[str] = set()
+        pending: set[str] | None = None
+        evidence: list[LineageEvidence] = []
+        missing: set[str] = set()
+        expected_parent_ref = None
+        inherited_objects: dict[str, Any] = {}
+        while current:
+            if current in visited or len(visited) >= max_depth:
+                raise SilverError("LINEAGE_ANCESTRY_LIMIT")
+            visited.add(current)
+            row = self.repository.snapshot(current, self.scope)
+            ref = json.loads(row["manifest_ref"])
+            if expected_parent_ref is not None and ref != expected_parent_ref:
+                raise SilverError("LINEAGE_PARENT_REFERENCE_MISMATCH")
+            manifest = self._read_manifest_header(ObjectRef(**ref), current)
+            entities = manifest["entities"]
+            if pending is None:
+                pending = set(entities)
+            for entity, artifact in inherited_objects.items():
+                if entity not in entities or entities[entity]["object"] != artifact:
+                    raise SilverError("LINEAGE_INHERITED_OBJECT_MISMATCH")
+            updated = set(manifest["updated_lineage"])
+            selected = pending & updated
+            raw = manifest.get("dataset_lineage")
+            resolved: set[str] = set()
+            if raw is not None:
+                item = LineageEvidence.model_validate(raw)
+                if (
+                    item.run_ref != f"silver:{current}"
+                    or item.mode != self.mode
+                    or item.parent_snapshot != manifest["parent_snapshot"]
+                ):
+                    raise SilverError("LINEAGE_RUN_MISMATCH")
+                asset_entities = {
+                    f"silver:{self.scope}:{self._specs()[entity]['x-owner']}:{entity}": entity
+                    for entity in updated
+                }
+                selected_edges = []
+                for edge in item.derivations:
+                    output_entity = asset_entities.get(edge.output.asset_id)
+                    if (
+                        output_entity is None
+                        or edge.output.layer != "SILVER"
+                        or edge.output.version != current
+                        or edge.output.checksum != entities[output_entity]["object"]["sha256"]
+                        or edge.output.domain != self._specs()[output_entity]["x-owner"]
+                        or edge.output.producer_run_ref not in {None, f"silver:{current}"}
+                    ):
+                        raise SilverError("LINEAGE_OUTPUT_MISMATCH")
+                    if output_entity in selected:
+                        resolved.add(output_entity)
+                        selected_edges.append(edge)
+                if selected_edges:
+                    evidence.append(item.model_copy(update={"derivations": tuple(selected_edges)}))
+            missing.update(selected - resolved)
+            # A rewritten entity with missing evidence must not inherit old lineage.
+            pending -= updated
+            if not pending:
+                break
+            current = manifest["parent_snapshot"]
+            expected_parent_ref = manifest["parent_manifest"]
+            if current and expected_parent_ref is None:
+                raise SilverError("LINEAGE_PARENT_REFERENCE_MISSING")
+            inherited_objects = {entity: entities[entity]["object"] for entity in pending}
+        missing.update(pending or ())
+        return SnapshotLineage(
+            snapshot_id=snapshot_id,
+            evidence=tuple(evidence),
+            missing_entities=tuple(sorted(missing)),
+        )
+
     def publish(
         self, results: Sequence[IdentityResult], *, base_snapshot: str | None = None
     ) -> PublicationReceipt:
         if not results:
             raise SilverError("NO_INPUT_BATCHES")
         # Loại thời gian thử/chụp và mã batch khỏi khóa chống xử lý lặp logic.
-        inputs = []
+        inputs: list[dict[str, Any]] = []
         for result in results:
             source = asdict(result.provenance) if result.provenance else None
             if source:
                 source.pop("captured_at")
+                # A run reference is audit context, not a change to captured data.
+                # Omit the new optional field to preserve pre-lineage replay hashes.
+                source.pop("ingestion_job_id", None)
             inputs.append(
                 {
                     "key": asdict(result.key),
@@ -256,6 +347,10 @@ class SilverPublicationService:
                     "counts": [result.inspected_count, result.total_count],
                 }
             )
+            # Only add execution versions when present; old no-cleaning inputs keep
+            # their historical request hash, but changed cleaning rules must not reuse.
+            if result.processing_steps:
+                inputs[-1]["processing_steps"] = result.processing_steps
         request_hash = checksum(
             packed(
                 {
@@ -359,6 +454,7 @@ class SilverPublicationService:
                     else {"namespace": result.key.source_system_id}
                 )
                 record_source.pop("captured_at", None)
+                record_source.pop("ingestion_job_id", None)
                 for row in result.accepted:
                     if not row.locator.strip() or set(row.values) != {
                         n for n in specs[entity]["properties"] if not n.startswith("_")
@@ -425,6 +521,14 @@ class SilverPublicationService:
                     "rows": len(records),
                     "lineage": lineage[entity],
                 }
+            manifest["dataset_lineage"] = silver_lineage(
+                run_id=run_id,
+                scope=self.scope,
+                mode=self.mode,
+                parent=base_snapshot,
+                updated=lineage,
+                entities=entities,
+            )
             data = packed(manifest)
             ref = self.storage.put(f"{prefix}/manifest-{checksum(data)}.json", data)
             self._read_manifest(ref, run_id)

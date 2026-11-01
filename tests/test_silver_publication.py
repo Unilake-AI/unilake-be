@@ -101,6 +101,11 @@ def test_all_22_entities_real_parquet_and_audit(environment):
         assert table[0]["_processed_at"].tzinfo is not None
     manifest = json.loads(store.get(receipt.manifest))
     assert manifest["mode"] == "rehearsal"
+    evidence = manifest["dataset_lineage"]
+    assert evidence["run_ref"] == f"silver:{receipt.snapshot_id}"
+    assert len(evidence["derivations"]) == 22
+    assert all(edge["output"]["layer"] == "SILVER" for edge in evidence["derivations"])
+    assert all(edge["inputs"][0]["layer"] is None for edge in evidence["derivations"])
     assert not manifest["activation_allowed"]
     assert manifest["entities"]["position"]["lineage"][0]["crosswalk_version"] == "fixture-cw-1"
     assert manifest["entities"]["position"]["lineage"][0]["record_locators"] == [
@@ -139,6 +144,79 @@ def test_partial_update_keeps_pinned_parent_tables(environment):
     manifest = json.loads(store.get(second.manifest))
     assert manifest["parent_snapshot"] == first.snapshot_id
     assert manifest["parent_manifest"] == json.loads(runs(publisher.repository)[0]["manifest_ref"])
+    view = publisher.read_lineage(second.snapshot_id)
+    assert view.missing_entities == ()
+    origins = {
+        edge.output.asset_id.rsplit(":", 1)[-1]: edge.output.version
+        for item in view.evidence
+        for edge in item.derivations
+    }
+    assert origins["position"] == second.snapshot_id
+    assert origins["employee"] == first.snapshot_id
+    assert len(origins) == 22
+
+
+def test_missing_updated_lineage_does_not_inherit_outdated_evidence(environment, monkeypatch):
+    publisher, _, _ = environment
+    first = publisher.publish(all_entities())
+    monkeypatch.setattr("app.modules.pipeline.silver_publication.silver_lineage", lambda **_: None)
+    second = publisher.publish(
+        (normalized(changes={"position_name": "Changed"}),), base_snapshot=first.snapshot_id
+    )
+    view = publisher.read_lineage(second.snapshot_id)
+    assert view.missing_entities == ("position",)
+    assert all(
+        not edge.output.asset_id.endswith(":position")
+        for item in view.evidence
+        for edge in item.derivations
+    )
+
+
+def test_lineage_reads_only_manifests_and_bounds_ancestry(environment, monkeypatch):
+    publisher, _, store = environment
+    first = publisher.publish(all_entities())
+    second = publisher.publish(
+        (normalized(changes={"position_name": "Changed"}),), base_snapshot=first.snapshot_id
+    )
+    original = store.get
+
+    def metadata_only(ref):
+        assert ref.key.endswith(".json"), "Lineage must not scan business rows"
+        return original(ref)
+
+    monkeypatch.setattr(store, "get", metadata_only)
+    assert publisher.read_lineage(second.snapshot_id).missing_entities == ()
+    with pytest.raises(SilverError, match="LINEAGE_ANCESTRY_LIMIT"):
+        publisher.read_lineage(second.snapshot_id, max_depth=1)
+
+
+def test_lineage_cannot_read_staged_snapshot(environment, monkeypatch):
+    publisher, repo, _ = environment
+    monkeypatch.setattr(repo, "publish", MagicMock(side_effect=RuntimeError("DB unavailable")))
+    with pytest.raises(SilverError, match="STORAGE_OR_METADATA_FAILURE"):
+        publisher.publish((normalized(),))
+    attempt = runs(repo)[0]
+    assert attempt["manifest_ref"] is not None
+    with pytest.raises(SilverError, match="SNAPSHOT_NOT_PUBLISHED"):
+        publisher.read_lineage(attempt["run_id"])
+
+
+def test_changed_cleaning_version_changes_publication_identity(environment):
+    publisher, _, _ = environment
+    result = replace(normalized(), processing_steps=(("CLEAN_FORMAT", "v1"),))
+    first = publisher.publish((result,))
+    assert publisher.publish((result,)).reused
+    # Same data but different transformation evidence is not the same logical request.
+    with pytest.raises(SilverError, match="ACTIVE_SNAPSHOT_CHANGED"):
+        publisher.publish((replace(result, processing_steps=(("CLEAN_FORMAT", "v2"),)),))
+    assert (
+        publisher.read_lineage(first.snapshot_id)
+        .evidence[0]
+        .derivations[0]
+        .transformations[0]
+        .version
+        == "v1"
+    )
 
 
 def test_fk_to_missing_parent_blocks_snapshot(environment):
@@ -329,6 +407,34 @@ def test_production_requires_durable_bronze_version(environment):
     with pytest.raises(SilverError, match="BRONZE_REPLAY_REFERENCE_REQUIRED"):
         publisher.publish((result,))
     assert repo.head(publisher.scope) is None
+
+
+def test_ingestion_run_context_does_not_change_logical_replay(environment):
+    publisher, _, _ = environment
+    result = normalized()
+    provenance = FileProvenance(
+        "SYNTH",
+        "1",
+        "positions",
+        "CSV",
+        "s3://bronze/input.csv",
+        "version-1",
+        "0" * 64,
+        "1" * 64,
+        "2" * 64,
+        "2026-01-01T00:00:00Z",
+        "parsed_record_ordinal",
+    )
+    result = replace(result, provenance=provenance, input_version=provenance.input_version)
+    first = publisher.publish((result,))
+    linked = replace(result, provenance=replace(provenance, ingestion_job_id=101))
+    replay = publisher.publish((linked,))
+    assert replay.reused
+    assert replay.snapshot_id == first.snapshot_id
+    # The old published evidence is not retroactively rewritten with a new claim.
+    assert (
+        publisher.read_lineage(first.snapshot_id).evidence[0].derivations[0].inputs[0].layer is None
+    )
 
 
 def test_business_gate_coverage_tracks_source_rule_inventory():

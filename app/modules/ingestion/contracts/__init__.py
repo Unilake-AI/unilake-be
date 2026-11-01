@@ -52,6 +52,8 @@ class FileProvenance:
     captured_at: str
     locator_kind: str
     workbook_epoch: str | None = None
+    # Set only after resolving and verifying a successful ingestion job's Bronze object.
+    ingestion_job_id: int | None = None
 
     @property
     def input_version(self) -> str:
@@ -83,6 +85,8 @@ class BronzeBatch:
     record_locators: tuple[str, ...] = ()
     source_paths: tuple[str, ...] = ()
     provenance: FileProvenance | None = None
+    # Execution metadata is distinct from the immutable captured file provenance.
+    processing_steps: tuple[tuple[str, str], ...] = ()
 
 
 class BronzeRepository(Protocol):

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -201,6 +201,11 @@ def _read_bronze(
         or parsed.rows_read != context["rows_read"]
     ):
         raise ValueError("BRONZE_JOB_CAPTURE_MISMATCH")
+
+    parsed = replace(
+        parsed,
+        provenance=replace(provenance, ingestion_job_id=context["ingestion_job_id"]),
+    )
 
     case = _case(context["domain"])
     expected_columns = tuple(path.removeprefix("/") for path in case["source_paths"])

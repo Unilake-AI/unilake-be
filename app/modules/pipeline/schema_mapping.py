@@ -83,6 +83,7 @@ class MappingResult:
     # Đây là cấu trúc trung gian, chưa phải Silver đã kiểm tra.
     silver_ready: bool = False
     provenance: FileProvenance | None = None
+    processing_steps: tuple[tuple[str, str], ...] = ()
 
 
 def _tokens(pointer: str) -> tuple[str, ...]:
@@ -318,6 +319,7 @@ class SchemaMappingService:
             len(batch.records),
             preview_limit is not None,
             provenance=batch.provenance,
+            processing_steps=batch.processing_steps,
         )
 
     def preview(self, batch: BronzeBatch, *, limit: int = 20) -> MappingResult:

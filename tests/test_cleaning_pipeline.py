@@ -137,7 +137,13 @@ def test_cleaning_pipeline_runs_all_stages_and_preserves_count_and_lineage():
         {"id": "1", "employee_code": "NV0001", "status": "Active", "fee": "10.00"},
     )
     assert result.batch.record_locators == ("record:1",)
+    assert result.batch.provenance is not None
     assert result.batch.provenance == batch().provenance
+    assert result.batch.processing_steps == (
+        ("CLEAN_MISSING", "cleaning-1"),
+        ("CLEAN_FORMAT", "cleaning-1"),
+        ("CLEAN_DUPLICATES", "cleaning-1"),
+    )
     report = result.report
     assert (report.records_read, report.records_passed, report.records_quarantined) == (
         5,
