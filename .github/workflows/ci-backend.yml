@@ -60,8 +60,21 @@ jobs:
       - name: Editor type check
         run: pyright --pythonpath "$(command -v python)"
 
-      - name: Test migrations
-        run: alembic upgrade head
+      - name: Test database schema and SQL migrations
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: unilake
+          PGPASSWORD: unilake
+          PGDATABASE: unilake
+        run: |
+          psql -v ON_ERROR_STOP=1 --single-transaction -f infra/postgres/init/02-schema.sql
+          for migration in infra/postgres/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
+      - name: Test role and account seed
+        run: python -m app.seed
 
       - name: Tests
         run: pytest

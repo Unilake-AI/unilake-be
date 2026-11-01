@@ -1,0 +1,50 @@
+# Demo: API + Render Postgres. Schema/seed được áp dụng thủ công theo docs/render.md.
+services:
+  - type: web
+    name: unilake-api
+    runtime: docker
+    branch: develop
+    autoDeployTrigger: checksPass
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: DB_ECHO
+        value: "false"
+      - key: DB_HOST
+        fromDatabase:
+          name: unilake-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: unilake-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: unilake-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: unilake-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: unilake-db
+          property: password
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+
+databases:
+  - name: unilake-db
+    plan: free
+    region: singapore
+    postgresMajorVersion: "16"
+    databaseName: unilake
+    user: unilake

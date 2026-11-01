@@ -73,6 +73,8 @@ Docker Compose có cấu hình Redis. Hàng đợi ingestion hiện sử dụng 
 
 ## Cài đặt và khởi chạy
 
+Deploy lên Render: xem [hướng dẫn Render](docs/render.md).
+
 ### Yêu cầu môi trường
 
 - Python **3.11 trở lên**.
@@ -223,6 +225,35 @@ Tạo tác vụ ingestion và chạy cleaning yêu cầu vai trò `ADMIN` hoặc
 Tham khảo [đặc tả ingestion](docs/ingestion-execution.md) để tra cứu payload, vòng đời tác vụ và mã lỗi. Quy trình Bronze → Silver với dữ liệu tổng hợp được mô tả trong [hướng dẫn demo chuẩn hóa](docs/standardization/manual-live-demo.md).
 
 ## Quản lý cơ sở dữ liệu
+
+### Role và tài khoản mẫu
+
+Seed tạo 9 role dưới đây, mỗi tài khoản mẫu được gán đúng một role.
+Mật khẩu khởi tạo cho các tài khoản demo/local: `Password@123`.
+
+| Role | Tên đăng nhập | Trách nhiệm |
+| --- | --- | --- |
+| `ADMIN` | `admin` | Quản trị hệ thống, tài khoản và phân quyền |
+| `DATA_ADMIN` | `dataadmin` | Quản lý nguồn, pipeline, chất lượng dữ liệu; truy vấn AI xuyên phòng ban |
+| `VIEWER` | `viewer` | Ban Giám hiệu xem dashboard và báo cáo tổng hợp |
+| `ADMISSIONS_MANAGER` | `admissions_manager` | Trưởng phòng Tuyển sinh |
+| `ADMISSIONS_STAFF` | `admissions_staff` | Nhân viên phòng Tuyển sinh |
+| `ACADEMIC_MANAGER` | `academic_manager` | Trưởng phòng Đào tạo |
+| `ACADEMIC_STAFF` | `academic_staff` | Nhân viên phòng Đào tạo |
+| `HR_MANAGER` | `hr_manager` | Trưởng phòng Nhân sự |
+| `HR_STAFF` | `hr_staff` | Nhân viên phòng Nhân sự |
+
+Áp dụng vào database đã có schema bằng `python -m app.seed`.
+Seed đồng bộ quyền của 9 role và gán lại role cho các tài khoản mẫu; chạy lại không
+ghi đè mật khẩu hoặc trạng thái của các tài khoản này. Hai tài khoản mẫu cũ
+`analyst`, `manager` được khóa và bỏ role, giữ lại lịch sử. Các role cũ
+`SUPER_ADMIN`, `ANALYST`, `MANAGER` chỉ được xóa khi không còn tài khoản sử dụng.
+
+`DATA_ADMIN` có thêm quyền `query.execute`. Sáu role phòng ban được khai báo quyền
+xem dataset, catalog, dashboard, thực thi và xem lịch sử truy vấn. Hiện manager
+và staff có cùng tập quyền; backend chưa thực thi giới hạn dữ liệu theo phòng ban.
+Bảng `role_permission` là cấu hình quyền; các endpoint hiện chưa kiểm tra đầy đủ
+bảng này. Xem trạng thái triển khai từng phân hệ ở phần phạm vi chức năng.
 
 DDL, dữ liệu khởi tạo và SQL migration được quản lý trong `infra/postgres/`. Schema dữ liệu nằm tại `docs/data-schema/`.
 
