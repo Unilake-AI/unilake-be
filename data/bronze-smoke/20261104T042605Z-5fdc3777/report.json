@@ -1,0 +1,238 @@
+{
+  "run_id": "20261104T042605Z-5fdc3777",
+  "source_id": 1,
+  "dataset_id": 1,
+  "valid.csv": {
+    "ingestion_job_id": 1,
+    "data_source_id": 1,
+    "dataset_id": 1,
+    "status": "SUCCESS",
+    "stage": "COMPLETED",
+    "source_table": "valid.csv",
+    "created_at": "2026-11-04T04:26:05.970195",
+    "started_at": "2026-11-04T04:26:07.239417",
+    "finished_at": "2026-11-04T04:26:07.320345",
+    "requested_by": "1",
+    "rows_read": 2,
+    "rows_written": 2,
+    "rows_rejected": 0,
+    "error_message": null,
+    "output": {
+      "uri": "s3://bronze/bronze-smoke/2026/11/04/job-1/valid.csv",
+      "sha256": "479c3656335c95ce6947c4c8bca493833e84024a36eef0aa2c4131a0d39c9320",
+      "metadata": {
+        "sha256": "479c3656335c95ce6947c4c8bca493833e84024a36eef0aa2c4131a0d39c9320",
+        "batch-id": "job-1",
+        "source-system-id": "5",
+        "ingestion-timestamp": "2026-11-04T04:26:07.261455+00:00"
+      },
+      "size_bytes": 43,
+      "version_id": "f83b39d7-1595-44ea-80ca-7284997d82bf",
+      "source_version_id": null
+    },
+    "validation_report": {
+      "checks": [
+        {
+          "status": "PASS",
+          "rule_id": "IN-COM-001",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-COM-002",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-COM-003",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-COM-004",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-COM-005",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-COM-006",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-COM-007",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-COM-008",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-CSV-001",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-CSV-002",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-CSV-003",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-CSV-004",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-CSV-005",
+          "required": true
+        }
+      ],
+      "issues": [],
+      "result": "PASS",
+      "policy_id": "bronze-smoke-csv-v1",
+      "report_id": "3db3b7ed-44c0-4636-9308-479219a1ab05",
+      "attempt_id": "job-1",
+      "can_accept": true,
+      "source_type": "CSV",
+      "total_errors": 0,
+      "scan_complete": true,
+      "policy_version": "1",
+      "total_warnings": 0,
+      "records_scanned": 2,
+      "ingestion_job_id": 1,
+      "issues_truncated": false,
+      "blank_rows_skipped": 0,
+      "policy_fingerprint": "sha256:a8311cbbf46a494ac6b4197b19b3c19ac5ede17dbe90949131c6f67ccb2df719"
+    }
+  },
+  "verification": {
+    "bytes_match": true,
+    "sha256_match": true,
+    "metadata_match": true,
+    "source_unchanged": true,
+    "version_id": "f83b39d7-1595-44ea-80ca-7284997d82bf",
+    "invalid_file_not_uploaded": true
+  },
+  "invalid.csv": {
+    "ingestion_job_id": 2,
+    "data_source_id": 1,
+    "dataset_id": 1,
+    "status": "FAILED",
+    "stage": "FAILED",
+    "source_table": "invalid.csv",
+    "created_at": "2026-11-04T04:26:08.047000",
+    "started_at": "2026-11-04T04:26:09.335193",
+    "finished_at": "2026-11-04T04:26:09.351890",
+    "requested_by": "1",
+    "rows_read": 0,
+    "rows_written": 0,
+    "rows_rejected": 0,
+    "error_message": "BRONZE_INPUT_VALIDATION_BLOCKED",
+    "output": null,
+    "validation_report": {
+      "checks": [
+        {
+          "status": "PASS",
+          "rule_id": "IN-COM-001",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-COM-002",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-COM-003",
+          "required": true
+        },
+        {
+          "status": "NOT_RUN",
+          "rule_id": "IN-COM-004",
+          "required": true
+        },
+        {
+          "status": "NOT_RUN",
+          "rule_id": "IN-COM-005",
+          "required": true
+        },
+        {
+          "status": "FAIL",
+          "rule_id": "IN-COM-006",
+          "required": true
+        },
+        {
+          "status": "NOT_RUN",
+          "rule_id": "IN-COM-007",
+          "required": true
+        },
+        {
+          "status": "NOT_RUN",
+          "rule_id": "IN-COM-008",
+          "required": true
+        },
+        {
+          "status": "PASS",
+          "rule_id": "IN-CSV-001",
+          "required": true
+        },
+        {
+          "status": "NOT_RUN",
+          "rule_id": "IN-CSV-002",
+          "required": true
+        },
+        {
+          "status": "NOT_RUN",
+          "rule_id": "IN-CSV-003",
+          "required": true
+        },
+        {
+          "status": "NOT_RUN",
+          "rule_id": "IN-CSV-004",
+          "required": true
+        },
+        {
+          "status": "NOT_RUN",
+          "rule_id": "IN-CSV-005",
+          "required": true
+        }
+      ],
+      "issues": [
+        {
+          "code": "HEADER_DUPLICATE",
+          "rule_id": "IN-COM-006",
+          "severity": "ERROR",
+          "row_number": null,
+          "column_number": null
+        }
+      ],
+      "result": "FAIL",
+      "policy_id": "bronze-smoke-csv-v1",
+      "report_id": "76733853-0a1a-4fb9-a732-6cfaad64abf8",
+      "attempt_id": "job-2",
+      "can_accept": false,
+      "source_type": "CSV",
+      "total_errors": 1,
+      "scan_complete": false,
+      "policy_version": "1",
+      "total_warnings": 0,
+      "records_scanned": 0,
+      "ingestion_job_id": 2,
+      "issues_truncated": false,
+      "blank_rows_skipped": 0,
+      "policy_fingerprint": "sha256:a8311cbbf46a494ac6b4197b19b3c19ac5ede17dbe90949131c6f67ccb2df719"
+    }
+  },
+  "result": "PASS"
+}
