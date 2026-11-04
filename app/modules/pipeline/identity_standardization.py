@@ -80,6 +80,7 @@ class IdentityResult:
     total_count: int
     provenance: FileProvenance | None
     silver_ready: bool = False
+    processing_steps: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, init=False)
@@ -335,4 +336,5 @@ class IdentityStandardizationService:
             typed.inspected_count,
             typed.total_count,
             typed.provenance,
+            processing_steps=typed.processing_steps,
         )

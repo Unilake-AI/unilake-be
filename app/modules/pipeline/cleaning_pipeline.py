@@ -165,6 +165,12 @@ class CleaningPipeline:
 
         cleaned_batch = replace(
             batch,
+            processing_steps=(
+                *batch.processing_steps,
+                ("CLEAN_MISSING", task.missing_profile.version),
+                ("CLEAN_FORMAT", task.format_profile.version),
+                ("CLEAN_DUPLICATES", task.duplicate_profile.version),
+            ),
             records=tuple(dict(record.values) for record in duplicates.passed),
             record_locators=tuple(record.locator for record in duplicates.passed),
         )

@@ -496,6 +496,7 @@ class TypeResult:
     configuration_fingerprint: str
     silver_ready: bool = False
     provenance: FileProvenance | None = None
+    processing_steps: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, init=False)
@@ -693,4 +694,5 @@ class TypeStandardizationService:
             mapped.total_count,
             self.configuration_fingerprint,
             provenance=mapped.provenance,
+            processing_steps=mapped.processing_steps,
         )
