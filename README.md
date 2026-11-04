@@ -11,7 +11,7 @@ Repository này bao gồm API FastAPI, ingestion worker và pipeline chuẩn hó
 - [Phạm vi chức năng](#phạm-vi-chức-năng)
 - [Kiến trúc và công nghệ](#kiến-trúc-và-công-nghệ)
 - [Cài đặt và khởi chạy](#cài-đặt-và-khởi-chạy)
-- [Giao diện API](#giao-diện-api)
+- [Giao diện API]
 - [Quản lý cơ sở dữ liệu](#quản-lý-cơ-sở-dữ-liệu)
 - [Kiểm thử và chất lượng mã nguồn](#kiểm-thử-và-chất-lượng-mã-nguồn)
 - [Cấu trúc dự án](#cấu-trúc-dự-án)

@@ -587,3 +587,13 @@ CREATE TABLE IF NOT EXISTS chart_widget (
     width INT,
     height INT
 );
+
+-- Metadata quản trị catalog; khai báo tĩnh vẫn là dữ liệu nền.
+CREATE TABLE IF NOT EXISTS app.catalog_metadata (
+    domain_id VARCHAR(50) NOT NULL,
+    dataset VARCHAR(150) NOT NULL,
+    metadata_payload JSONB NOT NULL,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (domain_id, dataset)
+);

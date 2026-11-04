@@ -52,7 +52,11 @@ def require_role(*roles: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
     ) -> dict[str, Any]:
         user_roles = set(current_user.get("roles", []))
         if roles and user_roles.isdisjoint(roles):
-            raise AppException("Insufficient permissions", code="FORBIDDEN", status_code=403)
+            raise AppException(
+                "Bạn không có quyền thực hiện thao tác này. Vui lòng liên hệ quản trị viên nếu cần hỗ trợ.",
+                code="FORBIDDEN",
+                status_code=403,
+            )
         return current_user
 
     return dependency
