@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.deps import require_role
 from app.core.exceptions import AppException
+from app.core.roles import RoleCode
 from app.modules.pipeline.manual_cleaning import run_manual_cleaning
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
@@ -24,6 +25,7 @@ class ManualCleaningRequest(BaseModel):
 
 
 class ManualCleaningResponse(BaseModel):
+    run_id: str
     status: str
     ingestion_job_id: int
     requested_by: str
@@ -36,9 +38,10 @@ class ManualCleaningResponse(BaseModel):
     records_collapsed: int
     issues: list[dict[str, Any]]
     publication: dict[str, Any] | None
+    quarantine_report: dict[str, Any] | None = None
 
 
-Admin = Annotated[dict[str, Any], Depends(require_role("ADMIN", "DATA_ADMIN"))]
+Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.ADMIN, RoleCode.DATA_ADMIN))]
 
 
 @router.post(
@@ -48,7 +51,7 @@ Admin = Annotated[dict[str, Any], Depends(require_role("ADMIN", "DATA_ADMIN"))]
     description=(
         "Runs the pinned Bronze object through cleaning and Silver rehearsal. "
         "Only the dedicated synthetic DEMO_FLOW catalog profiles are currently supported. "
-        "Any quarantined row prevents Silver publication."
+        "Only the HR position profile can publish with quarantined rows, within its policy limits."
     ),
 )
 def run_cleaning_for_ingestion_job(

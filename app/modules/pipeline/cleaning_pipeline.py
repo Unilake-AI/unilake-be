@@ -68,6 +68,7 @@ class CleaningReport:
 class CleaningResult:
     batch: BronzeBatch
     report: CleaningReport
+    quarantined_locators: tuple[str, ...] = ()
 
 
 class CleaningReportSink(Protocol):
@@ -195,7 +196,7 @@ class CleaningPipeline:
             raise ValueError("CLEANING_RECORD_COUNT_INVARIANT_FAILED")
         if self._issue_sink is not None:
             self._issue_sink.publish(report)
-        return CleaningResult(cleaned_batch, report)
+        return CleaningResult(cleaned_batch, report, tuple(quarantine_by_locator))
 
 
 class CleaningSilverPipeline:

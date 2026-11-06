@@ -330,7 +330,7 @@ trường đã seed trong buổi này:
 
 Theo dõi `GET /api/v1/ingestion/jobs/{id}` bằng ID vừa trả về. Có thể liệt kê
 bằng `GET /api/v1/ingestion/jobs?data_source_id=5&limit=20&offset=0`.
-Role đọc được hỗ trợ: ADMIN, DATA_ADMIN, ANALYST, VIEWER.
+Role đọc được hỗ trợ: ADMIN, DATA_ADMIN, VIEWER.
 
 Để chạy ca file thiếu, dùng ID nguồn thử từ seed, dataset HR và `missing.csv`.
 Không đổi location của nguồn HR hợp lệ để tạo lỗi.

@@ -203,7 +203,9 @@ Frontend sử dụng API base URL `http://localhost:8000/api/v1` với cấu hì
 
 ## Giao diện API
 
-Các endpoint dưới đây sử dụng prefix mặc định `/api/v1`. Swagger UI cung cấp chi tiết về dữ liệu đầu vào, phản hồi và yêu cầu xác thực.
+Xem [handoff API cho frontend](docs/api/fe-handoff.md) để tra quyền theo role, request và response của tất cả endpoint. Dùng [OpenAPI JSON](docs/api/openapi.json) để import vào Postman hoặc sinh type.
+
+Các endpoint thường dùng dưới đây sử dụng prefix mặc định `/api/v1`.
 
 | Phân hệ | Phương thức | Đường dẫn |
 | --- | --- | --- |
@@ -245,9 +247,8 @@ Mật khẩu khởi tạo cho các tài khoản demo/local: `Password@123`.
 
 Áp dụng vào database đã có schema bằng `python -m app.seed`.
 Seed đồng bộ quyền của 9 role và gán lại role cho các tài khoản mẫu; chạy lại không
-ghi đè mật khẩu hoặc trạng thái của các tài khoản này. Hai tài khoản mẫu cũ
-`analyst`, `manager` được khóa và bỏ role, giữ lại lịch sử. Các role cũ
-`SUPER_ADMIN`, `ANALYST`, `MANAGER` chỉ được xóa khi không còn tài khoản sử dụng.
+ghi đè mật khẩu hoặc trạng thái của các tài khoản này. Tài khoản ngoài seed cần
+được gán ít nhất một role trong bảng trên để đăng nhập.
 
 `DATA_ADMIN` có thêm quyền `query.execute`. Sáu role phòng ban được khai báo quyền
 xem dataset, catalog, dashboard, thực thi và xem lịch sử truy vấn. Hiện manager

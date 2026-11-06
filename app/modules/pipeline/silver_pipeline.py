@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from app.modules.pipeline.identity_standardization import IdentityStandardizationService
     from app.modules.pipeline.schema_mapping import SchemaMappingService
     from app.modules.pipeline.silver_publication import PublicationReceipt, SilverPublicationService
+    from app.modules.pipeline.silver_storage import ObjectRef
 
 
 @dataclass(frozen=True)
@@ -27,7 +28,11 @@ class SilverPipeline:
         self.publisher = publisher
 
     def run(
-        self, tasks: Sequence[NormalizationTask], *, base_snapshot: str | None = None
+        self,
+        tasks: Sequence[NormalizationTask],
+        *,
+        base_snapshot: str | None = None,
+        quarantine_report: ObjectRef | None = None,
     ) -> PublicationReceipt:
         results = []
         for task in tasks:
@@ -38,4 +43,8 @@ class SilverPipeline:
                 derivation_input_version=task.derivation_input_version,
             )
             results.append(task.identity.standardize(typed))
+        if quarantine_report is not None:
+            return self.publisher.publish(
+                results, base_snapshot=base_snapshot, quarantine_report=quarantine_report
+            )
         return self.publisher.publish(results, base_snapshot=base_snapshot)

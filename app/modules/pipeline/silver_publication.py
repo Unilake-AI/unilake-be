@@ -214,6 +214,8 @@ class SilverPublicationService:
         self, ref: ObjectRef, snapshot_id: str
     ) -> tuple[dict[str, Any], dict[str, list[dict[str, object]]]]:
         manifest = self._read_manifest_header(ref, snapshot_id)
+        if quarantine := manifest.get("quarantine_report"):
+            self.storage.get(ObjectRef(**quarantine))
         specs = self._specs()
         tables = {}
         for entity, artifact in manifest["entities"].items():
@@ -314,10 +316,24 @@ class SilverPublicationService:
         )
 
     def publish(
-        self, results: Sequence[IdentityResult], *, base_snapshot: str | None = None
+        self,
+        results: Sequence[IdentityResult],
+        *,
+        base_snapshot: str | None = None,
+        quarantine_report: ObjectRef | None = None,
     ) -> PublicationReceipt:
         if not results:
             raise SilverError("NO_INPUT_BATCHES")
+        if quarantine_report is not None:
+            if (
+                self.mode != "rehearsal"
+                or len(results) != 1
+                or (results[0].key.domain_id, results[0].key.entity) != ("hr", "position")
+                or not results[0].accepted
+            ):
+                raise SilverError("PARTIAL_PUBLICATION_NOT_ALLOWED")
+            # The report must be readable before any snapshot can reference it.
+            self.storage.get(quarantine_report)
         # Loại thời gian thử/chụp và mã batch khỏi khóa chống xử lý lặp logic.
         inputs: list[dict[str, Any]] = []
         for result in results:
@@ -351,17 +367,16 @@ class SilverPublicationService:
             # their historical request hash, but changed cleaning rules must not reuse.
             if result.processing_steps:
                 inputs[-1]["processing_steps"] = result.processing_steps
-        request_hash = checksum(
-            packed(
-                {
-                    "scope": self.scope,
-                    "parent": base_snapshot,
-                    "schema": self.schema_fingerprint,
-                    "policy": self.policy_json,
-                    "inputs": sorted(inputs, key=lambda item: checksum(packed(item))),
-                }
-            )
-        )
+        request = {
+            "scope": self.scope,
+            "parent": base_snapshot,
+            "schema": self.schema_fingerprint,
+            "policy": self.policy_json,
+            "inputs": sorted(inputs, key=lambda item: checksum(packed(item))),
+        }
+        if quarantine_report is not None:
+            request["quarantine_report_sha256"] = quarantine_report.sha256
+        request_hash = checksum(packed(request))
         # Cùng yêu cầu logic thì tái sử dụng snapshot đã công bố (idempotency).
         # Không đưa active head về snapshot cũ khi người dùng gửi lại yêu cầu cũ.
         existing = self.repository.find(self.scope, request_hash)
@@ -485,9 +500,29 @@ class SilverPublicationService:
                     meta["record_locators"].append(
                         {"source_record_id": record_id, "locator": row.locator}
                     )
-            # Đây là thay thế TOÀN BỘ entity được gửi lên, không phải upsert từng dòng.
-            # Entity không gửi giữ dữ liệu từ snapshot cha; kiểm tra FK trên toàn bộ
-            # snapshot ứng viên để phát hiện tham chiếu bị đứt sau khi thay thế.
+            if quarantine_report is not None:
+                # Merge accepted keys and carry forward the provenance of retained rows.
+                entity = results[0].key.entity
+                primary_key = specs[entity]["x-primary-key"]
+                incoming_keys = {
+                    tuple(row[field] for field in primary_key) for row in updates[entity]
+                }
+                retained = [
+                    row
+                    for row in tables.get(entity, ())
+                    if tuple(row[field] for field in primary_key) not in incoming_keys
+                ]
+                retained_ids = {row["_source_record_id"] for row in retained}
+                for batch in entities.get(entity, {}).get("lineage", ()):
+                    locators = [
+                        locator
+                        for locator in batch["record_locators"]
+                        if locator["source_record_id"] in retained_ids
+                    ]
+                    if locators:
+                        lineage[entity].append({**batch, "record_locators": locators})
+                updates[entity] = retained + updates[entity]
+            # Check the entire candidate, including foreign keys from other entities.
             tables.update(updates)
             issues.extend(validate_snapshot(tables, specs))
             if issues:
@@ -508,6 +543,8 @@ class SilverPublicationService:
                 "updated_lineage": lineage,
                 "entities": entities,
             }
+            if quarantine_report is not None:
+                manifest["quarantine_report"] = asdict(quarantine_report)
             # Kiểm tra điều kiện quản trị trước mọi thao tác ghi đối tượng. Đã có nguồn gốc cho thực thể mới.
             manifest["business_issues"] = [asdict(issue) for issue in self._gate(tables, manifest)]
             prefix = f"silver/{self.mode}/{checksum(self.scope.encode())}/{run_id}"

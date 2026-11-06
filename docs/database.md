@@ -538,7 +538,7 @@ Table app_user {
 
 Table role {
   role_id bigint [pk, increment]
-  role_code varchar(50) [unique, not null, note: 'ADMIN, DATA_ADMIN, ANALYST, VIEWER']
+  role_code varchar(50) [unique, not null, note: '9 mã vai trò do seed khai báo']
   role_name varchar(100) [not null]
   description text
 }

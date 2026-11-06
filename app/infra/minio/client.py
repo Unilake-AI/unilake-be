@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from minio import Minio
+from urllib3 import PoolManager, Timeout
 
 from app.core.config import settings
 
@@ -19,7 +20,9 @@ class MinioClientSettings:
     secure: bool = settings.minio_secure
 
 
-def _scoped_client(access_key: str, secret_key: str, role: str) -> Minio:
+def _scoped_client(
+    access_key: str, secret_key: str, role: str, *, timeout: float | None = None
+) -> Minio:
     """Thiếu SA thì dừng rõ ràng, không dùng root làm phương án dự phòng."""
     if not access_key or not secret_key:
         raise ValueError(f"MINIO_{role}_CREDENTIALS_REQUIRED")
@@ -29,6 +32,9 @@ def _scoped_client(access_key: str, secret_key: str, role: str) -> Minio:
         secret_key=secret_key,
         secure=settings.minio_secure,
         region=settings.minio_region,
+        http_client=PoolManager(timeout=Timeout(total=timeout), retries=False)
+        if timeout is not None
+        else None,
     )
 
 
@@ -44,9 +50,12 @@ def bronze_verifier_client() -> Minio:
     )
 
 
-def bronze_reader_client() -> Minio:
+def bronze_reader_client(*, timeout: float | None = None) -> Minio:
     return _scoped_client(
-        settings.bronze_reader_access_key, settings.bronze_reader_secret_key, "BRONZE_READER"
+        settings.bronze_reader_access_key,
+        settings.bronze_reader_secret_key,
+        "BRONZE_READER",
+        timeout=timeout,
     )
 
 

@@ -5,14 +5,16 @@ from __future__ import annotations
 import json
 import logging
 import re
+from contextlib import suppress
 from dataclasses import asdict, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 from uuid import uuid4
 
 from sqlalchemy import URL, create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
 from app.modules.ingestion.contracts import MappingBinding
@@ -23,11 +25,10 @@ from app.modules.ingestion.contracts.readers import (
     reader_to_batch,
 )
 from app.modules.pipeline.cleaning_pipeline import (
-    CleaningNormalizationTask,
     CleaningPipeline,
-    CleaningSilverPipeline,
     CleaningTask,
 )
+from app.modules.pipeline.cleaning_runs import CleaningRunRepository
 from app.modules.pipeline.duplicate_records import build_duplicate_profile
 from app.modules.pipeline.format_validation import SourceFormatOptions, build_format_profile
 from app.modules.pipeline.identity_repository import CrosswalkRepository
@@ -37,17 +38,25 @@ from app.modules.pipeline.identity_standardization import (
 )
 from app.modules.pipeline.mapping_profiles import build_profile
 from app.modules.pipeline.missing_values import MissingValueProfile, MissingValueRule
+from app.modules.pipeline.quarantine_records import (
+    file_parser_options,
+    quarantine_source,
+    save_quarantine_records,
+)
 from app.modules.pipeline.schema_mapping import (
     MappingKey,
     MappingRegistry,
     SchemaMappingService,
 )
-from app.modules.pipeline.silver_pipeline import SilverPipeline
+from app.modules.pipeline.silver_pipeline import NormalizationTask, SilverPipeline
 from app.modules.pipeline.silver_publication import SilverPublicationService
 from app.modules.pipeline.silver_repository import SilverRepository
-from app.modules.pipeline.silver_storage import MinioSilverStore, SilverError
+from app.modules.pipeline.silver_storage import MinioSilverStore, SilverError, checksum
 from app.modules.pipeline.type_standardization import TypeStandardizationService
 from app.providers import silver_writer_client, source_reader_client
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Connection
 
 ROOT = Path(__file__).resolve().parents[3]
 DEMO_DOMAINS = ("admissions", "academic", "hr")
@@ -55,6 +64,10 @@ DEMO_CROSSWALK_RELEASE = "manual-ingestion-demo-v1"
 PROFILE_VERSION = "manual-cleaning-demo-v1"
 TYPE_VERSION = "manual-cleaning-types-v1"
 IDENTITY_VERSION = "manual-cleaning-identity-v1"
+# Máy chủ quy định chính sách chạy thử. Các bộ dữ liệu demo khác yêu cầu batch đầy đủ.
+PARTIAL_POSITION_POLICY = "hr-position-partial-v1"
+MAX_POSITION_QUARANTINED = 10
+MAX_POSITION_QUARANTINED_PERCENT = 10
 logger = logging.getLogger(__name__)
 
 
@@ -130,6 +143,7 @@ def _validate_job_context(context: dict[str, Any]) -> None:
     extension = ".xlsx" if context["source_type"] == "EXCEL" else ".csv"
     if not isinstance(source_table, str) or not source_table.lower().endswith(extension):
         raise ValueError("BRONZE_SOURCE_FILE_TYPE_MISMATCH")
+    # Object phải có phiên bản và nằm trong bucket Bronze theo đường dẫn của job này.
     output = context["output"]
     if not isinstance(output, dict):
         raise ValueError("BRONZE_JOB_OUTPUT_REQUIRED")
@@ -172,10 +186,11 @@ def _read_bronze(
 ]:
     output = context["output"]
     source_type = context["source_type"]
+    # Đọc đúng phiên bản object mà ingestion đã ghi nhận, kể cả khi đã có phiên bản mới hơn.
     request = ReadRequest(
         source_type=source_type,
         location=output["uri"],
-        configuration=dict(context["configuration"]),
+        configuration=file_parser_options(source_type, context["configuration"]),
         source_table=context["source_table"],
         object_version_id=output["version_id"],
     )
@@ -193,6 +208,7 @@ def _read_bronze(
         data_source_id=str(context["data_source_id"]),
         dataset_id=str(context["dataset_id"]),
     )
+    # Đối chiếu checksum và số dòng đọc được với thông tin do ingestion job lưu lại.
     provenance = parsed.provenance
     if (
         provenance is None
@@ -240,6 +256,7 @@ def _read_bronze(
     )
     schema = _read_json(f"docs/data-schema/{context['domain']}_v1.schema.json")
     entity_schema = schema["entities"][case["entity"]]
+    # Cleaning chạy trước mapping, nên áp dụng quy tắc schema theo tên cột nguồn.
     target_to_source = {
         target: pointer_paths[0].removeprefix("/")
         for target, pointer_paths in case["field_paths"].items()
@@ -285,6 +302,7 @@ def _read_bronze(
         source_columns=batch.source_paths,
         field_paths={name: tuple(paths) for name, paths in case["field_paths"].items()},
         ignored_sources=tuple(case["ignored_sources"]),
+        # Để các bước sau xử lý những trường Silver chưa được ánh xạ trong profile demo.
         deferred_fields=tuple(
             name
             for name in contract["$defs"][key.entity]["properties"]
@@ -319,6 +337,7 @@ def _format_options(domain: str, case: dict[str, Any]) -> dict[str, SourceFormat
 def _identity_service(
     engine: Any, key: MappingKey, contract: dict[str, Any]
 ) -> IdentityStandardizationService:
+    # Dùng bản crosswalk demo cố định và thời điểm hiệu lực trong profile để chuẩn hóa định danh.
     with engine.begin() as connection:
         crosswalk = CrosswalkRepository(connection).load(DEMO_CROSSWALK_RELEASE)
     profile = _read_json("data/standardization/s4/preview-profiles.json")
@@ -372,76 +391,199 @@ def run_manual_cleaning(
         pool_pre_ping=True,
         connect_args={"connect_timeout": 5},
     )
+    repository = CleaningRunRepository(engine)
+    run_id = None
+    cleaning_completed = False
+    publication_committed = False
     try:
         context = _job_context(engine, ingestion_job_id)
+        run_id = repository.start(
+            context, entity=_case(context["domain"])["entity"], actor=requested_by, session=session
+        )
         cleaning, mapping, key, contract, case = _read_bronze(context)
         cleaned = CleaningPipeline().clean(cleaning)
         report = cleaned.report
+        counts = {
+            "records_read": report.records_read,
+            "records_passed": report.records_passed,
+            "records_quarantined": report.records_quarantined,
+            "records_collapsed": report.records_collapsed,
+        }
+        # Giữ số liệu cleaning kể cả khi chuẩn hóa hoặc xuất bản thất bại ở bước sau.
+        with engine.begin() as connection:
+            # Ghi hồ sơ và số liệu trong cùng giao dịch trước mọi thao tác xuất bản Silver.
+            evidence = None
+            if report.records_quarantined:
+                evidence = quarantine_source(context, cleaning.batch)
+                save_quarantine_records(connection, run_id, cleaning.batch, cleaned)
+            repository.update(
+                run_id,
+                connection=connection,
+                cleaning_status="COMPLETED",
+                input_version=report.input_version,
+                quarantine_source=evidence,
+                **counts,
+            )
+        cleaning_completed = True
         result: dict[str, Any] = {
             "status": "CLEANED",
+            "run_id": run_id,
             "ingestion_job_id": ingestion_job_id,
             "requested_by": requested_by,
             "domain": report.domain,
             "entity": report.entity,
             "input_version": report.input_version,
-            "records_read": report.records_read,
-            "records_passed": report.records_passed,
-            "records_quarantined": report.records_quarantined,
-            "records_collapsed": report.records_collapsed,
+            **counts,
             "issues": [asdict(issue) for issue in report.issues],
             "publication": None,
         }
+        # Mỗi session có lịch sử snapshot chạy thử riêng.
+        scope = f"manual-cleaning-{session}"
+        storage = None
+        quarantine_report = None
         if report.records_quarantined:
-            result["status"] = "QUARANTINED"
-            _log_report(requested_by, result)
-            return result
+            # Chỉ cho phép publish một phần với batch hr.position có dòng đạt và đáp ứng cả hai ngưỡng.
+            # So sánh bằng số nguyên để kiểm tra ngưỡng phần trăm mà không cần làm tròn.
+            partial_allowed = (
+                (report.domain, report.entity) == ("hr", "position")
+                and report.records_passed > 0
+                and report.records_quarantined <= MAX_POSITION_QUARANTINED
+                and report.records_quarantined * 100
+                <= report.records_read * MAX_POSITION_QUARANTINED_PERCENT
+            )
+            storage = MinioSilverStore(silver_writer_client(), settings.minio_bucket_silver)
+            output = context["output"]
+            # Lưu vị trí dữ liệu và lỗi kiểm tra. Giá trị gốc của các ô vẫn nằm ở Bronze.
+            data = json.dumps(
+                {
+                    **{
+                        key: value
+                        for key, value in result.items()
+                        if key not in {"status", "run_id", "requested_by", "publication"}
+                    },
+                    "scope": f"rehearsal:{scope}",
+                    "bronze": {key: output[key] for key in ("uri", "version_id", "sha256")},
+                    "policy": PARTIAL_POSITION_POLICY if report.entity == "position" else "strict",
+                    "decision": "ALLOW_PARTIAL" if partial_allowed else "BLOCK",
+                },
+                sort_keys=True,
+                ensure_ascii=False,
+            ).encode("utf-8")
+            quarantine_report = storage.put(
+                f"silver/rehearsal/quarantine/job-{ingestion_job_id}/report-{checksum(data)}.json",
+                data,
+            )
+            # Đọc lại để xác minh báo cáo, kể cả khi batch bị chặn và không tạo manifest.
+            storage.get(quarantine_report)
+            result["quarantine_report"] = {
+                "uri": f"s3://{settings.minio_bucket_silver}/{quarantine_report.key}",
+                **asdict(quarantine_report),
+            }
+            repository.update(run_id, report_ref=asdict(quarantine_report))
+            if not partial_allowed:
+                repository.update(
+                    run_id, publication_status="BLOCKED", finished_at=datetime.now(UTC)
+                )
+                result["status"] = "QUARANTINED"
+                _log_report(requested_by, result)
+                return result
         if not cleaned.batch.records:
+            repository.update(run_id, publication_status="SKIPPED", finished_at=datetime.now(UTC))
             result["status"] = "EMPTY"
             _log_report(requested_by, result)
             return result
 
+        repository.update(run_id, publication_status="RUNNING")
         identity = _identity_service(engine, key, contract)
         contracts = {
             domain: _read_json(f"docs/standardization/silver-schemas/{domain}.json")
             for domain in DEMO_DOMAINS
         }
+        published_status = (
+            "PUBLISHED_WITH_QUARANTINE" if quarantine_report is not None else "PUBLISHED"
+        )
+        cleaning_run_id = run_id
+        publication_recorded = False
+
+        def record_publication(connection: Connection | None, snapshot_id: str) -> None:
+            nonlocal publication_recorded
+            repository.update(
+                cleaning_run_id,
+                connection=connection,
+                publication_status=published_status,
+                records_published=report.records_passed,
+                silver_snapshot_id=snapshot_id,
+                finished_at=datetime.now(UTC),
+            )
+            publication_recorded = True
+
         publisher = SilverPublicationService(
-            repository=SilverRepository(engine),
-            storage=MinioSilverStore(silver_writer_client(), settings.minio_bucket_silver),
+            repository=SilverRepository(engine, on_published=record_publication),
+            storage=storage
+            or MinioSilverStore(silver_writer_client(), settings.minio_bucket_silver),
             contracts=contracts,
-            scope=f"manual-cleaning-{session}",
+            scope=scope,
             mode="rehearsal",
         )
+        # Với "active", lấy snapshot hiện hành của session. Với ID cụ thể, dùng trực tiếp ID đó.
+        # Giá trị None yêu cầu publish mà không có snapshot cha.
         base = (
             publisher.repository.head(publisher.scope)
             if base_snapshot == "active"
             else base_snapshot
         )
-        publication = CleaningSilverPipeline(SilverPipeline(publisher)).run(
+        # Chuyển đúng tập dòng đã qua cleaning và được thống kê trong báo cáo.
+        publication = SilverPipeline(publisher).run(
             (
-                CleaningNormalizationTask(
-                    cleaning=cleaning,
+                NormalizationTask(
+                    batch=cleaned.batch,
                     mapping=mapping,
                     identity=identity,
                 ),
             ),
             base_snapshot=base,
+            quarantine_report=quarantine_report,
         )
+        publication_committed = True
+        # Khi dùng lại snapshot đã tồn tại, không có giao dịch đổi snapshot để ghi kèm.
+        if not publication_recorded:
+            record_publication(None, publication.snapshot_id)
         result.update(
-            status="PUBLISHED",
+            status=published_status,
             publication={
-                "snapshot_id": publication.publication.snapshot_id,
-                "scope": publication.publication.scope,
-                "mode": publication.publication.mode,
-                "reused": publication.publication.reused,
+                "snapshot_id": publication.snapshot_id,
+                "scope": publication.scope,
+                "mode": publication.mode,
+                "reused": publication.reused,
+                "records_published": report.records_passed,
                 "base_snapshot": base,
                 "entity": case["entity"],
             },
         )
         _log_report(requested_by, result)
         return result
-    except SilverError as exc:
-        raise ValueError(f"SILVER_PUBLICATION_REJECTED:{exc}") from exc
+    except Exception as exc:
+        # Không ghi FAILED nếu Silver đã công bố nhưng lần cập nhật metadata cuối bị lỗi.
+        if run_id is not None and not publication_committed:
+            error_code = (
+                "PIPELINE_METADATA_UNAVAILABLE"
+                if isinstance(exc, SQLAlchemyError)
+                else "SILVER_PUBLICATION_REJECTED"
+                if isinstance(exc, SilverError)
+                else "CLEANING_PROCESSING_FAILED"
+            )
+            # Nếu PostgreSQL đang lỗi, giữ nguyên lỗi gốc trả về cho người gọi.
+            with suppress(SQLAlchemyError):
+                repository.update(
+                    run_id,
+                    cleaning_status="COMPLETED" if cleaning_completed else "FAILED",
+                    publication_status="FAILED" if cleaning_completed else "NOT_STARTED",
+                    error_code=error_code,
+                    finished_at=datetime.now(UTC),
+                )
+        if isinstance(exc, SilverError):
+            raise ValueError(f"SILVER_PUBLICATION_REJECTED:{exc}") from exc
+        raise
     finally:
         engine.dispose()
 

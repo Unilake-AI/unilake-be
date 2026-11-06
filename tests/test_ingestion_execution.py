@@ -74,7 +74,7 @@ async def test_rejection_is_persisted(duplicate):
     assert repo.create.call_args.kwargs["status"] == "REJECTED"
 
 
-@pytest.mark.parametrize("roles", [[], ["VIEWER"], ["ANALYST"], None])
+@pytest.mark.parametrize("roles", [[], ["VIEWER"], ["HR_STAFF"], None])
 def test_write_authorization(roles):
     with pytest.raises(AppException, match="Không có quyền"):
         authorize({"roles": roles}, write=True)

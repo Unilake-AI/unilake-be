@@ -109,8 +109,7 @@ psql -v ON_ERROR_STOP=1 --single-transaction \
 
 Username ở README, mật khẩu khởi tạo `Password@123`. Đổi mật khẩu bằng công cụ
 quản trị trước khi dùng trên hệ thống public; backend chưa có endpoint đổi mật khẩu.
-Không đặt seed tài khoản trong startup: seed gán lại role cho tài khoản mẫu và
-khóa hai tài khoản cũ `analyst`, `manager`.
+Không đặt seed tài khoản trong startup vì seed gán lại role cho tài khoản mẫu.
 
 ## Ingestion và lưu trữ
 

@@ -29,6 +29,19 @@ def _db() -> MagicMock:
     return mock_db
 
 
+@pytest.mark.asyncio
+async def test_auth_requires_supported_role() -> None:
+    db = _db()
+    db.execute = AsyncMock(return_value=MagicMock())
+    db.execute.return_value.scalars.return_value.all.return_value = []
+
+    with pytest.raises(AppException) as exc:
+        await AuthService(db)._get_role_codes(1)
+
+    assert exc.value.status_code == 403
+    assert exc.value.code == "ROLE_REQUIRED"
+
+
 @pytest.fixture(autouse=True)
 async def dispose_engine() -> AsyncGenerator[None]:
     """Giải phóng engine cơ sở dữ liệu trước mỗi kiểm thử để tránh lệch vòng lặp sự kiện."""

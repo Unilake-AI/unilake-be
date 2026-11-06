@@ -52,6 +52,7 @@ SELECT r.role_id, p.permission_id
 FROM app.role r
 JOIN app.permission p ON p.permission_code IN (
     'auth.login',
+    'data_source.read',
     'dashboard.read'
 )
 WHERE r.role_code IN ('VIEWER')

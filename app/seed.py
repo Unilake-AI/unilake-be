@@ -95,6 +95,7 @@ SELECT r.role_id, p.permission_id
 FROM app.role r
 JOIN app.permission p ON p.permission_code IN (
     'auth.login',
+    'data_source.read',
     'dashboard.read'
 )
 WHERE r.role_code IN ('VIEWER')
@@ -135,11 +136,8 @@ USER_ROLES_SQL_LIST = [
     """
 DELETE FROM app.user_role
 WHERE app_user_id IN (
-    SELECT app_user_id FROM app.app_user WHERE username IN ('admin', 'dataadmin', 'viewer', 'admissions_manager', 'admissions_staff', 'academic_manager', 'academic_staff', 'hr_manager', 'hr_staff', 'analyst', 'manager')
+    SELECT app_user_id FROM app.app_user WHERE username IN ('admin', 'dataadmin', 'viewer', 'admissions_manager', 'admissions_staff', 'academic_manager', 'academic_staff', 'hr_manager', 'hr_staff')
 );
-    """,
-    """
-UPDATE app.app_user SET is_active = FALSE WHERE username IN ('analyst', 'manager');
     """,
     """
 INSERT INTO app.user_role (app_user_id, role_id)
@@ -158,19 +156,6 @@ FROM (VALUES
 JOIN app.app_user u ON u.username = mapping.username
 JOIN app.role r ON r.role_code = mapping.role_code
 ON CONFLICT (app_user_id, role_id) DO NOTHING;
-    """,
-    """
--- Chỉ xóa role cũ khi không còn tài khoản nào sử dụng.
-DELETE FROM app.role_permission rp USING app.role r
-WHERE rp.role_id = r.role_id
-  AND r.role_code IN ('SUPER_ADMIN', 'ANALYST', 'MANAGER')
-  AND NOT EXISTS (SELECT 1 FROM app.user_role ur WHERE ur.role_id = r.role_id);
-
-    """,
-    """
-DELETE FROM app.role r
-WHERE r.role_code IN ('SUPER_ADMIN', 'ANALYST', 'MANAGER')
-  AND NOT EXISTS (SELECT 1 FROM app.user_role ur WHERE ur.role_id = r.role_id);
     """,
 ]
 

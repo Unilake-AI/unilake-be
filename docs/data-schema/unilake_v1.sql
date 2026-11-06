@@ -268,7 +268,7 @@ CREATE TABLE IF NOT EXISTS app_user (
 
 CREATE TABLE IF NOT EXISTS role (
     role_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    role_code VARCHAR(50) UNIQUE NOT NULL, -- ADMIN, DATA_ADMIN, ANALYST, VIEWER
+    role_code VARCHAR(50) UNIQUE NOT NULL, -- Mã vai trò do seed khai báo
     role_name VARCHAR(100) NOT NULL,
     description TEXT
 );
