@@ -13,7 +13,9 @@ from app.modules.pipeline.silver_models import SilverHead, SilverRun, SilverSnap
 from app.modules.pipeline.silver_storage import ObjectRef, SilverError
 
 if TYPE_CHECKING:
-    from sqlalchemy.engine import Engine
+    from collections.abc import Callable
+
+    from sqlalchemy.engine import Connection, Engine
 
 RUNS = cast("Table", SilverRun.__table__)
 SNAPSHOTS = cast("Table", SilverSnapshot.__table__)
@@ -22,8 +24,11 @@ SILVER_TABLES = (RUNS, SNAPSHOTS, HEADS)
 
 
 class SilverRepository:
-    def __init__(self, engine: Engine) -> None:
+    def __init__(
+        self, engine: Engine, *, on_published: Callable[[Connection, str], None] | None = None
+    ) -> None:
         self.engine = engine
+        self.on_published = on_published
 
     def head(self, scope: str) -> str | None:
         with self.engine.begin() as conn:
@@ -123,6 +128,8 @@ class SilverRepository:
                         conn.execute(
                             update(RUNS).where(RUNS.c.run_id == run_id).values(status="REUSED")
                         )
+                    if self.on_published is not None:
+                        self.on_published(conn, existing["snapshot_id"])
                     return dict(existing)
                 if run["status"] not in {"STAGED", "FAILED"} or not run["manifest_ref"]:
                     raise SilverError("RUN_NOT_STAGED")
@@ -154,6 +161,9 @@ class SilverRepository:
                     .where(RUNS.c.run_id == run_id)
                     .values(status="PUBLISHED", issues="[]")
                 )
+                # Lưu kết quả của lượt cleaning trong cùng giao dịch đổi snapshot.
+                if self.on_published is not None:
+                    self.on_published(conn, run_id)
                 return {
                     "snapshot_id": run_id,
                     "scope": run["scope"],
@@ -167,4 +177,6 @@ class SilverRepository:
                 raise
             with self.engine.begin() as conn:
                 conn.execute(update(RUNS).where(RUNS.c.run_id == run_id).values(status="REUSED"))
+                if self.on_published is not None:
+                    self.on_published(conn, retry_existing["snapshot_id"])
             return retry_existing

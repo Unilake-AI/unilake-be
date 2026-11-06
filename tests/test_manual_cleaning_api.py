@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+from dataclasses import replace
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -24,6 +27,7 @@ from app.modules.pipeline.manual_cleaning import (
 from app.modules.pipeline.mapping_profiles import pointer
 from app.modules.pipeline.missing_values import MissingValueProfile, MissingValueRule
 from app.modules.pipeline.router import router
+from app.modules.pipeline.silver_storage import LocalSilverStore
 
 
 def _demo_cleaning_task(domain: str) -> CleaningTask:
@@ -157,6 +161,7 @@ def _valid_job_context() -> dict[str, Any]:
             "size_bytes": 100,
         },
         "ingestion_job_id": 42,
+        "dataset_id": 31,
         "rows_read": 1,
     }
 
@@ -170,6 +175,65 @@ def test_manual_runner_accepts_only_successful_pinned_demo_bronze_jobs() -> None
         _validate_job_context(invalid)
 
 
+@pytest.mark.parametrize(
+    ("domain", "rows_read", "status"),
+    [
+        ("hr", 10, "PUBLISHED_WITH_QUARANTINE"),
+        ("hr", 9, "QUARANTINED"),
+        ("academic", 10, "QUARANTINED"),
+    ],
+)
+def test_manual_runner_applies_partial_policy_and_persists_report(
+    monkeypatch, tmp_path, domain, rows_read, status
+) -> None:
+    from app.modules.pipeline import manual_cleaning as runner
+
+    task = _demo_cleaning_task(domain)
+    sample = task.batch.records[0]
+    valid = [
+        {
+            **sample,
+            "id": f"{100 + i}",
+            "ma": f"P{chr(65 + i)}" if domain == "hr" else f"{2026 + i}-1",
+        }
+        for i in range(rows_read - 1)
+    ]
+    task = replace(
+        task,
+        batch=replace(
+            task.batch,
+            records=(*valid, {**sample, "id": ""}),
+            record_locators=tuple(f"record:{i}" for i in range(rows_read)),
+        ),
+    )
+    storage = LocalSilverStore(tmp_path)
+    monkeypatch.setattr(runner, "create_engine", lambda *_, **__: MagicMock())
+    monkeypatch.setattr(runner, "_job_context", lambda *_: _valid_job_context())
+    monkeypatch.setattr(
+        runner, "_read_bronze", lambda _: (task, None, None, None, runner._case(domain))
+    )
+    monkeypatch.setattr(runner, "silver_writer_client", lambda: None)
+    monkeypatch.setattr(runner, "MinioSilverStore", lambda *_: storage)
+    monkeypatch.setattr(runner, "_identity_service", lambda *_: None)
+    monkeypatch.setattr(runner, "SilverPublicationService", lambda **_: MagicMock())
+    pipeline = MagicMock()
+    monkeypatch.setattr(runner, "SilverPipeline", lambda _: pipeline)
+
+    result = runner.run_manual_cleaning(42, requested_by="17", base_snapshot=None)
+    assert result["status"] == status
+    assert result["records_quarantined"] == 1
+    ref = result["quarantine_report"]
+    saved = json.loads((tmp_path / ref["key"]).read_bytes())
+    assert saved["bronze"]["version_id"] == "bronze-version"
+    assert any(issue["locator"] == f"record:{rows_read - 1}" for issue in saved["issues"])
+    if status == "PUBLISHED_WITH_QUARANTINE":
+        assert result["publication"]["records_published"] == rows_read - 1
+        assert len(pipeline.run.call_args.args[0][0].batch.records) == rows_read - 1
+        assert pipeline.run.call_args.kwargs["quarantine_report"].sha256 == ref["sha256"]
+    else:
+        pipeline.run.assert_not_called()
+
+
 def test_manual_cleaning_api_requires_admin_and_returns_pipeline_report(monkeypatch) -> None:
     from app.modules.pipeline import router as pipeline_router
 
@@ -179,6 +243,7 @@ def test_manual_cleaning_api_requires_admin_and_returns_pipeline_report(monkeypa
         captured.update(job_id=job_id, **kwargs)
         return {
             "status": "PUBLISHED",
+            "run_id": "32840586-3d8e-4aeb-9b7e-af4388f4347d",
             "ingestion_job_id": job_id,
             "requested_by": kwargs["requested_by"],
             "domain": "hr",
@@ -229,7 +294,7 @@ def test_manual_cleaning_api_rejects_non_admin(monkeypatch) -> None:
     app.include_router(router)
     app.dependency_overrides[get_current_user] = lambda: {
         "sub": "18",
-        "roles": ["DATA_ANALYST"],
+        "roles": ["HR_STAFF"],
     }
 
     response = TestClient(app).post(

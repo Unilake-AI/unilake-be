@@ -156,6 +156,59 @@ def test_partial_update_keeps_pinned_parent_tables(environment):
     assert len(origins) == 22
 
 
+def test_quarantined_publication_merges_without_losing_parent_rows(environment):
+    publisher, repo, store = environment
+    original = normalized()
+    first = publisher.publish((original,))
+    previous = publisher.read_snapshot(first.snapshot_id)["position"][0]
+    row = original.accepted[0]
+    incoming = replace(
+        original,
+        input_version="v2",
+        accepted=(
+            replace(
+                row,
+                values={
+                    **row.values,
+                    "position_id": previous["position_id"] + 1,
+                    "position_code": "NEW",
+                },
+            ),
+        ),
+    )
+    data = b'{"records_quarantined":1}'
+    report = store.put(f"report-{checksum(data)}.json", data)
+    second = publisher.publish(
+        (incoming,), base_snapshot=first.snapshot_id, quarantine_report=report
+    )
+    current = publisher.read_active()["position"]
+    assert current[0] == previous
+    assert current[1]["position_code"] == "NEW"
+    manifest = json.loads(store.get(second.manifest))
+    assert manifest["quarantine_report"]["sha256"] == report.sha256
+    assert len(manifest["entities"]["position"]["lineage"]) == 2
+    retry = publisher.publish(
+        (incoming,), base_snapshot=first.snapshot_id, quarantine_report=report
+    )
+    assert retry.reused
+    assert retry.snapshot_id == second.snapshot_id
+
+    # Invalid updates and unavailable reports must leave the active snapshot intact.
+    with pytest.raises(FileNotFoundError):
+        publisher.publish(
+            (incoming,),
+            base_snapshot=second.snapshot_id,
+            quarantine_report=replace(report, key="missing-report.json"),
+        )
+    with pytest.raises(SilverError, match="SNAPSHOT_REJECTED"):
+        publisher.publish(
+            (replace(incoming, rejected_locators=("bad",)),),
+            base_snapshot=second.snapshot_id,
+            quarantine_report=report,
+        )
+    assert repo.head(publisher.scope) == second.snapshot_id
+
+
 def test_missing_updated_lineage_does_not_inherit_outdated_evidence(environment, monkeypatch):
     publisher, _, _ = environment
     first = publisher.publish(all_entities())

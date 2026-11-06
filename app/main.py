@@ -14,6 +14,9 @@ from app.modules.governance.router import router as governance_router
 from app.modules.ingestion.router import router as ingestion_router
 from app.modules.nlq.dependencies import get_nlq_service
 from app.modules.nlq.router import router as nlq_router
+from app.modules.pipeline.cleaning_runs_router import router as cleaning_runs_router
+from app.modules.pipeline.data_quality_issues_router import router as data_quality_issues_router
+from app.modules.pipeline.quarantine_records_router import router as quarantine_records_router
 from app.modules.pipeline.router import router as pipeline_router
 from app.modules.query_history.router import router as query_history_router
 from app.modules.users.router import router as users_router
@@ -39,6 +42,9 @@ def create_app() -> FastAPI:
     application.include_router(datasources_router, prefix=api_prefix)
     application.include_router(ingestion_router, prefix=api_prefix)
     application.include_router(pipeline_router, prefix=api_prefix)
+    application.include_router(cleaning_runs_router, prefix=api_prefix)
+    application.include_router(quarantine_records_router, prefix=api_prefix)
+    application.include_router(data_quality_issues_router, prefix=api_prefix)
     application.include_router(governance_router, prefix=api_prefix)
     application.include_router(nlq_router, prefix=api_prefix)
     application.include_router(dashboard_router, prefix=api_prefix)

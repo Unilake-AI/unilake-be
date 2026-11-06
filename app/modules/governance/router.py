@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import require_role
 from app.core.responses import COMMON_ERROR_RESPONSES, ErrorResponse
+from app.core.roles import RoleCode
 from app.dependencies import get_db
 from app.modules.governance.catalog_service import CatalogService
 from app.modules.governance.schemas import CatalogEntrySchema, CatalogUpdateSchema
@@ -17,7 +18,7 @@ router = APIRouter(
     prefix="/governance",
     tags=["governance"],
     # Áp dụng tại router để tất cả endpoint đều yêu cầu đúng role DATA_ADMIN.
-    dependencies=[Depends(require_role("DATA_ADMIN"))],
+    dependencies=[Depends(require_role(RoleCode.DATA_ADMIN))],
     responses={
         **COMMON_ERROR_RESPONSES,
         409: {"model": ErrorResponse, "description": "Bộ dữ liệu đã có trong danh mục."},

@@ -339,7 +339,8 @@ Hai file vẫn parse được: Bronze không kiểm tra ngày nghiệp vụ ho�
 
 Kỳ vọng FAILED, exit 2, DATE_PARSE_ERROR / SOURCE_ID_UNMAPPED và locator dòng.
 head_before=head_after; inspect vẫn thấy ba entity hợp lệ cũ. Job Bronze vẫn SUCCESS vì
-hai tầng có trạng thái riêng. Không có quarantine tự động hoặc tự lấy riêng dòng đúng.
+hai tầng có trạng thái riêng. Các ca ở đây chạy qua CLI với chính sách chặn cả batch.
+Xem [xuất bản một phần qua API](partial-silver-publication.md) cho trường hợp riêng của HR.
 
 ## 9. Cập nhật và lỗi Bronze riêng
 

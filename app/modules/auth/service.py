@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
+from app.core.roles import RoleCode
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -84,21 +85,28 @@ class AuthService:
             user=UserProfileDTO(
                 user_id=exist_user.app_user_id,
                 username=exist_user.username,
-                role=role_codes[0] if role_codes else "USER",
+                role=role_codes[0],
             ),
         )
 
     # Hàm lấy danh sách quyền của user từ AppUserRole và Role
-    async def _get_role_codes(self, app_user_id: int) -> list[str]:
-        # Gom tất cả role của user để đưa vào access token.
+    async def _get_role_codes(self, app_user_id: int) -> list[RoleCode]:
+        # Chỉ đưa các role được hỗ trợ vào access token.
         query = (
             select(Role.role_code)
             .join(UserRole, UserRole.role_id == Role.role_id)
-            .where(UserRole.app_user_id == app_user_id)
+            .where(UserRole.app_user_id == app_user_id, Role.role_code.in_(list(RoleCode)))
             .order_by(Role.role_code)
         )
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        roles = [RoleCode(code) for code in result.scalars().all()]
+        if not roles:
+            raise AppException(
+                "Tài khoản chưa được gán vai trò hợp lệ. Vui lòng liên hệ quản trị viên.",
+                code="ROLE_REQUIRED",
+                status_code=403,
+            )
+        return roles
 
     @staticmethod
     def _hash_refresh_token(refresh_token: str) -> str:
@@ -163,7 +171,7 @@ class AuthService:
             user=UserProfileDTO(
                 user_id=user.app_user_id,
                 username=user.username,
-                role=role_codes[0] if role_codes else "USER",
+                role=role_codes[0],
             ),
         )
 

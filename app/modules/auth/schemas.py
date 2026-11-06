@@ -6,6 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.core.roles import RoleCode  # noqa: TC001
+
 
 class LoginRequest(BaseModel):
     """Thông tin xác thực trong yêu cầu đăng nhập."""
@@ -19,7 +21,7 @@ class UserProfileDTO(BaseModel):
 
     user_id: int
     username: str
-    role: str
+    role: RoleCode
 
 
 # Hàm trả về access_token và refresh_token

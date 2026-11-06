@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
+from app.core.roles import DATA_READ_ROLES, DATA_WRITE_ROLES
 from app.modules.datasources.schemas import (
     DataSourceCreate,
     DataSourceFilter,
@@ -20,9 +21,9 @@ from app.repositories.datasource_repo import DataSourceRepository
 if TYPE_CHECKING:
     from app.modules.datasources.models import DataSource
 
-ALLOWED_DATA_SOURCE_ROLES = {"DATA_ADMIN", "ADMIN", "ANALYST", "VIEWER"}
+ALLOWED_DATA_SOURCE_ROLES = DATA_READ_ROLES
 ALLOWED_DATA_SOURCE_ROLES_RESPONSE = tuple(sorted(ALLOWED_DATA_SOURCE_ROLES))
-ALLOWED_DATA_SOURCE_WRITE_ROLES = {"DATA_ADMIN", "ADMIN"}
+ALLOWED_DATA_SOURCE_WRITE_ROLES = DATA_WRITE_ROLES
 ALLOWED_DATA_SOURCE_WRITE_ROLES_RESPONSE = tuple(sorted(ALLOWED_DATA_SOURCE_WRITE_ROLES))
 
 
@@ -74,7 +75,7 @@ class DataSourceService:
     ) -> DataSourceItem:
         """Lấy chi tiết một data source theo id, có phân quyền và response public."""
 
-        # Dùng cùng rule đọc danh sách: DATA_ADMIN, ADMIN, ANALYST, VIEWER.
+        # Dùng cùng rule đọc danh sách: DATA_ADMIN, ADMIN, VIEWER.
         self._ensure_can_read_data_sources(current_user)
 
         # Repository JOIN source_system để response có source_system_name.

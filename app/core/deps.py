@@ -8,6 +8,7 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.exceptions import AppException
+from app.core.roles import RoleCode
 from app.core.security import decode_access_token
 
 if TYPE_CHECKING:
@@ -40,8 +41,23 @@ async def get_current_user(
             code="UNAUTHORIZED",
             status_code=401,
         )
-    # Token hợp lệ sẽ trả về payload, trong đó "sub" chính là app_user_id.
-    return decode_access_token(token)
+    # Chỉ giữ vai trò hiện hành, kể cả với token đã cấp trước khi cập nhật.
+    payload = decode_access_token(token)
+    raw_roles = payload.get("roles")
+    # So sánh với mã chuỗi vì Python 3.11 chưa hỗ trợ kiểm tra chuỗi trực tiếp trong Enum.
+    supported_roles = {role.value for role in RoleCode}
+    roles = (
+        [role for role in raw_roles if isinstance(role, str) and role in supported_roles]
+        if isinstance(raw_roles, list)
+        else []
+    )
+    if not roles:
+        raise AppException(
+            "Tài khoản chưa được gán vai trò hợp lệ. Vui lòng liên hệ quản trị viên.",
+            code="ROLE_REQUIRED",
+            status_code=403,
+        )
+    return {**payload, "roles": roles}
 
 
 def require_role(*roles: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
