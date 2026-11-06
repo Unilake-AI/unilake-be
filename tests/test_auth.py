@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.exceptions import AppException
+from app.core.roles import RoleCode
 from app.core.security import create_refresh_token, hash_password
 from app.infra.db.session import engine, get_db
 from app.main import app
@@ -506,7 +507,7 @@ async def test_login_api_endpoint() -> None:
     login_response = LoginResponse(
         access_token="access-token",
         refresh_token="refresh-token",
-        user=UserProfileDTO(user_id=1, username="admin", role="ADMIN"),
+        user=UserProfileDTO(user_id=1, username="admin", role=RoleCode.ADMIN),
     )
 
     try:
@@ -543,7 +544,7 @@ async def test_refresh_token_api_endpoint() -> None:
     refresh_response = LoginResponse(
         access_token="new-access-token",
         refresh_token="new-refresh-token",
-        user=UserProfileDTO(user_id=1, username="admin", role="ADMIN"),
+        user=UserProfileDTO(user_id=1, username="admin", role=RoleCode.ADMIN),
     )
 
     try:

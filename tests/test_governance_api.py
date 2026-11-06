@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import Table, create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -38,7 +39,7 @@ def client() -> Iterator[TestClient]:
         poolclass=StaticPool,
         execution_options={"schema_translate_map": {"app": None}},
     )
-    CatalogMetadata.__table__.create(engine)
+    cast("Table", CatalogMetadata.__table__).create(engine)
     application = create_app()
 
     def override_db() -> Iterator[MagicMock]:
