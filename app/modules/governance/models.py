@@ -32,6 +32,7 @@ __all__ = [
     "DataLineage",
     "DataQualityRule",
     "DataQualityRun",
+    "PipelineLineage",
 ]
 
 
@@ -179,3 +180,34 @@ class DataQualityRun(Base):
     pass_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
     execution_status: Mapped[str] = mapped_column(String(30), nullable=False)
     failure_sample_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PipelineLineage(Base):
+    """Lưu trữ quan hệ nguồn - đích và thông tin kiểm toán từng chặng của pipeline."""
+
+    __tablename__ = "pipeline_lineage"
+    __table_args__ = (
+        Index("ix_pipeline_lineage_source", "source_layer", "source_name"),
+        Index("ix_pipeline_lineage_target", "target_layer", "target_name"),
+        Index("ix_pipeline_lineage_created", "created_at"),
+        {"schema": "app"},
+    )
+
+    lineage_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=True, index=True
+    )
+    source_layer: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_name: Mapped[str] = mapped_column(Text, nullable=False)
+    target_layer: Mapped[str] = mapped_column(String(50), nullable=False)
+    target_name: Mapped[str] = mapped_column(Text, nullable=False)
+    lineage_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata",
+        JSON().with_variant(JSONB(), "postgresql"),
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+

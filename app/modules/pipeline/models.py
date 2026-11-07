@@ -34,6 +34,7 @@ from app.modules.pipeline.silver_models import SilverHead, SilverRun, SilverSnap
 __all__ = [
     "CLEANING_RUNS",
     "DATASET_CATALOG",
+    "PIPELINE_LINEAGE",
     "QUARANTINE_RECORDS",
     "CanonicalIdentity",
     "CrosswalkRelease",
@@ -148,6 +149,20 @@ QUARANTINE_RECORDS = Table(
     Column("issues", JSON, nullable=False),
     Column("error_codes", JSONB, nullable=False),
     UniqueConstraint("cleaning_run_id", "locator"),
+    schema="app",
+)
+
+
+PIPELINE_LINEAGE = Table(
+    "pipeline_lineage",
+    Base.metadata,
+    Column("lineage_id", BigInteger, primary_key=True, autoincrement=True),
+    Column("source_layer", String(50), nullable=False),
+    Column("source_name", Text, nullable=False),
+    Column("target_layer", String(50), nullable=False),
+    Column("target_name", Text, nullable=False),
+    Column("metadata", JSON().with_variant(JSONB(), "postgresql"), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
     schema="app",
 )
 

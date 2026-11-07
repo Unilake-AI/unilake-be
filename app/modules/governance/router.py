@@ -12,7 +12,12 @@ from app.core.responses import COMMON_ERROR_RESPONSES, ErrorResponse
 from app.core.roles import RoleCode
 from app.dependencies import get_db
 from app.modules.governance.catalog_service import CatalogService
-from app.modules.governance.schemas import CatalogEntrySchema, CatalogUpdateSchema
+from app.modules.governance.repository import LineageRepository, build_lineage_graph
+from app.modules.governance.schemas import (
+    CatalogEntrySchema,
+    CatalogUpdateSchema,
+    LineageGraphResponse,
+)
 
 router = APIRouter(
     prefix="/governance",
@@ -65,3 +70,17 @@ async def delete_catalog(domain_id: str, dataset: str, service: Catalog) -> Resp
     """Ẩn metadata khỏi catalog; giữ nguyên dữ liệu vật lý và schema pipeline."""
     await service.delete(domain_id, dataset)
     return Response(status_code=204)
+
+
+@router.get("/lineage", response_model=LineageGraphResponse)
+async def get_lineage(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    domain_id: str | None = None,
+    layer: str | None = None,
+    search: str | None = None,
+) -> LineageGraphResponse:
+    """Tra cứu cây phả hệ dữ liệu (Data Lineage) chuẩn đồ thị Nodes & Edges cho ReactFlow / D3.js."""
+    repo = LineageRepository(db)
+    rows = await repo.list(domain_id=domain_id, layer=layer, search=search)
+    return build_lineage_graph(rows)
+

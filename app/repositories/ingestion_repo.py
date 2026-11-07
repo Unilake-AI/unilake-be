@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select, update
+from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
 from app.modules.datasources.models import DataLayer, Dataset, DataSource, SourceSystem
 from app.modules.ingestion.models import IngestionJob
+from app.modules.pipeline.models import PIPELINE_LINEAGE
 from app.repositories.datasource_repo import DataSourceRepository
 
 if TYPE_CHECKING:
@@ -179,6 +181,26 @@ class IngestionRepository:
             values.update(
                 last_ingested_at=job.finished_at, ingestion_count=DataSource.ingestion_count + 1
             )
+            if output and output.get("uri"):
+                with suppress(Exception):
+                    await self.record_lineage(
+                        source_layer="SOURCE",
+                        source_name=job.source_table or f"source:{job.data_source_id}",
+                        target_layer="BRONZE",
+                        target_name=str(output["uri"]),
+                        metadata={
+                            "ingestion_job_id": job.ingestion_job_id,
+                            "data_source_id": job.data_source_id,
+                            "dataset_id": job.dataset_id,
+                            "domain": output.get("domain"),
+                            "records_read": job.rows_read,
+                            "records_passed": job.rows_written,
+                            "records_rejected": job.rows_rejected,
+                            "size_bytes": output.get("size_bytes"),
+                            "sha256": output.get("sha256"),
+                            "version_id": output.get("version_id"),
+                        },
+                    )
         await self.db.execute(
             update(DataSource)
             .where(DataSource.data_source_id == job.data_source_id)
@@ -186,6 +208,26 @@ class IngestionRepository:
         )
         await self.db.commit()
         return True
+
+    async def record_lineage(
+        self,
+        *,
+        source_layer: str,
+        source_name: str,
+        target_layer: str,
+        target_name: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        stmt = insert(PIPELINE_LINEAGE).values(
+            source_layer=source_layer,
+            source_name=source_name,
+            target_layer=target_layer,
+            target_name=target_name,
+            metadata=metadata or {},
+            created_at=datetime.now(UTC),
+        )
+        await self.db.execute(stmt)
+
 
     async def recover_expired(self) -> int:
         jobs = list(
