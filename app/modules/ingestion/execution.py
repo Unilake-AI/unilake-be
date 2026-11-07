@@ -8,7 +8,14 @@ import re
 from typing import TYPE_CHECKING, Any, ParamSpec, Protocol, TypeVar
 
 from app.core.exceptions import AppException
+from app.core.roles import DATA_READ_ROLES, DATA_WRITE_ROLES
 from app.modules.datasources.contracts import CatalogSource
+from app.modules.governance.contracts import (
+    AssetReference,
+    DatasetDerivation,
+    LineageEvidence,
+    TransformationEvidence,
+)
 from app.modules.ingestion.contracts import BronzeWriteContext
 from app.modules.ingestion.input_validator import ValidationBlockedError, required_rule_ids
 from app.modules.ingestion.readers.request_builder import build_read_request
@@ -38,7 +45,7 @@ class CaptureReader(Protocol):
 def authorize(user: dict[str, Any], *, write: bool = False) -> None:
     roles = user.get("roles", [])
     roles = [roles] if isinstance(roles, str) else roles
-    allowed = {"ADMIN", "DATA_ADMIN"} if write else {"ADMIN", "DATA_ADMIN", "ANALYST", "VIEWER"}
+    allowed = DATA_WRITE_ROLES if write else DATA_READ_ROLES
     if not isinstance(roles, list | tuple | set) or allowed.isdisjoint(roles):
         raise AppException(
             "Không có quyền thực thi thao tác ingestion", code="FORBIDDEN", status_code=403
@@ -196,6 +203,35 @@ class IngestionExecutionService:
                 except Exception:
                     pass
                 stage = "COMMITTING"
+                output = {
+                    **output,
+                    "lineage": LineageEvidence(
+                        run_ref=f"ingestion:{job_id}",
+                        mode="ingestion",
+                        derivations=(
+                            DatasetDerivation(
+                                inputs=(
+                                    AssetReference(
+                                        asset_id=f"source:{job.data_source_id}:{job.source_table}",
+                                        layer="SOURCE",
+                                        domain=domain,
+                                        version=output.get("source_version_id"),
+                                    ),
+                                ),
+                                output=AssetReference(
+                                    asset_id=f"dataset:{job.dataset_id}",
+                                    layer="BRONZE",
+                                    domain=domain,
+                                    version=output["version_id"],
+                                    uri=output["uri"],
+                                    checksum=output.get("sha256"),
+                                    producer_run_ref=f"ingestion:{job_id}",
+                                ),
+                                transformations=(TransformationEvidence(name="INGESTION_CAPTURE"),),
+                            ),
+                        ),
+                    ).model_dump(mode="json"),
+                }
                 await repo.finish(job_id, output=output)
         except asyncio.CancelledError:
             # Để thời hạn giữ job tự hết hạn: I/O trên luồng có thể vẫn đang chạy.

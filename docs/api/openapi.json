@@ -206,14 +206,672 @@
         }
       }
     },
+    "/api/v1/datasources": {
+      "get": {
+        "tags": [
+          "datasources"
+        ],
+        "summary": "Get Data Source",
+        "description": "Danh sách nguồn dữ liệu có xác thực, phân quyền, filter và phân trang.",
+        "operationId": "get_data_source_api_v1_datasources_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "source_system_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source System Id"
+            }
+          },
+          {
+            "name": "source_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Type"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Active"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataSourceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - requires one of roles: ADMIN, DATA_ADMIN, VIEWER.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/datasources/{data_source_id}": {
+      "get": {
+        "tags": [
+          "datasources"
+        ],
+        "summary": "Get Data Source Detail",
+        "description": "Chi tiết một nguồn dữ liệu theo id, có xác thực và phân quyền.",
+        "operationId": "get_data_source_detail_api_v1_datasources__data_source_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "data_source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Data Source Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataSourceItem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - requires one of roles: ADMIN, DATA_ADMIN, VIEWER.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - data source does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "datasources"
+        ],
+        "summary": "Update Data Source",
+        "description": "Cập nhật một data source bằng payload partial.",
+        "operationId": "update_data_source_api_v1_datasources__data_source_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "data_source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Data Source Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DataSourceUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataSourceItem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - requires one of roles: ADMIN, DATA_ADMIN.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - data source does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/datasources/create": {
+      "post": {
+        "tags": [
+          "datasources"
+        ],
+        "summary": "Create Data Source",
+        "description": "Tạo một data source mới.",
+        "operationId": "create_data_source_api_v1_datasources_create_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DataSourceCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataSourceItem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - requires one of roles: ADMIN, DATA_ADMIN.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ingestion/jobs": {
+      "post": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Start Ingestion",
+        "operationId": "start_ingestion_api_v1_ingestion_jobs_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestionStart"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionJobRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "List Jobs",
+        "operationId": "list_jobs_api_v1_ingestion_jobs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "data_source_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Data Source Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IngestionJobRead"
+                  },
+                  "title": "Response List Jobs Api V1 Ingestion Jobs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ingestion/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Get Job",
+        "operationId": "get_job_api_v1_ingestion_jobs__job_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionJobRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pipeline/cleaning/ingestion-jobs/{ingestion_job_id}": {
+      "post": {
+        "tags": [
+          "pipeline"
+        ],
+        "summary": "Run manual cleaning for a completed demo Bronze job",
+        "description": "Runs the pinned Bronze object through cleaning and Silver rehearsal. Only the dedicated synthetic DEMO_FLOW catalog profiles are currently supported. Only the HR position profile can publish with quarantined rows, within its policy limits.",
+        "operationId": "run_cleaning_for_ingestion_job_api_v1_pipeline_cleaning_ingestion_jobs__ingestion_job_id__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ingestion_job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Ingestion Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualCleaningRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualCleaningResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/governance/catalog": {
       "get": {
         "tags": [
           "governance"
         ],
         "summary": "Get Catalog",
-        "description": "Return catalog entries generated from registered domain metadata.",
+        "description": "Đọc catalog hiệu lực, có thể lọc theo domain_id; chỉ DATA_ADMIN.",
         "operationId": "get_catalog_api_v1_governance_catalog_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "domain_id",
@@ -247,6 +905,471 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Bộ dữ liệu đã có trong danh mục.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "governance"
+        ],
+        "summary": "Create Catalog",
+        "description": "Thêm metadata dataset vào lĩnh vực đã đăng ký; không tạo bảng vật lý.",
+        "operationId": "create_catalog_api_v1_governance_catalog_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogEntrySchema"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogEntrySchema"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Bộ dữ liệu đã có trong danh mục.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/governance/catalog/{domain_id}/{dataset}": {
+      "get": {
+        "tags": [
+          "governance"
+        ],
+        "summary": "Get Catalog Detail",
+        "description": "Xem chi tiết metadata của một dataset theo lĩnh vực và tên.",
+        "operationId": "get_catalog_detail_api_v1_governance_catalog__domain_id___dataset__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "domain_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Domain Id"
+            }
+          },
+          {
+            "name": "dataset",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogEntrySchema"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Bộ dữ liệu đã có trong danh mục.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "governance"
+        ],
+        "summary": "Update Catalog",
+        "description": "Sửa một phần metadata; fields nếu gửi sẽ thay toàn bộ danh sách cột.",
+        "operationId": "update_catalog_api_v1_governance_catalog__domain_id___dataset__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "domain_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Domain Id"
+            }
+          },
+          {
+            "name": "dataset",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogUpdateSchema"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogEntrySchema"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Bộ dữ liệu đã có trong danh mục.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "governance"
+        ],
+        "summary": "Delete Catalog",
+        "description": "Ẩn metadata khỏi catalog; giữ nguyên dữ liệu vật lý và schema pipeline.",
+        "operationId": "delete_catalog_api_v1_governance_catalog__domain_id___dataset__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "domain_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Domain Id"
+            }
+          },
+          {
+            "name": "dataset",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Bộ dữ liệu đã có trong danh mục.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -266,7 +1389,7 @@
           "nlq"
         ],
         "summary": "Ask Nlq",
-        "description": "Run the NLQ flow from intent parsing to read-only execution.",
+        "description": "Chạy luồng NLQ từ phân tích ý định đến thực thi chỉ đọc.",
         "operationId": "ask_nlq_api_v1_nlq_ask_post",
         "requestBody": {
           "content": {
@@ -353,10 +1476,15 @@
         "properties": {
           "domain_id": {
             "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]*$",
             "title": "Domain Id"
           },
           "dataset": {
             "type": "string",
+            "maxLength": 150,
+            "minLength": 1,
             "title": "Dataset"
           },
           "layer": {
@@ -364,6 +1492,8 @@
           },
           "schema_version": {
             "type": "string",
+            "maxLength": 30,
+            "minLength": 1,
             "title": "Schema Version"
           },
           "description": {
@@ -378,6 +1508,7 @@
             "title": "Fields"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "domain_id",
@@ -388,7 +1519,63 @@
           "fields"
         ],
         "title": "CatalogEntrySchema",
-        "description": "Catalog entry schema for governance responses."
+        "description": "Schema mục catalog cho phản hồi quản trị dữ liệu."
+      },
+      "CatalogUpdateSchema": {
+        "properties": {
+          "layer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DataLayer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schema_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 30,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Version"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FieldDefinitionSchema"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fields"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CatalogUpdateSchema",
+        "description": "PATCH chỉ đổi metadata; domain_id/dataset là khóa cố định trên URL."
       },
       "DataLayer": {
         "type": "string",
@@ -398,16 +1585,393 @@
           "gold"
         ],
         "title": "DataLayer",
-        "description": "Logical data-lake layers exposed to domain implementations."
+        "description": "Các tầng data lake logic được cung cấp cho phần triển khai miền nghiệp vụ."
+      },
+      "DataSourceCreate": {
+        "properties": {
+          "source_system_id": {
+            "type": "integer",
+            "title": "Source System Id"
+          },
+          "source_name": {
+            "type": "string",
+            "title": "Source Name"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "connection_type": {
+            "type": "string",
+            "title": "Connection Type"
+          },
+          "location": {
+            "type": "string",
+            "title": "Location"
+          },
+          "configuration": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Configuration"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_system_id",
+          "source_name",
+          "source_type",
+          "connection_type",
+          "location",
+          "configuration",
+          "is_active"
+        ],
+        "title": "DataSourceCreate",
+        "description": "Payload tạo mới data source; configuration được validate theo source_type."
+      },
+      "DataSourceItem": {
+        "properties": {
+          "data_source_id": {
+            "type": "integer",
+            "title": "Data Source Id"
+          },
+          "source_system_id": {
+            "type": "integer",
+            "title": "Source System Id"
+          },
+          "source_system_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source System Name"
+          },
+          "source_name": {
+            "type": "string",
+            "title": "Source Name"
+          },
+          "source_type": {
+            "type": "string",
+            "title": "Source Type"
+          },
+          "connection_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Type"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "last_ingested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Ingested At"
+          },
+          "last_ingestion_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Ingestion Status"
+          },
+          "ingestion_count": {
+            "type": "integer",
+            "title": "Ingestion Count"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data_source_id",
+          "source_system_id",
+          "source_name",
+          "source_type",
+          "is_active",
+          "ingestion_count",
+          "created_at"
+        ],
+        "title": "DataSourceItem",
+        "description": "Một dòng data source chi tiết dùng cho API list/detail."
+      },
+      "DataSourceResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DataSourceItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "DataSourceResponse",
+        "description": "Response phân trang cho danh sách nguồn dữ liệu."
+      },
+      "DataSourceUpdate": {
+        "properties": {
+          "source_system_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source System Id"
+          },
+          "source_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Name"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "connection_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Type"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "configuration": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Configuration"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "title": "DataSourceUpdate",
+        "description": "Payload cập nhật data source; tất cả field đều optional để hỗ trợ partial update."
+      },
+      "ErrorBody": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorBody",
+        "description": "Đối tượng lỗi chuẩn bên trong cấu trúc lỗi API."
+      },
+      "ErrorResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false,
+            "title": "Success",
+            "default": false
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "description": "Cấu trúc phản hồi lỗi API chuẩn được AppException sử dụng."
       },
       "FieldDefinitionSchema": {
         "properties": {
           "name": {
             "type": "string",
+            "maxLength": 150,
+            "minLength": 1,
             "title": "Name"
           },
           "data_type": {
             "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
             "title": "Data Type"
           },
           "nullable": {
@@ -421,13 +1985,14 @@
             "default": ""
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "name",
           "data_type"
         ],
         "title": "FieldDefinitionSchema",
-        "description": "Field metadata schema for governance responses."
+        "description": "Schema metadata trường cho phản hồi quản trị dữ liệu."
       },
       "HTTPValidationError": {
         "properties": {
@@ -441,6 +2006,223 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "IngestionJobRead": {
+        "properties": {
+          "ingestion_job_id": {
+            "type": "integer",
+            "title": "Ingestion Job Id"
+          },
+          "data_source_id": {
+            "type": "integer",
+            "title": "Data Source Id"
+          },
+          "dataset_id": {
+            "type": "integer",
+            "title": "Dataset Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "source_table": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Table"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "requested_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By"
+          },
+          "rows_read": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Read"
+          },
+          "rows_written": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Written"
+          },
+          "rows_rejected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Rejected"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output"
+          },
+          "validation_report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Report"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ingestion_job_id",
+          "data_source_id",
+          "dataset_id",
+          "status",
+          "stage",
+          "source_table",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "requested_by",
+          "rows_read",
+          "rows_written",
+          "rows_rejected",
+          "error_message",
+          "output"
+        ],
+        "title": "IngestionJobRead",
+        "description": "Dữ liệu trạng thái job ingestion."
+      },
+      "IngestionStart": {
+        "properties": {
+          "data_source_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Data Source Id"
+          },
+          "dataset_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Dataset Id"
+          },
+          "source_table": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Source Table"
+          },
+          "validation_policy": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Policy"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "data_source_id",
+          "dataset_id",
+          "source_table"
+        ],
+        "title": "IngestionStart"
       },
       "LoginRequest": {
         "properties": {
@@ -459,7 +2241,7 @@
           "password"
         ],
         "title": "LoginRequest",
-        "description": "Login request credentials."
+        "description": "Thông tin xác thực trong yêu cầu đăng nhập."
       },
       "LoginResponse": {
         "properties": {
@@ -487,7 +2269,7 @@
           "user"
         ],
         "title": "LoginResponse",
-        "description": "Login response with user profile."
+        "description": "Phản hồi đăng nhập kèm hồ sơ người dùng."
       },
       "LogoutRequest": {
         "properties": {
@@ -505,7 +2287,126 @@
         },
         "type": "object",
         "title": "LogoutRequest",
-        "description": "Payload for logout request."
+        "description": "Dữ liệu yêu cầu đăng xuất."
+      },
+      "ManualCleaningRequest": {
+        "properties": {
+          "session": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9-]{1,40}$",
+            "title": "Session",
+            "default": "default"
+          },
+          "base_snapshot": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 36,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Snapshot",
+            "default": "active"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ManualCleaningRequest"
+      },
+      "ManualCleaningResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "ingestion_job_id": {
+            "type": "integer",
+            "title": "Ingestion Job Id"
+          },
+          "requested_by": {
+            "type": "string",
+            "title": "Requested By"
+          },
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "entity": {
+            "type": "string",
+            "title": "Entity"
+          },
+          "input_version": {
+            "type": "string",
+            "title": "Input Version"
+          },
+          "records_read": {
+            "type": "integer",
+            "title": "Records Read"
+          },
+          "records_passed": {
+            "type": "integer",
+            "title": "Records Passed"
+          },
+          "records_quarantined": {
+            "type": "integer",
+            "title": "Records Quarantined"
+          },
+          "records_collapsed": {
+            "type": "integer",
+            "title": "Records Collapsed"
+          },
+          "issues": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "publication": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publication"
+          },
+          "quarantine_report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quarantine Report"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "ingestion_job_id",
+          "requested_by",
+          "domain",
+          "entity",
+          "input_version",
+          "records_read",
+          "records_passed",
+          "records_quarantined",
+          "records_collapsed",
+          "issues",
+          "publication"
+        ],
+        "title": "ManualCleaningResponse"
       },
       "MessageResponse": {
         "properties": {
@@ -519,7 +2420,7 @@
           "message"
         ],
         "title": "MessageResponse",
-        "description": "Generic status/message response."
+        "description": "Phản hồi trạng thái/thông báo dùng chung."
       },
       "NaturalLanguageQueryRequest": {
         "properties": {
@@ -533,7 +2434,7 @@
           "question"
         ],
         "title": "NaturalLanguageQueryRequest",
-        "description": "User question submitted to the NLQ engine."
+        "description": "Câu hỏi của người dùng gửi đến bộ xử lý NLQ."
       },
       "NaturalLanguageQueryResponse": {
         "properties": {
@@ -556,7 +2457,7 @@
           "sql"
         ],
         "title": "NaturalLanguageQueryResponse",
-        "description": "NLQ response payload."
+        "description": "Dữ liệu phản hồi NLQ."
       },
       "RefreshTokenRequest": {
         "properties": {
@@ -570,7 +2471,22 @@
           "refresh_token"
         ],
         "title": "RefreshTokenRequest",
-        "description": "Payload to request a new access token using a refresh token."
+        "description": "Dữ liệu yêu cầu cấp access token mới bằng refresh token."
+      },
+      "RoleCode": {
+        "type": "string",
+        "enum": [
+          "ADMIN",
+          "DATA_ADMIN",
+          "VIEWER",
+          "ADMISSIONS_MANAGER",
+          "ADMISSIONS_STAFF",
+          "ACADEMIC_MANAGER",
+          "ACADEMIC_STAFF",
+          "HR_MANAGER",
+          "HR_STAFF"
+        ],
+        "title": "RoleCode"
       },
       "SessionRead": {
         "properties": {
@@ -617,7 +2533,7 @@
           "session_status"
         ],
         "title": "SessionRead",
-        "description": "Active login session returned to the authenticated user."
+        "description": "Phiên đăng nhập đang hoạt động được trả về cho người dùng đã xác thực."
       },
       "UserProfileDTO": {
         "properties": {
@@ -630,8 +2546,7 @@
             "title": "Username"
           },
           "role": {
-            "type": "string",
-            "title": "Role"
+            "$ref": "#/components/schemas/RoleCode"
           }
         },
         "type": "object",
@@ -641,7 +2556,7 @@
           "role"
         ],
         "title": "UserProfileDTO",
-        "description": "Authenticated user profile returned to the client."
+        "description": "Hồ sơ người dùng đã xác thực được trả về cho máy khách."
       },
       "ValidationError": {
         "properties": {

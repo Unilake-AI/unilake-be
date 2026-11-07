@@ -11,7 +11,7 @@ Repository này bao gồm API FastAPI, ingestion worker và pipeline chuẩn hó
 - [Phạm vi chức năng](#phạm-vi-chức-năng)
 - [Kiến trúc và công nghệ](#kiến-trúc-và-công-nghệ)
 - [Cài đặt và khởi chạy](#cài-đặt-và-khởi-chạy)
-- [Giao diện API](#giao-diện-api)
+- [Giao diện API]
 - [Quản lý cơ sở dữ liệu](#quản-lý-cơ-sở-dữ-liệu)
 - [Kiểm thử và chất lượng mã nguồn](#kiểm-thử-và-chất-lượng-mã-nguồn)
 - [Cấu trúc dự án](#cấu-trúc-dự-án)
@@ -72,6 +72,8 @@ API ingestion trả HTTP `202 Accepted` sau khi lưu tác vụ vào PostgreSQL. 
 Docker Compose có cấu hình Redis. Hàng đợi ingestion hiện sử dụng PostgreSQL.
 
 ## Cài đặt và khởi chạy
+
+Deploy lên Render: xem [hướng dẫn Render](docs/render.md).
 
 ### Yêu cầu môi trường
 
@@ -201,7 +203,9 @@ Frontend sử dụng API base URL `http://localhost:8000/api/v1` với cấu hì
 
 ## Giao diện API
 
-Các endpoint dưới đây sử dụng prefix mặc định `/api/v1`. Swagger UI cung cấp chi tiết về dữ liệu đầu vào, phản hồi và yêu cầu xác thực.
+Xem [handoff API cho frontend](docs/api/fe-handoff.md) để tra quyền theo role, request và response của tất cả endpoint. Dùng [OpenAPI JSON](docs/api/openapi.json) để import vào Postman hoặc sinh type.
+
+Các endpoint thường dùng dưới đây sử dụng prefix mặc định `/api/v1`.
 
 | Phân hệ | Phương thức | Đường dẫn |
 | --- | --- | --- |
@@ -223,6 +227,34 @@ Tạo tác vụ ingestion và chạy cleaning yêu cầu vai trò `ADMIN` hoặc
 Tham khảo [đặc tả ingestion](docs/ingestion-execution.md) để tra cứu payload, vòng đời tác vụ và mã lỗi. Quy trình Bronze → Silver với dữ liệu tổng hợp được mô tả trong [hướng dẫn demo chuẩn hóa](docs/standardization/manual-live-demo.md).
 
 ## Quản lý cơ sở dữ liệu
+
+### Role và tài khoản mẫu
+
+Seed tạo 9 role dưới đây, mỗi tài khoản mẫu được gán đúng một role.
+Mật khẩu khởi tạo cho các tài khoản demo/local: `Password@123`.
+
+| Role | Tên đăng nhập | Trách nhiệm |
+| --- | --- | --- |
+| `ADMIN` | `admin` | Quản trị hệ thống, tài khoản và phân quyền |
+| `DATA_ADMIN` | `dataadmin` | Quản lý nguồn, pipeline, chất lượng dữ liệu; truy vấn AI xuyên phòng ban |
+| `VIEWER` | `viewer` | Ban Giám hiệu xem dashboard và báo cáo tổng hợp |
+| `ADMISSIONS_MANAGER` | `admissions_manager` | Trưởng phòng Tuyển sinh |
+| `ADMISSIONS_STAFF` | `admissions_staff` | Nhân viên phòng Tuyển sinh |
+| `ACADEMIC_MANAGER` | `academic_manager` | Trưởng phòng Đào tạo |
+| `ACADEMIC_STAFF` | `academic_staff` | Nhân viên phòng Đào tạo |
+| `HR_MANAGER` | `hr_manager` | Trưởng phòng Nhân sự |
+| `HR_STAFF` | `hr_staff` | Nhân viên phòng Nhân sự |
+
+Áp dụng vào database đã có schema bằng `python -m app.seed`.
+Seed đồng bộ quyền của 9 role và gán lại role cho các tài khoản mẫu; chạy lại không
+ghi đè mật khẩu hoặc trạng thái của các tài khoản này. Tài khoản ngoài seed cần
+được gán ít nhất một role trong bảng trên để đăng nhập.
+
+`DATA_ADMIN` có thêm quyền `query.execute`. Sáu role phòng ban được khai báo quyền
+xem dataset, catalog, dashboard, thực thi và xem lịch sử truy vấn. Hiện manager
+và staff có cùng tập quyền; backend chưa thực thi giới hạn dữ liệu theo phòng ban.
+Bảng `role_permission` là cấu hình quyền; các endpoint hiện chưa kiểm tra đầy đủ
+bảng này. Xem trạng thái triển khai từng phân hệ ở phần phạm vi chức năng.
 
 DDL, dữ liệu khởi tạo và SQL migration được quản lý trong `infra/postgres/`. Schema dữ liệu nằm tại `docs/data-schema/`.
 

@@ -1,4 +1,4 @@
-"""Các tuyến API quản trị dữ liệu."""
+"""API metadata catalog: xác thực → DATA_ADMIN → validate → service → DB."""
 
 from __future__ import annotations
 
@@ -13,7 +13,31 @@ from app.modules.governance.schemas import (
 from app.modules.governance.service import GovernanceService
 from sqlalchemy.ext.asyncio import AsyncSession
 
-router = APIRouter(prefix="/governance", tags=["governance"])
+from app.core.deps import require_role
+from app.core.responses import COMMON_ERROR_RESPONSES, ErrorResponse
+from app.core.roles import RoleCode
+from app.dependencies import get_db
+from app.modules.governance.catalog_service import CatalogService
+from app.modules.governance.schemas import CatalogEntrySchema, CatalogUpdateSchema
+
+router = APIRouter(
+    prefix="/governance",
+    tags=["governance"],
+    # Áp dụng tại router để tất cả endpoint đều yêu cầu đúng role DATA_ADMIN.
+    dependencies=[Depends(require_role(RoleCode.DATA_ADMIN))],
+    responses={
+        **COMMON_ERROR_RESPONSES,
+        409: {"model": ErrorResponse, "description": "Bộ dữ liệu đã có trong danh mục."},
+    },
+)
+
+
+def get_catalog_service(db: Annotated[AsyncSession, Depends(get_db)]) -> CatalogService:
+    # get_db quản lý transaction: thành công commit, có exception rollback.
+    return CatalogService(db)
+
+
+Catalog = Annotated[CatalogService, Depends(get_catalog_service)]
 
 
 @router.get("/catalog", response_model=list[CatalogEntrySchema])

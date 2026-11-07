@@ -47,7 +47,7 @@ Theo dõi:
 
 - `GET /api/v1/ingestion/jobs/{ingestion_job_id}`: chi tiết job.
 - `GET /api/v1/ingestion/jobs?data_source_id=1&limit=20&offset=0`: lịch sử mới nhất trước.
-- Quyền đọc: `ADMIN`, `DATA_ADMIN`, `ANALYST`, `VIEWER`, theo quy ước catalog hiện tại.
+- Quyền đọc: `ADMIN`, `DATA_ADMIN`, `VIEWER`, theo quy ước catalog hiện tại.
 
 Response có `status`, `stage`, `requested_by`, các mốc thời gian UTC,
 `rows_read`, `rows_written`, `rows_rejected`, `error_message` và `output`.

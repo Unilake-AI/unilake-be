@@ -12,8 +12,10 @@ from app.domains.base import DataLayer  # noqa: TC001
 class FieldDefinitionSchema(BaseModel):
     """Schema metadata trường cho phản hồi quản trị dữ liệu."""
 
-    name: str
-    data_type: str
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=150)
+    data_type: str = Field(min_length=1, max_length=50)
     nullable: bool = True
     description: str = ""
 
@@ -21,10 +23,12 @@ class FieldDefinitionSchema(BaseModel):
 class CatalogEntrySchema(BaseModel):
     """Schema mục catalog cho phản hồi quản trị dữ liệu."""
 
-    domain_id: str
-    dataset: str
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    domain_id: str = Field(min_length=1, max_length=50, pattern=r"^[a-z][a-z0-9_]*$")
+    dataset: str = Field(min_length=1, max_length=150)
     layer: DataLayer
-    schema_version: str
+    schema_version: str = Field(min_length=1, max_length=30)
     description: str
     fields: list[FieldDefinitionSchema]
 
