@@ -36,6 +36,7 @@ from app.modules.pipeline.identity_standardization import (
     IdentityStandardizationService,
     ValueDictionary,
 )
+from app.modules.pipeline.lineage import record_pipeline_lineage_sync
 from app.modules.pipeline.mapping_profiles import build_profile
 from app.modules.pipeline.missing_values import MissingValueProfile, MissingValueRule
 from app.modules.pipeline.quarantine_records import (
@@ -515,6 +516,26 @@ def run_manual_cleaning(
                 silver_snapshot_id=snapshot_id,
                 finished_at=datetime.now(UTC),
             )
+            with suppress(Exception):
+                record_pipeline_lineage_sync(
+                    connection or engine,
+                    source_layer="BRONZE",
+                    source_name=str(context["output"]["uri"]),
+                    target_layer="SILVER",
+                    target_name=case["entity"],
+                    metadata={
+                        "cleaning_run_id": cleaning_run_id,
+                        "silver_snapshot_id": snapshot_id,
+                        "ingestion_job_id": report.ingestion_job_id,
+                        "domain": case["domain"],
+                        "entity": case["entity"],
+                        "records_read": report.records_read,
+                        "records_passed": report.records_passed,
+                        "records_quarantined": report.records_quarantined,
+                        "records_collapsed": report.records_collapsed,
+                        "status": published_status,
+                    },
+                )
             publication_recorded = True
 
         publisher = SilverPublicationService(

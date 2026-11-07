@@ -65,3 +65,41 @@ class CatalogUpdateSchema(BaseModel):
             if len(names) != len(set(names)):
                 raise ValueError("Tên cột bị trùng. Vui lòng đặt tên khác nhau cho từng cột.")
         return self
+
+
+class LineageNode(BaseModel):
+    """Nút trên đồ thị phả hệ dữ liệu cho Frontend (ReactFlow / D3.js)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str
+    layer: str
+    label: str
+    data: dict[str, object] = Field(default_factory=dict)
+
+
+class LineageEdge(BaseModel):
+    """Cạnh nối trên đồ thị phả hệ dữ liệu thể hiện dòng chảy và chuyển dịch dữ liệu."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    source: str
+    target: str
+    source_layer: str
+    target_layer: str
+    label: str | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+    data: dict[str, object] = Field(default_factory=dict)
+    created_at: str | None = None
+
+
+class LineageGraphResponse(BaseModel):
+    """Phản hồi đồ thị Data Lineage chuẩn Nodes & Edges."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    nodes: list[LineageNode]
+    edges: list[LineageEdge]
+

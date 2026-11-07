@@ -188,6 +188,7 @@ class IngestionExecutionService:
                 stage = "COMMITTING"
                 output = {
                     **output,
+                    "domain": domain,
                     "lineage": LineageEvidence(
                         run_ref=f"ingestion:{job_id}",
                         mode="ingestion",
