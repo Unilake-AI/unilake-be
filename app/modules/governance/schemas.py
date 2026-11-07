@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 from app.domains.base import DataLayer  # noqa: TC001
 
@@ -25,3 +27,20 @@ class CatalogEntrySchema(BaseModel):
     schema_version: str
     description: str
     fields: list[FieldDefinitionSchema]
+
+class LineageNode(BaseModel):
+    id: str
+    label: str
+    layer: str  # SOURCE, BRONZE, SILVER
+    details: dict[str, Any] = Field(default_factory=dict)
+    
+class LineageEdge(BaseModel):
+    source: str
+    target: str
+    lineage_type: str  # INGESTION, CLEANING_AND_TRANSFORMATION
+    job_id: int | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    
+class LineageGraphResponse(BaseModel):
+    nodes: list[LineageNode]
+    edges: list[LineageEdge]

@@ -9,8 +9,15 @@ from app.domains.base import DataLayer, FieldDefinition  # noqa: TC001 - Pydanti
 from app.domains.registry import get_domain_registry
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from app.domains.registry import DomainRegistry
     from app.modules.pipeline.contracts import PipelineEvent
+
+from app.modules.governance.schemas import LineageEdge, LineageGraphResponse, LineageNode
+from app.repositories.lineage_repo import LineageRepository
 
 
 @dataclass(frozen=True)
@@ -86,3 +93,44 @@ class GovernanceService:
         return tuple(
             event for event in self._events if domain_id is None or event.domain_id == domain_id
         )
+
+    async def get_lineage_graph(
+        self,
+        db: AsyncSession,
+        target_id: str | None = None,
+    ) -> LineageGraphResponse:
+        """Truy vấn đồ thị Lineage từ database."""
+        repo = LineageRepository(db)
+        raw_edges = await repo.get_lineage_graph(target_id=target_id)
+
+        nodes_dict: dict[str, LineageNode] = {}
+        edges: list[LineageEdge] = []
+
+        for row in raw_edges:
+            src_key = f"{row['source_layer']}:{row['source_id']}"
+            if src_key not in nodes_dict:
+                nodes_dict[src_key] = LineageNode(
+                    id=src_key,
+                    label=row["source_name"],
+                    layer=row["source_layer"],
+                )
+
+            tgt_key = f"{row['target_layer']}:{row['target_id']}"
+            if tgt_key not in nodes_dict:
+                nodes_dict[tgt_key] = LineageNode(
+                    id=tgt_key,
+                    label=row["target_name"],
+                    layer=row["target_layer"],
+                )
+
+            edges.append(
+                LineageEdge(
+                    source=src_key,
+                    target=tgt_key,
+                    lineage_type=row["lineage_type"],
+                    job_id=row["job_id"],
+                    metadata=row.get("metadata", {}),
+                )
+            )
+
+        return LineageGraphResponse(nodes=list(nodes_dict.values()), edges=edges)

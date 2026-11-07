@@ -178,6 +178,23 @@ class IngestionExecutionService:
                 stage = "WRITING"
                 await repo.stage(job_id, stage, artifact.rows)
                 output = await run_io(store, artifact, domain, write_context)
+                # Ghi nhận Lineage Source -> Bronze
+                try:
+                    from app.repositories.lineage_repo import LineageRepository
+
+                    await LineageRepository(repo.db).record_edge(
+                        source_layer="SOURCE",
+                        source_id=str(context[0].data_source_id),
+                        source_name=f"{context[0].source_name} ({job.source_table})",
+                        target_layer="BRONZE",
+                        target_id=str(context[1].dataset_id),
+                        target_name=output.get("uri", ""),
+                        job_id=job_id,
+                        lineage_type="INGESTION",
+                        metadata={"sha256": output.get("sha256"), "rows": artifact.rows},
+                    )
+                except Exception:
+                    pass
                 stage = "COMMITTING"
                 await repo.finish(job_id, output=output)
         except asyncio.CancelledError:

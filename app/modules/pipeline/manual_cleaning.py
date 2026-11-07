@@ -433,6 +433,36 @@ def run_manual_cleaning(
                 "entity": case["entity"],
             },
         )
+        # Ghi nhận Lineage Bronze -> Silver
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("""
+                        INSERT INTO app.pipeline_lineage (
+                            source_layer, source_id, source_name,
+                            target_layer, target_id, target_name,
+                            job_id, lineage_type, metadata, created_at
+                        ) VALUES (
+                            'BRONZE', :source_id, :source_name,
+                            'SILVER', :target_id, :target_name,
+                            :job_id, 'CLEANING_AND_STANDARDIZATION', :metadata, NOW()
+                        )
+                    """),
+                    {
+                        "source_id": str(context["dataset_id"]),
+                        "source_name": str(context["output"].get("uri")),
+                        "target_id": publication.publication.snapshot_id,
+                        "target_name": f"{case['entity']}.parquet",
+                        "job_id": ingestion_job_id,
+                        "metadata": json.dumps({
+                            "records_read": report.records_read,
+                            "records_passed": report.records_passed,
+                            "records_quarantined": report.records_quarantined,
+                        }),
+                    },
+                )
+        except Exception:
+            pass
         _log_report(requested_by, result)
         return result
     except SilverError as exc:

@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from app.modules.governance.schemas import CatalogEntrySchema, FieldDefinitionSchema
+from app.dependencies import get_db
+from app.modules.governance.schemas import (
+    CatalogEntrySchema,
+    FieldDefinitionSchema,
+    LineageGraphResponse,
+)
 from app.modules.governance.service import GovernanceService
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/governance", tags=["governance"])
 
@@ -33,3 +39,12 @@ def get_catalog(domain_id: str | None = None) -> list[CatalogEntrySchema]:
         )
         for entry in entries
     ]
+
+@router.get("/lineage", response_model=LineageGraphResponse, summary="Tra cứu Data Lineage đồ thị")
+async def get_data_lineage(
+    target_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> LineageGraphResponse:
+    """Trả về cấu trúc đồ thị nodes và edges theo dõi hành trình dữ liệu."""
+    service = GovernanceService()
+    return await service.get_lineage_graph(db, target_id=target_id)
