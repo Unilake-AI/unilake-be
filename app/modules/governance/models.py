@@ -13,6 +13,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
@@ -194,7 +195,10 @@ class PipelineLineage(Base):
     )
 
     lineage_id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True, autoincrement=True, index=True
+        BigInteger().with_variant(Integer(), "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+        index=True,
     )
     source_layer: Mapped[str] = mapped_column(String(50), nullable=False)
     source_name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -205,9 +209,8 @@ class PipelineLineage(Base):
         JSON().with_variant(JSONB(), "postgresql"),
         nullable=False,
         default=dict,
-        server_default=text("'{}'::jsonb"),
+        server_default=text("'{}'"),
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-
