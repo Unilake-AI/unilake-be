@@ -20,6 +20,23 @@ class FieldDefinitionSchema(BaseModel):
     description: str = ""
 
 
+class CatalogTableSchema(BaseModel):
+    """Table thuộc dataset và metadata các cột của table đó."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=150)
+    description: str = ""
+    columns: list[FieldDefinitionSchema]
+
+    @model_validator(mode="after")
+    def unique_column_names(self) -> Self:
+        names = [column.name for column in self.columns]
+        if len(names) != len(set(names)):
+            raise ValueError("Tên cột trong cùng table không được trùng nhau.")
+        return self
+
+
 class CatalogEntrySchema(BaseModel):
     """Schema mục catalog cho phản hồi quản trị dữ liệu."""
 
@@ -30,7 +47,8 @@ class CatalogEntrySchema(BaseModel):
     layer: DataLayer
     schema_version: str = Field(min_length=1, max_length=30)
     description: str
-    fields: list[FieldDefinitionSchema]
+    fields: list[FieldDefinitionSchema] = Field(default_factory=list)
+    tables: list[CatalogTableSchema] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def unique_field_names(self) -> Self:
@@ -38,6 +56,21 @@ class CatalogEntrySchema(BaseModel):
         names = [field.name for field in self.fields]
         if len(names) != len(set(names)):
             raise ValueError("Tên cột bị trùng. Vui lòng đặt tên khác nhau cho từng cột.")
+        if "tables" not in self.model_fields_set:
+            self.tables = [
+                CatalogTableSchema(
+                    name=self.dataset, description=self.description, columns=self.fields
+                )
+            ]
+        table_names = [table.name for table in self.tables]
+        if len(table_names) != len(set(table_names)):
+            raise ValueError("Tên table trong cùng dataset không được trùng nhau.")
+        legacy_fields = self.tables[0].columns if len(self.tables) == 1 else []
+        if "fields" in self.model_fields_set and self.fields != legacy_fields:
+            raise ValueError(
+                "fields phải khớp columns của table duy nhất; nhiều table dùng fields: []."
+            )
+        self.fields = legacy_fields
         return self
 
 
@@ -50,6 +83,7 @@ class CatalogUpdateSchema(BaseModel):
     schema_version: str | None = Field(default=None, min_length=1, max_length=30)
     description: str | None = None
     fields: list[FieldDefinitionSchema] | None = None
+    tables: list[CatalogTableSchema] | None = None
 
     @model_validator(mode="after")
     def reject_explicit_null(self) -> Self:
@@ -64,6 +98,13 @@ class CatalogUpdateSchema(BaseModel):
             names = [field.name for field in self.fields]
             if len(names) != len(set(names)):
                 raise ValueError("Tên cột bị trùng. Vui lòng đặt tên khác nhau cho từng cột.")
+        if self.tables is not None:
+            names = [table.name for table in self.tables]
+            if len(names) != len(set(names)):
+                raise ValueError("Tên table trong cùng dataset không được trùng nhau.")
+            legacy_fields = self.tables[0].columns if len(self.tables) == 1 else []
+            if self.fields is not None and self.fields != legacy_fields:
+                raise ValueError("fields không khớp với tables.")
         return self
 
 

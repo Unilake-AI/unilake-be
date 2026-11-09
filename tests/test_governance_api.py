@@ -40,6 +40,14 @@ def client() -> Iterator[TestClient]:
         execution_options={"schema_translate_map": {"app": None}},
     )
     cast("Table", CatalogMetadata.__table__).create(engine)
+    with Session(engine) as session, session.begin():
+        session.add(
+            CatalogMetadata(
+                domain_id="demo",
+                dataset="legacy_students",
+                metadata_payload=PAYLOAD | {"dataset": "legacy_students"},
+            )
+        )
     application = create_app()
 
     def override_db() -> Iterator[MagicMock]:
@@ -67,6 +75,17 @@ def test_data_admin_can_read_catalog(client: TestClient, params: dict[str, str])
     entries = response.json()
     assert entries
     assert all("fields" in entry for entry in entries)
+    assert all(
+        entry["tables"]
+        == [
+            {
+                "name": entry["dataset"],
+                "description": entry["description"],
+                "columns": entry["fields"],
+            }
+        ]
+        for entry in entries
+    )
     if params:
         assert all(entry["domain_id"] == "demo" for entry in entries)
 
@@ -199,6 +218,91 @@ def test_empty_patch_preserves_metadata(client: TestClient) -> None:
     response = client.patch(path, json={}, headers=headers())
     assert response.status_code == 200
     assert response.json() == before
+
+
+def test_multiple_tables_persist_and_can_be_replaced(client: TestClient) -> None:
+    payload = {key: value for key, value in PAYLOAD.items() if key != "fields"}
+    tables = [
+        {"name": "students", "description": "Sinh viên", "columns": PAYLOAD["fields"]},
+        {
+            "name": "classes",
+            "description": "Lớp",
+            "columns": [
+                {"name": "class_id", "data_type": "integer", "description": "Mã lớp"},
+            ],
+        },
+    ]
+    created = client.post(CATALOG, json=payload | {"tables": tables}, headers=headers())
+    assert created.status_code == 201
+    entry = created.json()
+    assert entry["fields"] == []
+    assert [table["name"] for table in entry["tables"]] == ["students", "classes"]
+    assert entry["tables"][1]["columns"][0]["data_type"] == "integer"
+    assert client.get(DETAIL, headers=headers()).json() == entry
+    assert entry in client.get(CATALOG, headers=headers()).json()
+    assert client.patch(DETAIL, json={"fields": []}, headers=headers()).status_code == 422
+    assert client.get(DETAIL, headers=headers()).json() == entry
+    replaced = client.patch(DETAIL, json={"tables": [tables[1]]}, headers=headers())
+    assert replaced.status_code == 200
+    assert replaced.json()["fields"] == replaced.json()["tables"][0]["columns"]
+    assert client.get(DETAIL, headers=headers()).json() == replaced.json()
+    cleared = client.patch(DETAIL, json={"tables": []}, headers=headers())
+    assert cleared.status_code == 200
+    assert cleared.json()["tables"] == cleared.json()["fields"] == []
+
+
+def test_legacy_fields_patch_updates_table_columns(client: TestClient) -> None:
+    assert client.post(CATALOG, json=PAYLOAD, headers=headers()).status_code == 201
+    response = client.patch(DETAIL, json={"fields": []}, headers=headers())
+    assert response.status_code == 200
+    assert response.json()["tables"][0]["columns"] == []
+    assert client.get(DETAIL, headers=headers()).json() == response.json()
+
+
+def test_old_database_payload_is_exposed_as_table(client: TestClient) -> None:
+    path = f"{CATALOG}/demo/legacy_students"
+    response = client.get(path, headers=headers())
+    assert response.status_code == 200
+    entry = response.json()
+    assert entry["tables"] == [
+        {
+            "name": "legacy_students",
+            "description": PAYLOAD["description"],
+            "columns": entry["fields"],
+        }
+    ]
+    updated = client.patch(path, json={"description": "Updated"}, headers=headers())
+    assert updated.status_code == 200
+    assert updated.json()["tables"] == entry["tables"]
+    assert client.get(path, headers=headers()).json() == updated.json()
+
+
+@pytest.mark.parametrize(
+    "tables",
+    [
+        None,
+        [{"name": " ", "columns": []}],
+        [{"name": "students", "columns": []}] * 2,
+        [{"name": "students", "columns": [{"name": "id", "data_type": "string"}] * 2}],
+    ],
+)
+def test_invalid_tables_are_rejected(client: TestClient, tables: object) -> None:
+    auth = headers()
+    assert client.post(CATALOG, json=PAYLOAD | {"tables": tables}, headers=auth).status_code == 422
+    assert client.post(CATALOG, json=PAYLOAD, headers=auth).status_code == 201
+    before = client.get(DETAIL, headers=auth).json()
+    assert client.patch(DETAIL, json={"tables": tables}, headers=auth).status_code == 422
+    assert client.get(DETAIL, headers=auth).json() == before
+
+
+def test_conflicting_fields_and_tables_are_rejected(client: TestClient) -> None:
+    conflicting = {"tables": [{"name": "students", "columns": []}]}
+    assert client.post(CATALOG, json=PAYLOAD | conflicting, headers=headers()).status_code == 422
+    assert client.post(CATALOG, json=PAYLOAD, headers=headers()).status_code == 201
+    response = client.patch(
+        DETAIL, json=conflicting | {"fields": PAYLOAD["fields"]}, headers=headers()
+    )
+    assert response.status_code == 422
 
 
 def test_openapi_documents_auth_and_crud(client: TestClient) -> None:
