@@ -1,5 +1,16 @@
 # Deploy backend lên Render
 
+## Service hiện tại
+
+Backend đang dùng service [`unilake-be`](https://dashboard.render.com/web/srv-dbk321nf3r2c738i7630)
+với URL `https://unilake-be.onrender.com`, repository `Unilake-AI/unilake-be`,
+nhánh `develop`. Service này cấu hình trực tiếp trong Dashboard: Auto-Deploy
+**After CI Checks Pass**, Health Check Path `/health`,
+`CORS_ORIGINS=https://unilake-fe.vercel.app`.
+
+Với service hiện tại, cập nhật cấu hình trong Dashboard; không tạo thêm Blueprint
+và database chỉ để áp dụng CORS hoặc CI/CD. Blueprint bên dưới dành cho môi trường mới.
+
 ## Blueprint cho Render Postgres
 
 Repository có `render.yaml` để tạo `unilake-api` và `unilake-db` cùng region
@@ -9,7 +20,8 @@ chạy lâu dài hoặc xử lý dữ liệu lớn.
 
 1. Push mã nguồn và `render.yaml` lên Git repository.
 2. Trong Render chọn **New → Blueprint**, kết nối repository và chọn branch.
-3. Nhập `CORS_ORIGINS` là origin của frontend, ví dụ `https://your-app.vercel.app`.
+3. Blueprint đã đặt `CORS_ORIGINS=https://unilake-fe.vercel.app` cho frontend
+   [UniLake](https://unilake-fe.vercel.app/login). CORS chỉ dùng origin, không có `/login`.
 4. Kiểm tra tài nguyên và plan hiển thị trước khi tạo Blueprint.
 5. Khởi tạo schema, migration và seed bằng các lệnh ở phần bên dưới.
 
@@ -31,6 +43,7 @@ Luồng deploy sau khi Blueprint được tạo:
 ```text
 Push / merge vào develop
   → GitHub Actions: lint, format, mypy, pyright, SQL migration, seed, pytest
+  → GitHub Actions: build Docker image production
   → Tất cả CI checks thành công
   → Render build Docker image và deploy
   → Render kiểm tra /health trước khi chuyển traffic
@@ -45,6 +58,10 @@ Sau khi push thay đổi cấu hình, sync Blueprint trên Render. Trong service
 kiểm tra branch là `develop`, Auto-Deploy là **After CI Checks Pass**, Health Check
 Path là `/health`. Repository cần được kết nối qua GitHub integration để Render
 nhận CI checks. Không cần `RENDER_DEPLOY_HOOK_URL` hoặc Render API key.
+
+Với service đã tạo trước đó, sync Blueprint để cập nhật `CORS_ORIGINS` từ giá trị
+nhập thủ công sang `https://unilake-fe.vercel.app`. Nếu service không được quản lý
+bằng Blueprint, đặt biến này trong **Environment** rồi lưu và redeploy.
 
 Nếu tạo Web Service thủ công, đặt ba mục này trong Dashboard. Theo dõi kết quả CI
 ở GitHub Actions và kết quả build/deploy ở Render Events/Deploys. Việc build hoặc
@@ -73,7 +90,7 @@ Thêm các biến môi trường trong Render Dashboard:
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Thông tin database đích |
 | `DB_ECHO` | `false` |
 | `JWT_SECRET_KEY` | Tạo bằng `openssl rand -hex 32` |
-| `CORS_ORIGINS` | Origin HTTPS của frontend, nhiều origin cách nhau bằng dấu phẩy |
+| `CORS_ORIGINS` | `https://unilake-fe.vercel.app` (nhiều origin cách nhau bằng dấu phẩy) |
 
 Code hiện đọc `DB_*`; chỉ đặt `DATABASE_URL` chưa đủ để kết nối.
 Với Render Postgres cùng tài khoản và region, dùng thông tin kết nối internal.
@@ -126,10 +143,26 @@ dữ liệu qua các lần deploy. API không tự xử lý ingestion job nếu 
 
 ## Kiểm tra sau deploy
 
+Ở frontend Vercel, cấu hình URL backend theo biến môi trường mà FE sử dụng,
+trỏ tới URL HTTPS thực tế của Web Service Render (thêm `/api/v1` nếu FE yêu cầu).
+Redeploy FE sau khi đổi biến môi trường. URL trang `/login` của FE không phải
+endpoint đăng nhập của backend; endpoint backend là `/api/v1/auth/login`.
+
 1. `GET /health` trả `{"status":"ok"}`; endpoint này chỉ kiểm tra tiến trình API.
 2. Mở `/docs`, đăng nhập bằng tài khoản trên database đích để kiểm tra kết nối DB.
 3. Gọi API từ frontend để kiểm tra CORS.
 4. Nếu dùng ingestion, xác nhận worker xử lý job và lưu Bronze thành công.
+
+Kiểm tra preflight từ origin FE bằng URL backend thực tế:
+
+```bash
+curl -i -X OPTIONS "https://<backend-service>.onrender.com/api/v1/auth/login" \
+  -H 'Origin: https://unilake-fe.vercel.app' \
+  -H 'Access-Control-Request-Method: POST' \
+  -H 'Access-Control-Request-Headers: content-type'
+```
+
+Kết quả phải có `access-control-allow-origin: https://unilake-fe.vercel.app`.
 
 Giới hạn dữ liệu theo phòng ban và kiểm tra đầy đủ bảng `role_permission` chưa
 được triển khai; xem phạm vi chức năng trong README trước khi mở dữ liệu thật.

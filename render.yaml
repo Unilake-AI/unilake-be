@@ -39,7 +39,7 @@ services:
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        sync: false
+        value: https://unilake-fe.vercel.app
 
 databases:
   - name: unilake-db

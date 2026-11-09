@@ -78,3 +78,14 @@ jobs:
 
       - name: Tests
         run: pytest
+
+  docker:
+    name: Build production Docker image
+    needs: backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Build Render image
+        run: docker build --tag unilake-api:ci .
