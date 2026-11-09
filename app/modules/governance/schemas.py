@@ -102,4 +102,3 @@ class LineageGraphResponse(BaseModel):
 
     nodes: list[LineageNode]
     edges: list[LineageEdge]
-

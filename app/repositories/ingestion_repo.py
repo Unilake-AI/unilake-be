@@ -228,7 +228,6 @@ class IngestionRepository:
         )
         await self.db.execute(stmt)
 
-
     async def recover_expired(self) -> int:
         jobs = list(
             await self.db.scalars(

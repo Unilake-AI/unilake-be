@@ -526,7 +526,7 @@ def run_manual_cleaning(
                     metadata={
                         "cleaning_run_id": cleaning_run_id,
                         "silver_snapshot_id": snapshot_id,
-                        "ingestion_job_id": report.ingestion_job_id,
+                        "ingestion_job_id": ingestion_job_id,
                         "domain": case["domain"],
                         "entity": case["entity"],
                         "records_read": report.records_read,
