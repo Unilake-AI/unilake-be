@@ -101,3 +101,33 @@ def silver_lineage(
         parent_snapshot=parent,
         derivations=tuple(derivations),
     ).model_dump(mode="json")
+
+
+def record_pipeline_lineage_sync(
+    conn_or_engine: Any,
+    *,
+    source_layer: str,
+    source_name: str,
+    target_layer: str,
+    target_name: str,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Ghi sổ quan hệ nguồn gốc vào bảng app.pipeline_lineage (chế độ đồng bộ)."""
+    from datetime import UTC, datetime
+    from sqlalchemy import insert
+    from app.modules.pipeline.models import PIPELINE_LINEAGE
+
+    stmt = insert(PIPELINE_LINEAGE).values(
+        source_layer=source_layer,
+        source_name=source_name,
+        target_layer=target_layer,
+        target_name=target_name,
+        metadata=metadata or {},
+        created_at=datetime.now(UTC),
+    )
+    if hasattr(conn_or_engine, "execute"):
+        conn_or_engine.execute(stmt)
+    else:
+        with conn_or_engine.begin() as conn:
+            conn.execute(stmt)
+
