@@ -13,6 +13,7 @@ from sqlalchemy import (
     Identity,
     Index,
     Integer,
+    MetaData,
     String,
     Table,
     Text,
@@ -153,9 +154,10 @@ QUARANTINE_RECORDS = Table(
 )
 
 
+# Tham chiếu ghi dữ liệu độc lập với metadata chứa mô hình ORM PipelineLineage.
 PIPELINE_LINEAGE = Table(
     "pipeline_lineage",
-    Base.metadata,
+    MetaData(),
     Column("lineage_id", BigInteger, primary_key=True, autoincrement=True),
     Column("source_layer", String(50), nullable=False),
     Column("source_name", Text, nullable=False),
