@@ -83,4 +83,3 @@ async def get_lineage(
     repo = LineageRepository(db)
     rows = await repo.list(domain_id=domain_id, layer=layer, search=search)
     return build_lineage_graph(rows)
-

@@ -114,7 +114,9 @@ def record_pipeline_lineage_sync(
 ) -> None:
     """Ghi sổ quan hệ nguồn gốc vào bảng app.pipeline_lineage (chế độ đồng bộ)."""
     from datetime import UTC, datetime
+
     from sqlalchemy import insert
+
     from app.modules.pipeline.models import PIPELINE_LINEAGE
 
     stmt = insert(PIPELINE_LINEAGE).values(
@@ -130,4 +132,3 @@ def record_pipeline_lineage_sync(
     else:
         with conn_or_engine.begin() as conn:
             conn.execute(stmt)
-

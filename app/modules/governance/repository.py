@@ -166,4 +166,3 @@ def build_lineage_graph(rows: list[PipelineLineage]) -> LineageGraphResponse:
         )
 
     return LineageGraphResponse(nodes=list(nodes_map.values()), edges=edges)
-
