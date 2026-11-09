@@ -78,7 +78,24 @@ class CatalogService:
         current = await self.get(domain_id, dataset)
         # PATCH chỉ thay field được gửi. Nếu gửi fields, thay toàn bộ danh sách cột.
         changes = request.model_dump(exclude_unset=True, mode="json")
-        updated = CatalogEntrySchema.model_validate(current.model_dump(mode="json") | changes)
+        payload = current.model_dump(mode="json") | changes
+        if "tables" in changes and "fields" not in changes:
+            payload.pop("fields")
+        elif "fields" in changes and "tables" not in changes:
+            # Payload cũ gửi danh sách cột trực tiếp ở cấp dataset, không chỉ rõ bảng.
+            # Chỉ áp dụng được khi có đúng một bảng; nếu không, người dùng cần chọn
+            # bảng cần sửa để tránh cập nhật nhầm cột hoặc tạo bảng ngoài ý muốn.
+            if len(current.tables) != 1:
+                raise AppException(
+                    "Không thể cập nhật danh sách cột vì chưa xác định được bảng cần sửa. "
+                    "Vui lòng chọn hoặc thêm bảng trước khi chỉnh sửa các cột.",
+                    code="CATALOG_INVALID_FIELDS",
+                    status_code=422,
+                )
+            payload["tables"] = [
+                current.tables[0].model_dump(mode="json") | {"columns": changes["fields"]}
+            ]
+        updated = CatalogEntrySchema.model_validate(payload)
         if changes:
             await self.repo.save(updated)
         return updated

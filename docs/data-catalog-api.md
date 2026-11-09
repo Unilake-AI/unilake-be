@@ -48,7 +48,47 @@ Sửa mô tả bằng `PATCH /api/v1/governance/catalog/demo/student_profiles`:
 {"description": "Hồ sơ sinh viên đang theo học"}
 ```
 
-Field không gửi sẽ giữ nguyên. `fields` nếu gửi sẽ thay toàn bộ danh sách cột; dùng danh sách này để thêm/sửa/xóa metadata cột. `fields: []` làm rỗng danh sách, `description: ""` xóa nội dung mô tả. Không nhận `null`, field lạ hay hai cột trùng tên. `domain_id` và `dataset` là khóa cố định; PATCH không đổi hai giá trị này. `layer` nhận `bronze`, `silver`, `gold`; `data_type` là chuỗi metadata, không dùng để chạy DDL.
+Field không gửi sẽ giữ nguyên. `description: ""` xóa nội dung mô tả. Không nhận `null`, field lạ, tên table trùng trong một dataset hoặc tên cột trùng trong một table. Hai table khác nhau có thể có cột cùng tên. `domain_id` và `dataset` là khóa cố định; PATCH không đổi hai giá trị này. `layer` nhận `bronze`, `silver`, `gold`; `data_type` là chuỗi metadata, không dùng để chạy DDL.
+
+## Cấu trúc dataset → table → column
+
+GET danh sách và GET chi tiết đều trả `tables`, mỗi table có `name`, `description`, `columns`. Frontend dùng `tables[].columns[]` để hiển thị cây catalog. Một dataset có thể chứa nhiều table:
+
+```json
+{
+  "domain_id": "demo",
+  "dataset": "student_management",
+  "layer": "silver",
+  "schema_version": "1.0",
+  "description": "Quản lý sinh viên",
+  "tables": [
+    {
+      "name": "students",
+      "description": "Sinh viên",
+      "columns": [
+        {"name": "student_id", "data_type": "string", "nullable": false, "description": "Mã sinh viên"}
+      ]
+    },
+    {
+      "name": "classes",
+      "description": "Lớp học",
+      "columns": [
+        {"name": "class_id", "data_type": "integer", "nullable": false, "description": "Mã lớp"}
+      ]
+    }
+  ]
+}
+```
+
+Payload trên dùng cho POST. PATCH nhận `tables` để thay toàn bộ danh sách table và cột; `tables: []` xóa hết metadata table trong dataset. Xóa dataset sẽ ẩn cả các table và cột của nó.
+
+Tương thích metadata cũ:
+
+- Registry và bản ghi DB chỉ có `fields` được biểu diễn thành một table cùng tên dataset, mô tả ban đầu lấy từ dataset, `columns` lấy từ `fields`. Đây là cách biểu diễn metadata khai báo, chưa xác nhận table vật lý trong Data Lake.
+- POST cũ dùng `fields` vẫn hoạt động. Không cần migration vì cấu trúc table được lưu trong JSON `catalog_metadata.metadata_payload`.
+- Response giữ `fields`: bằng `columns` khi có đúng một table, bằng `[]` khi có nhiều table hoặc không có table.
+- PATCH `fields` chỉ được dùng khi dataset đang có đúng một table và sẽ thay toàn bộ `columns` của table đó. Trường hợp khác trả 422; dùng `tables` để sửa.
+- Nếu gửi đồng thời `fields` và `tables`, hai giá trị phải nhất quán theo quy tắc response ở trên, nếu không trả 422.
 
 Xóa bằng `DELETE /api/v1/governance/catalog/demo/student_profiles`. Có thể POST lại cùng khóa để khôi phục bằng metadata mới.
 
