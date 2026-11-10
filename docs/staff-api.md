@@ -188,3 +188,22 @@ STAFF_API_INTEGRATION_TEST=1 python -m pytest -q tests/test_staff_workflow_postg
 Lệnh thứ hai dùng cấu hình PostgreSQL của môi trường chạy. Nó tạo schema có tên ngẫu nhiên riêng cho kiểm thử, hoàn tác dữ liệu giữa các bài và chỉ xóa schema đó khi xong. Không dùng schema `app` để lưu dữ liệu kiểm thử. MinIO được thay bằng kho trong bộ nhớ; worker và các thao tác PostgreSQL được chạy thật.
 
 CI bật `STAFF_API_INTEGRATION_TEST=1` để kiểm tra luồng upload → worker → gửi bản sửa → xác minh cùng các trường hợp vượt quyền, sai file/loại dữ liệu, sai chủ file, file lỗi, thiếu phân công, role bị thu hồi và vòng sửa lại sau khi bị từ chối.
+
+## 11. Vị trí xử lý trong code
+
+Toàn bộ phần điều phối chức năng STAFF nằm trong `app/modules/staff/services/`:
+
+| File | Trách nhiệm |
+| --- | --- |
+| `context.py` | Lấy quyền, lĩnh vực, phòng ban và các lựa chọn cho giao diện |
+| `access.py` | Xác định lĩnh vực được upload và xem lần nạp |
+| `datasets.py` | Tìm và xem bộ dữ liệu trong phạm vi được cấp |
+| `uploads.py` | Kiểm tra thông tin tải file, chọn hoặc tạo bộ dữ liệu, lưu file tiếp nhận và tạo lần nạp |
+| `ingestion.py` | Tra cứu lần nạp, thống kê, số liệu theo dõi và lịch sử chạy lại |
+| `quality_issues.py` | Xem yêu cầu, tải bản sửa, báo đã sửa; kiểm tra quyền và trạng thái khi quản trị giao hoặc xác minh |
+
+Các router hiện có giữ nguyên đường dẫn, tham số và mẫu trả về. Router nhận yêu cầu, xác thực tài khoản rồi gọi service; không giữ thêm một bản quy tắc nghiệp vụ. Các module khác gọi qua `app/modules/staff/contracts.py`; mẫu dữ liệu STAFF nằm trong `app/modules/staff/schemas.py`.
+
+Truy vấn và lưu database tiếp tục nằm trong `app/repositories/`, gồm `department_access_repo.py`, `staff_dataset_repo.py`, `upload_repo.py`, `ingestion_repo.py` và `quality_issue_repo.py`. Service dùng chung phiên làm việc của yêu cầu để giữ việc đổi trạng thái và ghi lịch sử trong cùng giao dịch.
+
+Worker vẫn xử lý validation và lưu Bronze qua module ingestion. Xác thực, phiên đăng nhập và xử lý Silver tiếp tục dùng các module tương ứng. Việc gom service không tạo endpoint, thay đổi quyền hoặc yêu cầu migration mới.

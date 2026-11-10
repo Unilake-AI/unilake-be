@@ -217,7 +217,7 @@ Bước Silver vẫn cần cấu hình tương ứng với `data_source_id`, `da
 ## 9. Các tệp triển khai và kiểm thử
 
 - `app/modules/ingestion/router.py`: nhận multipart và trả lỗi API có kiểm soát.
-- `app/modules/ingestion/uploads.py`: kiểm tra tiếp nhận, tự tạo nguồn, lưu kho tiếp nhận và tạo job.
+- `app/modules/staff/services/uploads.py`: kiểm tra tiếp nhận, tự tạo nguồn, lưu kho tiếp nhận và tạo job.
 - `app/modules/ingestion/upload_capture.py`: xác minh đúng file và kiểm tra toàn bộ dữ liệu trong worker.
 - `app/repositories/upload_repo.py`: tìm bộ cũ hoặc tạo bộ mới; tự cấp mã, quản lý nguồn upload, kiểm tra tên trùng; chỉ lưu chính thức cùng job.
 - `app/modules/ingestion/execution.py`, `app/ingestion_worker.py`, `app/repositories/ingestion_repo.py`: dùng chung hàng đợi, gia hạn và lưu Bronze.

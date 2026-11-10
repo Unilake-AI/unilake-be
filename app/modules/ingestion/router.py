@@ -6,17 +6,15 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
-from minio.error import MinioException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from urllib3.exceptions import HTTPError
 
 from app.core.config import settings
 from app.core.deps import get_current_user, require_role
 from app.core.exceptions import AppException
 from app.core.roles import RoleCode
 from app.dependencies import get_db
-from app.modules.ingestion.execution import IngestionExecutionService, ingestion_read_domains
+from app.modules.ingestion.execution import IngestionExecutionService
 from app.modules.ingestion.schemas import (
     IngestionAttemptRead,
     IngestionJobMetrics,
@@ -26,11 +24,14 @@ from app.modules.ingestion.schemas import (
     IngestionStart,
     IngestionWorkerRead,
 )
-from app.modules.ingestion.uploads import UploadDomain, receive_upload
+from app.modules.staff.contracts import ingestion as ingestion_service
+from app.modules.staff.contracts import uploads as uploads_service
 from app.repositories.ingestion_repo import IngestionRepository
 
 if TYPE_CHECKING:
     from app.modules.ingestion.models import IngestionJob
+
+UploadDomain = uploads_service.UploadDomain
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 
@@ -60,26 +61,20 @@ async def list_jobs(
     dataset_id: Annotated[int | None, Query(gt=0)] = None,
     status: IngestionJobStatus | None = None,
     mine_only: bool = False,
-) -> list[IngestionJob]:
-    return await IngestionRepository(db).list(
-        data_source_id,
-        limit,
-        offset,
-        ingestion_read_domains(user),
-        dataset_id=dataset_id,
-        status=status,
-        requested_by=str(user["sub"]) if mine_only else None,
+) -> list[IngestionJobRead]:
+    return await ingestion_service.list_jobs(
+        db, user, data_source_id, limit, offset, dataset_id, status, mine_only
     )
 
 
 @router.get("/jobs/stats", response_model=IngestionJobStats)
 async def job_stats(db: DB, user: User) -> dict[str, int]:
-    return await IngestionRepository(db).stats(ingestion_read_domains(user))
+    return await ingestion_service.job_stats(db, user)
 
 
 @router.get("/jobs/metrics", response_model=IngestionJobMetrics)
 async def job_metrics(db: DB, user: User) -> dict[str, float | None]:
-    return await IngestionRepository(db).metrics(ingestion_read_domains(user))
+    return await ingestion_service.job_metrics(db, user)
 
 
 @router.get("/workers", response_model=list[IngestionWorkerRead])
@@ -112,13 +107,13 @@ async def retry_job(job_id: int, db: DB, user: Admin) -> IngestionJob:
 
 
 @router.get("/jobs/{job_id}/attempts", response_model=list[IngestionAttemptRead])
-async def job_attempts(job_id: int, db: DB, user: User) -> list[IngestionJob]:
-    return await IngestionRepository(db).attempts(job_id, ingestion_read_domains(user))
+async def job_attempts(job_id: int, db: DB, user: User) -> list[IngestionAttemptRead]:
+    return await ingestion_service.job_attempts(job_id, db, user)
 
 
 @router.get("/jobs/{job_id}", response_model=IngestionJobRead)
-async def get_job(job_id: int, db: DB, user: User) -> IngestionJob:
-    return await IngestionRepository(db).get(job_id, ingestion_read_domains(user))
+async def get_job(job_id: int, db: DB, user: User) -> IngestionJobRead:
+    return await ingestion_service.get_job(job_id, db, user)
 
 
 @router.post(
@@ -154,30 +149,7 @@ async def upload_ingestion(
             description="Chỉ cần chọn khi tạo mới và tài khoản có nhiều lĩnh vực hoặc là quản trị"
         ),
     ] = None,
-) -> IngestionJob:
-    try:
-        return await receive_upload(
-            db,
-            file,
-            dataset_id,
-            parser_options,
-            user,
-            dataset_name=dataset_name,
-            description=description,
-            domain=domain,
-        )
-    except SQLAlchemyError:
-        await db.rollback()
-        raise AppException(
-            "Không thể tạo job tải file", code="INGESTION_QUEUE_UNAVAILABLE", status_code=503
-        ) from None
-    except AppException:
-        await db.rollback()
-        raise
-    except (MinioException, HTTPError, OSError, ValueError):
-        await db.rollback()
-        raise AppException(
-            "Không thể lưu file tiếp nhận", code="UPLOAD_STORAGE_UNAVAILABLE", status_code=503
-        ) from None
-    finally:
-        await file.close()
+) -> IngestionJobRead:
+    return await uploads_service.upload_file(
+        db, user, file, dataset_id, parser_options, dataset_name, description, domain
+    )

@@ -21,11 +21,12 @@ from app.core.deps import get_current_user
 from app.core.exceptions import AppException, app_exception_handler
 from app.dependencies import get_db
 from app.modules.datasources.models import DataLayer, Dataset, DataSource, SourceSystem
-from app.modules.ingestion import upload_capture, uploads
+from app.modules.ingestion import upload_capture
 from app.modules.ingestion.execution import IngestionExecutionService, validate_context
 from app.modules.ingestion.models import IngestionJob
 from app.modules.ingestion.router import router
 from app.modules.ingestion.upload_capture import UploadCapture, upload_request
+from app.modules.staff.services import uploads
 
 
 class MemoryStore:

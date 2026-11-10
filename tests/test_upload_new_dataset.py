@@ -17,10 +17,10 @@ from app.core.exceptions import AppException, app_exception_handler
 from app.dependencies import get_db
 from app.modules.datasources.datasets_router import router as datasets_router
 from app.modules.datasources.models import DataLayer, Dataset, DataSource, SourceSystem
-from app.modules.ingestion import uploads
 from app.modules.ingestion.models import IngestionJob
 from app.modules.ingestion.router import router
 from app.modules.ingestion.upload_capture import upload_request
+from app.modules.staff.services import uploads
 from app.repositories.ingestion_repo import IngestionRepository
 from tests.test_ingestion_uploads import MemoryStore
 

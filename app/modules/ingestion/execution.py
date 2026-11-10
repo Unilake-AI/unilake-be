@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import re
-from typing import TYPE_CHECKING, Any, ParamSpec, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Protocol
 
 from minio.error import MinioException
 from sqlalchemy.exc import SQLAlchemyError
@@ -15,8 +14,6 @@ from app.core.exceptions import AppException
 from app.core.roles import (
     DATA_READ_ROLES,
     DATA_WRITE_ROLES,
-    UPLOAD_STAFF_DOMAINS,
-    UPLOAD_WRITE_ROLES,
 )
 from app.modules.datasources.contracts import CatalogSource
 from app.modules.governance.contracts import (
@@ -30,6 +27,7 @@ from app.modules.ingestion.input_validator import ValidationBlockedError, requir
 from app.modules.ingestion.readers.request_builder import build_read_request
 from app.modules.ingestion.validation_binding import bind_policy, pin_policy
 from app.repositories.ingestion_repo import IngestionRepository, utcnow
+from app.shared.async_io import run_io
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -40,9 +38,6 @@ if TYPE_CHECKING:
     from app.modules.ingestion.readers.contract import ReadRequest
     from app.modules.ingestion.schemas import IngestionStart
     from app.repositories.ingestion_repo import SourceContext
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 
 class CaptureReader(Protocol):
@@ -59,37 +54,6 @@ def authorize(user: dict[str, Any], *, write: bool = False) -> None:
         raise AppException(
             "Không có quyền thực thi thao tác ingestion", code="FORBIDDEN", status_code=403
         )
-
-
-def upload_domains(user: dict[str, Any]) -> frozenset[str] | None:
-    """Trả về miền được tải file; ``None`` nghĩa là được tải mọi miền."""
-    roles = user.get("roles", [])
-    roles = [roles] if isinstance(roles, str) else roles
-    if not isinstance(roles, list | tuple | set):
-        raise AppException("Không có quyền tải file", code="FORBIDDEN", status_code=403)
-    role_set = set(roles)
-    if not UPLOAD_WRITE_ROLES.isdisjoint(role_set):
-        if not DATA_WRITE_ROLES.isdisjoint(role_set):
-            return None
-        return frozenset(
-            domain for role, domain in UPLOAD_STAFF_DOMAINS.items() if role in role_set
-        )
-    raise AppException("Không có quyền tải file", code="FORBIDDEN", status_code=403)
-
-
-def ingestion_read_domains(user: dict[str, Any]) -> frozenset[str] | None:
-    """Trả về miền job có thể xem; quản trị dữ liệu được xem toàn bộ."""
-    roles = user.get("roles", [])
-    roles = [roles] if isinstance(roles, str) else roles
-    if not isinstance(roles, list | tuple | set):
-        raise AppException("Không có quyền xem tác vụ ingestion", code="FORBIDDEN", status_code=403)
-    role_set = set(roles)
-    if not DATA_WRITE_ROLES.isdisjoint(role_set):
-        return None
-    domains = frozenset(domain for role, domain in UPLOAD_STAFF_DOMAINS.items() if role in role_set)
-    if domains:
-        return domains
-    raise AppException("Không có quyền xem tác vụ ingestion", code="FORBIDDEN", status_code=403)
 
 
 def classify_failure(stage: str, exc: Exception) -> tuple[str, bool]:
@@ -138,17 +102,6 @@ def validate_context(context: SourceContext, source_table: str) -> ReadRequest:
     elif not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?", source_table):
         raise ValueError("INVALID_SOURCE_TABLE")
     return request
-
-
-async def run_io(function: Callable[P, R], *args: P.args, **kwargs: P.kwargs) -> R:
-    """Hoàn tất I/O trên luồng trước khi giải phóng tệp tạm khi bị hủy."""
-    task = asyncio.create_task(asyncio.to_thread(function, *args, **kwargs))
-    try:
-        return await asyncio.shield(task)
-    except asyncio.CancelledError:
-        with contextlib.suppress(Exception):
-            await task
-        raise
 
 
 class IngestionExecutionService:

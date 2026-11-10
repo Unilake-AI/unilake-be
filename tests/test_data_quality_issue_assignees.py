@@ -9,7 +9,8 @@ from fastapi.testclient import TestClient
 
 from app.core.exceptions import AppException, app_exception_handler
 from app.dependencies import get_db
-from app.modules.pipeline import data_quality_issues_router as api
+from app.modules.pipeline.data_quality_issues_router import _actor, router
+from app.modules.staff.services import quality_issues as api
 
 
 @pytest.mark.parametrize(
@@ -34,11 +35,11 @@ def test_resolution_requires_current_assignee_with_active_department_scope(
     )
     execute = AsyncMock()
     monkeypatch.setattr(api, "_issue", load)
-    monkeypatch.setattr(api, "_execute", execute)
+    monkeypatch.setattr(api.quality_issue_repo, "update_issue", execute)
     app = FastAPI()
     app.add_exception_handler(AppException, app_exception_handler)
-    app.include_router(api.router)
-    app.dependency_overrides[api._actor] = lambda: actor
+    app.include_router(router)
+    app.dependency_overrides[_actor] = lambda: actor
     app.dependency_overrides[get_db] = lambda: None
 
     with TestClient(app) as client:
