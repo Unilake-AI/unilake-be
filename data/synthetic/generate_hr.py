@@ -7,10 +7,12 @@ Cách chạy (từ thư mục gốc repo), chạy trước vì mẫu Tuyển sin
 Ghi data/samples/hr/*.csv. Cùng seed cho cùng kết quả. Mọi người, số điện thoại và email đều là giả lập.
 """
 
+from __future__ import annotations
+
 import csv
 import random
-import sys
 import subprocess
+import sys
 import unicodedata
 from datetime import date
 from pathlib import Path
@@ -23,11 +25,7 @@ if __name__ == "__main__" and len(sys.argv) == 1:
     )
     raise SystemExit(0)
 
-ROOT = (
-    Path(sys.argv[1])
-    if len(sys.argv) > 1
-    else Path(__file__).resolve().parents[1] / "samples"
-)
+ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / "samples"
 rng = random.Random(20260927)
 
 
@@ -645,9 +643,7 @@ for eid, (name, gender, dob, lect, status, career, quals) in enumerate(EMPLOYEES
         if rng.random() < 0.1
         else rng.choice(["09", "03", "07", "08"]) + (f"{rng.randrange(10**8):08d}")
     )
-    employees.append(
-        (eid, f"NV{eid:04d}", name, dob, gender, email, phone, hire, status)
-    )
+    employees.append((eid, f"NV{eid:04d}", name, dob, gender, email, phone, hire, status))
     if lect:
         lecturers.append((eid, *lect))
     for code, year, org in quals:

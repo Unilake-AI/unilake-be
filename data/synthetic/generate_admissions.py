@@ -5,10 +5,12 @@ Ghi data/samples/admissions/*.csv và training/student.csv. Cùng seed cho cùng
 Mọi người, mã định danh, số điện thoại và email đều là giả lập.
 """
 
+from __future__ import annotations
+
 import csv
 import random
-import sys
 import subprocess
+import sys
 import unicodedata
 from datetime import date, timedelta
 from pathlib import Path
@@ -21,11 +23,7 @@ if __name__ == "__main__" and len(sys.argv) == 1:
     )
     raise SystemExit(0)
 
-ROOT = (
-    Path(sys.argv[1])
-    if len(sys.argv) > 1
-    else Path(__file__).resolve().parents[1] / "samples"
-)
+ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / "samples"
 rng = random.Random(20260925)
 
 
@@ -259,7 +257,9 @@ for year_id, y in YEARS.items():
     for _ in range(PER_YEAR):
         aid += 1
         gender = rng.choice(["Male", "Female"])
-        full_name = f"{rng.choices(last, last_w)[0]} {rng.choice(mid[gender])} {rng.choice(first[gender])}"
+        full_name = (
+            f"{rng.choices(last, last_w)[0]} {rng.choice(mid[gender])} {rng.choice(first[gender])}"
+        )
         birth_year = y - 18 if rng.random() < 0.9 else y - 19
         dob = rand_date(date(birth_year, 1, 1), date(birth_year, 12, 31))
         prov, pcode, _, schools = rng.choices(provinces, [p[2] for p in provinces])[0]
@@ -277,14 +277,8 @@ for year_id, y in YEARS.items():
         email = None
         if rng.random() < 0.85:
             parts = ascii_slug(full_name).split()
-            base = (
-                f"{parts[-1]}.{''.join(p[0] for p in parts[:-1])}{dob.strftime('%d%m')}"
-            )
-            email = (
-                f"{base}@example.com"
-                if base not in used_emails
-                else f"{base}{aid}@example.com"
-            )
+            base = f"{parts[-1]}.{''.join(p[0] for p in parts[:-1])}{dob.strftime('%d%m')}"
+            email = f"{base}@example.com" if base not in used_emails else f"{base}{aid}@example.com"
             used_emails.add(base)
         school = None if rng.random() < 0.05 else rng.choice(schools)
         applicants.append(
@@ -320,27 +314,19 @@ for year_id, y in YEARS.items():
             if method == 1:
                 app_date = rand_date(date(y, 7, 16), date(y, 7, 28))
                 score = (
-                    round(
-                        min(29.5, max(12.0, 21.0 + 3.3 * ability + rng.gauss(0, 1.0)))
-                        * 20
-                    )
-                    / 20
+                    round(min(29.5, max(12.0, 21.0 + 3.3 * ability + rng.gauss(0, 1.0))) * 20) / 20
                 )
             elif method == 2:
                 app_date = rand_date(date(y, 3, 15), date(y, 6, 15))
                 cutoff = min(28.5, cutoff + 2.0)
-                score = round(
-                    min(29.8, max(17.0, 24.3 + 2.2 * ability + rng.gauss(0, 0.8))), 1
-                )
+                score = round(min(29.8, max(17.0, 24.3 + 2.2 * ability + rng.gauss(0, 0.8))), 1)
             else:
                 app_date = rand_date(date(y, 4, 1), date(y, 6, 20))
                 score = None
             if method == 3:
                 eligible = ability > 1.4
             else:
-                assert (
-                    score is not None
-                )  # Phương thức 1 và 2 luôn tính ra điểm dạng số.
+                assert score is not None  # Phương thức 1 và 2 luôn tính ra điểm dạng số.
                 eligible = score >= cutoff
             if eligible and not accepted_done:
                 status, accepted_done = "Accepted", True
@@ -367,11 +353,7 @@ for year_id, y in YEARS.items():
             if status == "Accepted":
                 enr_id += 1
                 r = rng.random()
-                estatus = (
-                    "Enrolled"
-                    if r < 0.82
-                    else ("Deferred" if r < 0.88 else "Cancelled")
-                )
+                estatus = "Enrolled" if r < 0.82 else ("Deferred" if r < 0.88 else "Cancelled")
                 student_id = None
                 if estatus == "Enrolled":
                     stu_id += 1
@@ -402,9 +384,7 @@ for year_id, y in YEARS.items():
                         enr_id,
                         adm_id,
                         student_id,
-                        rand_date(
-                            result_day + timedelta(days=2), date(y, 9, 12)
-                        ).isoformat(),
+                        rand_date(result_day + timedelta(days=2), date(y, 9, 12)).isoformat(),
                         estatus,
                     )
                 )
@@ -414,12 +394,7 @@ for year_id, y in YEARS.items():
             taken = {(w[0][0], w[1]) for w in wishes}
             prog = rng.choice([p for p in ug if (p[0], 1) not in taken])
             adm_id += 1
-            score = (
-                round(
-                    min(29.5, max(12.0, 21.0 + 3.3 * ability + rng.gauss(0, 1.0))) * 20
-                )
-                / 20
-            )
+            score = round(min(29.5, max(12.0, 21.0 + 3.3 * ability + rng.gauss(0, 1.0))) * 20) / 20
             admissions.append(
                 (
                     adm_id,

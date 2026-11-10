@@ -54,8 +54,14 @@ async def cleanup_staging() -> None:
     for evidence in inputs:
         uri = urlsplit(str(evidence.get("uri", "")))
         version = evidence.get("version_id")
-        if uri.scheme == "s3" and uri.netloc == settings.minio_bucket_uploads and isinstance(version, str):
-            storage.remove_object(settings.minio_bucket_uploads, uri.path.lstrip("/"), version_id=version)
+        if (
+            uri.scheme == "s3"
+            and uri.netloc == settings.minio_bucket_uploads
+            and isinstance(version, str)
+        ):
+            storage.remove_object(
+                settings.minio_bucket_uploads, uri.path.lstrip("/"), version_id=version
+            )
 
 
 async def job_heartbeat(job_id: int) -> None:
