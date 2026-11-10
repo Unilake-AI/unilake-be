@@ -41,8 +41,9 @@ from app.modules.pipeline.silver_pipeline import NormalizationTask, SilverPipeli
 from app.modules.pipeline.silver_publication import SilverPublicationService
 from app.modules.pipeline.silver_repository import SilverRepository
 from app.modules.pipeline.silver_storage import MinioSilverStore, SilverError, checksum
-from app.modules.pipeline.source_profiles import SourceProfile, _tuples, load_profile
+from app.modules.pipeline.source_profiles import SourceProfile, _tuples
 from app.providers import silver_writer_client, source_reader_client
+from app.repositories.silver_profile_repo import load_source_profile
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
@@ -300,7 +301,7 @@ def run_manual_cleaning(
     cleaning_completed = False
     publication_committed = False
     try:
-        profile = load_profile(settings.silver_profiles_path, profile_id)
+        profile = load_source_profile(engine, settings.silver_profiles_path, profile_id)
         context = _job_context(engine, ingestion_job_id)
         _bind_profile(context, profile)
         mapping, identity = _identity_service(engine, profile)
@@ -491,3 +492,39 @@ def _log_report(requested_by: str, report: dict[str, Any]) -> None:
         issue_codes,
         (report["publication"] or {}).get("snapshot_id"),
     )
+
+
+def preview_cleaning(
+    engine: Any, ingestion_job_id: int, profile_id: str, limit: int
+) -> dict[str, Any]:
+    """Đọc và kiểm tra đầy đủ, chỉ trả một số dòng xem trước và không công bố dữ liệu."""
+    profile = load_source_profile(engine, settings.silver_profiles_path, profile_id)
+    context = _job_context(engine, ingestion_job_id)
+    _bind_profile(context, profile)
+    mapping, identity = _identity_service(engine, profile)
+    cleaned = CleaningPipeline().clean(_read_bronze(context, profile))
+    mapped = mapping.map_batch(cleaned.batch)
+    typed = identity.types.standardize(mapped)
+    normalized = identity.standardize(typed)
+    report = cleaned.report
+    return {
+        "preview": True,
+        "ingestion_job_id": ingestion_job_id,
+        "profile_id": profile_id,
+        "profile_fingerprint": profile.fingerprint,
+        "records_read": report.records_read,
+        "records_passed_cleaning": report.records_passed,
+        "records_quarantined": report.records_quarantined,
+        "records_collapsed": report.records_collapsed,
+        "records_normalized": len(normalized.accepted),
+        "cleaning_issues": [asdict(issue) for issue in report.issues],
+        "normalization_issues": [
+            *[asdict(issue) for issue in normalized.mapping_issues],
+            *[asdict(issue) for issue in normalized.type_issues],
+            *[asdict(issue) for issue in normalized.issues],
+        ],
+        "cleaned_sample": list(cleaned.batch.records[:limit]),
+        "normalized_sample": [row.values for row in normalized.accepted[:limit]],
+        "publication_checked": False,
+        "note": "Bản xem trước chưa kiểm tra liên kết với toàn bộ phiên bản Silver; bước công bố sẽ kiểm tra tiếp.",
+    }

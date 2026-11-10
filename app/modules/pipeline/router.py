@@ -4,15 +4,17 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Query
 from minio.error import S3Error
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.deps import require_role
 from app.core.exceptions import AppException
 from app.core.roles import RoleCode
-from app.modules.pipeline.source_cleaning import run_manual_cleaning
+from app.modules.pipeline.management_db import management_engine
+from app.modules.pipeline.source_cleaning import preview_cleaning, run_manual_cleaning
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
@@ -42,6 +44,32 @@ class ManualCleaningResponse(BaseModel):
 
 
 Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.ADMIN, RoleCode.DATA_ADMIN))]
+
+
+class CleaningPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    profile_id: str = Field(min_length=1, max_length=100)
+
+
+@router.post(
+    "/cleaning/ingestion-jobs/{ingestion_job_id}/preview",
+    tags=["silver-preview"],
+    summary="Xem trước làm sạch và chuẩn hóa từ Bronze",
+    description="Kiểm tra toàn bộ file và trả mẫu tối đa 100 dòng. Không lưu bản ghi lỗi, không ghi Silver, không thay đổi phiên bản hiện hành.",
+)
+def preview_cleaning_for_job(
+    ingestion_job_id: Annotated[int, Path(gt=0)],
+    request: CleaningPreviewRequest,
+    _admin: Admin,
+    db: Annotated[Engine, Depends(management_engine)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> dict[str, Any]:
+    try:
+        return preview_cleaning(db, ingestion_job_id, request.profile_id, limit)
+    except LookupError:
+        raise AppException(
+            "Không tìm thấy ingestion job", code="INGESTION_JOB_NOT_FOUND", status_code=404
+        ) from None
 
 
 @router.post(

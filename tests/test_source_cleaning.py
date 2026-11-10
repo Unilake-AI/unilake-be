@@ -174,7 +174,7 @@ def test_file_to_cleaning_to_production_parquet(
     )
     storage = LocalSilverStore(tmp_path / "silver")
     monkeypatch.setattr(runner, "create_engine", lambda *_args, **_kwargs: engine)
-    monkeypatch.setattr(runner, "load_profile", lambda *_: profile)
+    monkeypatch.setattr(runner, "load_source_profile", lambda *_: profile)
     monkeypatch.setattr(runner, "_job_context", lambda *_: context)
     monkeypatch.setattr(runner, "_identity_service", lambda *_: profile.services(crosswalk))
 
@@ -189,6 +189,15 @@ def test_file_to_cleaning_to_production_parquet(
     monkeypatch.setattr(runner, "source_reader_client", lambda *_: client)
     monkeypatch.setattr(runner, "silver_writer_client", lambda: None)
     monkeypatch.setattr(runner, "MinioSilverStore", lambda *_: storage)
+    preview = runner.preview_cleaning(engine, 42, "positions", 1)
+    assert preview["preview"] is True
+    assert preview["publication_checked"] is False
+    assert preview["records_read"] == len(rows)
+    assert preview["records_quarantined"] == (1 if invalid else 0)
+    assert len(preview["normalized_sample"]) == 1
+    with engine.connect() as connection:
+        assert connection.execute(select(CLEANING_RUNS)).first() is None
+    assert SilverRepository(engine).head("production:institution") is None
     result = runner.run_manual_cleaning(
         42, requested_by="1", profile_id="positions", base_snapshot=None
     )

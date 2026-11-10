@@ -79,6 +79,8 @@ Giữ Docker Command mặc định và đặt Health Check Path là `/health`.
 Image chạy Uvicorn trên `0.0.0.0`, đọc `PORT` do Render cung cấp.
 Render không tự chạy các service trong Docker Compose.
 
+Để dùng các API mới cho Bronze → Silver trên Swagger, xem [hướng dẫn quản lý Silver](silver-management-api.md). Cần áp dụng migration `20261110_silver_management.sql` trên database Render; profile tạo qua API được lưu trong PostgreSQL và được giữ qua các lần triển khai.
+
 Thêm các biến môi trường trong Render Dashboard:
 
 | Biến | Giá trị |

@@ -398,6 +398,15 @@ CREATE INDEX IF NOT EXISTS ix_ingestion_execution_queue
 CREATE INDEX IF NOT EXISTS ix_ingestion_job_root_attempt
     ON ingestion_job(root_job_id, attempt_number);
 
+CREATE TABLE IF NOT EXISTS silver_source_profile (
+    profile_id VARCHAR(100) PRIMARY KEY,
+    definition JSONB NOT NULL,
+    fingerprint VARCHAR(64) NOT NULL,
+    revision INTEGER NOT NULL CHECK (revision > 0),
+    updated_by VARCHAR(100) NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS ingestion_worker_heartbeat (
     worker_id VARCHAR(100) PRIMARY KEY,
     current_job_id BIGINT REFERENCES ingestion_job(ingestion_job_id),
