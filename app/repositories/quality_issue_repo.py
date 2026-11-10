@@ -1,4 +1,4 @@
-"""Đọc bằng chứng nạp dữ liệu cho yêu cầu sửa, không đổi trạng thái yêu cầu."""
+"""Đọc và lưu yêu cầu sửa dữ liệu cùng bằng chứng nạp liên quan."""
 
 from __future__ import annotations
 
@@ -6,13 +6,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, select
+from sqlalchemy import false, func, insert, select, text, update
 
 from app.modules.datasources.models import DataLayer
 from app.modules.ingestion.models import IngestionJob
 from app.modules.pipeline.models import (
     CLEANING_RUNS,
+    DATA_QUALITY_ISSUE_EVENTS,
     DATA_QUALITY_ISSUE_RECORDS,
+    DATA_QUALITY_ISSUES,
     DATASET_CATALOG,
     QUARANTINE_RECORDS,
 )
@@ -142,3 +144,143 @@ async def resolution_job(
         job.created_at,
         job.upload_input,
     )
+
+
+def _issue_query(
+    *,
+    is_admin: bool,
+    departments: frozenset[int],
+    domains: frozenset[str],
+    user_id: int,
+    department_id: int | None = None,
+    assignee_user_id: int | None = None,
+    status: str | None = None,
+    mine_only: bool = False,
+) -> Any:
+    columns = DATA_QUALITY_ISSUES.c
+    query = select(DATA_QUALITY_ISSUES)
+    if not is_admin:
+        query = (
+            query.where(columns.department_id.in_(departments), columns.domain.in_(domains))
+            if departments
+            else query.where(false())
+        )
+    if department_id is not None:
+        query = query.where(columns.department_id == department_id)
+    if assignee_user_id is not None:
+        query = query.where(columns.assignee_user_id == assignee_user_id)
+    if status is not None:
+        query = query.where(columns.status == status)
+    if mine_only:
+        query = query.where(columns.assignee_user_id == user_id)
+    return query
+
+
+async def get_issue(
+    db: AsyncSession,
+    issue_id: str,
+    *,
+    is_admin: bool,
+    departments: frozenset[int],
+    domains: frozenset[str],
+    user_id: int,
+    lock: bool = False,
+) -> dict[str, Any] | None:
+    query = _issue_query(
+        is_admin=is_admin, departments=departments, domains=domains, user_id=user_id
+    ).where(DATA_QUALITY_ISSUES.c.issue_id == issue_id)
+    # Chỉ một thao tác được đổi trạng thái yêu cầu tại một thời điểm.
+    if lock:
+        query = query.with_for_update()
+    row = (await db.execute(query)).mappings().one_or_none()
+    return dict(row) if row is not None else None
+
+
+async def linked_record_ids(db: AsyncSession, issue_id: str) -> list[str]:
+    return list(
+        (
+            await db.execute(
+                select(L.record_id).where(L.issue_id == issue_id).order_by(L.record_id)
+            )
+        ).scalars()
+    )
+
+
+async def issue_history(db: AsyncSession, issue_id: str) -> list[dict[str, Any]]:
+    columns = DATA_QUALITY_ISSUE_EVENTS.c
+    rows = (
+        await db.execute(
+            select(DATA_QUALITY_ISSUE_EVENTS)
+            .where(columns.issue_id == issue_id)
+            .order_by(columns.event_id)
+        )
+    ).mappings()
+    return [dict(row) for row in rows]
+
+
+async def active_department_id(db: AsyncSession, department_id: int) -> int | None:
+    return (
+        await db.execute(
+            text(
+                "SELECT department_id FROM app.department WHERE department_id = :id AND status = 'ACTIVE'"
+            ),
+            {"id": department_id},
+        )
+    ).scalar_one_or_none()
+
+
+async def insert_issue(db: AsyncSession, values: dict[str, Any]) -> None:
+    await db.execute(insert(DATA_QUALITY_ISSUES).values(**values))
+
+
+async def link_records(db: AsyncSession, issue_id: str, record_ids: set[str]) -> None:
+    await db.execute(
+        insert(DATA_QUALITY_ISSUE_RECORDS),
+        [{"issue_id": issue_id, "record_id": record_id} for record_id in sorted(record_ids)],
+    )
+
+
+async def add_event(db: AsyncSession, values: dict[str, Any]) -> None:
+    await db.execute(insert(DATA_QUALITY_ISSUE_EVENTS).values(**values))
+
+
+async def update_issue(db: AsyncSession, issue_id: str, values: dict[str, Any]) -> None:
+    await db.execute(
+        update(DATA_QUALITY_ISSUES)
+        .where(DATA_QUALITY_ISSUES.c.issue_id == issue_id)
+        .values(**values)
+    )
+
+
+async def list_issues(
+    db: AsyncSession, *, limit: int, offset: int, **scope: Any
+) -> list[dict[str, Any]]:
+    columns = DATA_QUALITY_ISSUES.c
+    query = (
+        _issue_query(**scope)
+        .order_by(columns.updated_at.desc(), columns.issue_id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return [dict(row) for row in (await db.execute(query)).mappings()]
+
+
+async def issue_stats(db: AsyncSession, **scope: Any) -> dict[str, int]:
+    items = _issue_query(**scope).subquery()
+    query = select(
+        func.count().label("total"),
+        func.count().filter(items.c.status == "ASSIGNED").label("assigned"),
+        func.count().filter(items.c.status == "PENDING_VERIFICATION").label("pending_verification"),
+        func.count().filter(items.c.status == "VERIFIED").label("verified"),
+    ).select_from(items)
+    return dict((await db.execute(query)).mappings().one())
+
+
+async def verification_run(
+    db: AsyncSession, run_id: str, resolution_job_id: int | None, dataset_id: int
+) -> dict[str, Any] | None:
+    query = select(R.cleaning_status, R.publication_status, R.finished_at, R.entity).where(
+        R.run_id == run_id, R.ingestion_job_id == resolution_job_id, R.dataset_id == dataset_id
+    )
+    row = (await db.execute(query)).mappings().one_or_none()
+    return dict(row) if row is not None else None

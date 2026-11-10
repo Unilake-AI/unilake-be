@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from app.modules.datasources.schemas import DatasetRead as DatasetRead
+
 
 @dataclass(frozen=True)
 class CatalogSource:

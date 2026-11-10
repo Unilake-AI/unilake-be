@@ -11,20 +11,23 @@ from time import monotonic
 from typing import TYPE_CHECKING, Any, Literal, Self
 from uuid import uuid4
 
+from minio.error import MinioException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from sqlalchemy.exc import SQLAlchemyError
+from urllib3.exceptions import HTTPError
 
 from app.core.config import settings
 from app.core.exceptions import AppException
-from app.modules.ingestion.execution import run_io, upload_domains
+from app.modules.ingestion.contracts.jobs import IngestionJobRead
+from app.modules.staff.services.access import upload_domains
 from app.providers import upload_writer_client
 from app.repositories.ingestion_repo import UPLOAD_JOB_TYPE, IngestionRepository
 from app.repositories.upload_repo import create_upload_target, upload_target
+from app.shared.async_io import run_io
 
 if TYPE_CHECKING:
     from fastapi import UploadFile
     from sqlalchemy.ext.asyncio import AsyncSession
-
-    from app.modules.ingestion.models import IngestionJob
 
 
 UploadDomain = Literal["hr", "academic", "admissions"]
@@ -194,7 +197,7 @@ async def receive_upload(
     description: str | None = None,
     domain: UploadDomain | None = None,
     quality_issue_id: str | None = None,
-) -> IngestionJob:
+) -> IngestionJobRead:
     allowed_domains = upload_domains(user)
     try:
         destination = UploadDestination(
@@ -273,7 +276,7 @@ async def receive_upload(
         if quality_issue_id is not None:
             # Chỉ luồng sửa lỗi đã kiểm tra người phụ trách mới được gắn yêu cầu vào file.
             reference["quality_issue_id"] = quality_issue_id
-        return await IngestionRepository(db).create(
+        job = await IngestionRepository(db).create(
             job_type=UPLOAD_JOB_TYPE,
             data_source_id=source.data_source_id,
             dataset_id=dataset_id,
@@ -284,5 +287,67 @@ async def receive_upload(
             stage="QUEUED",
             upload_input=reference,
         )
+        return IngestionJobRead.model_validate(job)
     finally:
         await file.close()
+
+
+async def upload_file(
+    db: AsyncSession,
+    user: dict[str, Any],
+    file: UploadFile,
+    dataset_id: int | None = None,
+    parser_options: str = "{}",
+    dataset_name: str | None = None,
+    description: str | None = None,
+    domain: UploadDomain | None = None,
+) -> IngestionJobRead:
+    """Tiếp nhận file và hoàn tác đăng ký khi bước lưu không thành công."""
+    try:
+        return await receive_upload(
+            db,
+            file,
+            dataset_id,
+            parser_options,
+            user,
+            dataset_name=dataset_name,
+            description=description,
+            domain=domain,
+        )
+    except SQLAlchemyError:
+        await db.rollback()
+        raise AppException(
+            "Không thể tạo job tải file", code="INGESTION_QUEUE_UNAVAILABLE", status_code=503
+        ) from None
+    except AppException:
+        await db.rollback()
+        raise
+    except (MinioException, HTTPError, OSError, ValueError):
+        await db.rollback()
+        raise AppException(
+            "Không thể lưu file tiếp nhận", code="UPLOAD_STORAGE_UNAVAILABLE", status_code=503
+        ) from None
+    finally:
+        await file.close()
+
+
+def safe_upload_filename(filename: str | None) -> str:
+    return file_type(filename)[0]
+
+
+def supported_parser_options(options: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in options.items() if key in UploadParser.model_fields}
+
+
+async def receive_issue_upload(
+    db: AsyncSession,
+    file: UploadFile,
+    dataset_id: int,
+    parser_options: str,
+    user: dict[str, Any],
+    *,
+    quality_issue_id: str,
+) -> IngestionJobRead:
+    return await receive_upload(
+        db, file, dataset_id, parser_options, user, quality_issue_id=quality_issue_id
+    )

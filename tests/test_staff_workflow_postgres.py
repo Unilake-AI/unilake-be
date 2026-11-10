@@ -26,7 +26,7 @@ from app.infra.db.base import Base
 from app.modules.auth.models import Role, UserRole
 from app.modules.datasources.datasets_router import router as datasets_router
 from app.modules.datasources.models import DataLayer, Dataset, DataSource, SourceSystem
-from app.modules.ingestion import upload_capture, uploads
+from app.modules.ingestion import upload_capture
 from app.modules.ingestion.execution import IngestionExecutionService
 from app.modules.ingestion.models import IngestionJob
 from app.modules.ingestion.router import router as ingestion_router
@@ -42,6 +42,7 @@ from app.modules.pipeline.models import (
 )
 from app.modules.pipeline.router import router as pipeline_router
 from app.modules.staff.router import router as staff_router
+from app.modules.staff.services import uploads
 from app.modules.users.models import Assignment, Department, Employee, Position, User
 from app.repositories.ingestion_repo import IngestionRepository
 from tests.test_ingestion_uploads import MemoryStore

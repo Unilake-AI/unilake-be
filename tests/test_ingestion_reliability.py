@@ -11,7 +11,9 @@ from sqlalchemy.exc import ProgrammingError
 
 from app.core.exceptions import AppException
 from app.modules.ingestion import router
-from app.modules.ingestion.execution import classify_failure, ingestion_read_domains
+from app.modules.ingestion.execution import classify_failure
+from app.modules.staff.services import ingestion as ingestion_service
+from app.modules.staff.services.access import ingestion_read_domains
 from app.repositories.ingestion_repo import IngestionRepository
 
 
@@ -33,7 +35,7 @@ async def test_stats_uses_staff_domain(monkeypatch):
     repository.stats = AsyncMock(
         return_value={"total": 2, "queued": 1, "running": 0, "success": 1, "failed": 0}
     )
-    monkeypatch.setattr(router, "IngestionRepository", lambda _db: repository)
+    monkeypatch.setattr(ingestion_service, "IngestionRepository", lambda _db: repository)
 
     result = await router.job_stats(AsyncMock(), {"roles": ["HR_STAFF"]})
 

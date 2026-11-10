@@ -12,10 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, require_role
 from app.core.exceptions import AppException
-from app.core.roles import DATA_WRITE_ROLES, UPLOAD_STAFF_DOMAINS, RoleCode
+from app.core.roles import RoleCode
 from app.dependencies import get_db
 from app.modules.datasources.models import DataLayer, Dataset, SourceSystem
 from app.modules.datasources.schemas import DatasetRead, SourceSystemRead
+from app.modules.staff.contracts import datasets as datasets_service
 
 router = APIRouter(tags=["datasets"])
 DB = Annotated[AsyncSession, Depends(get_db)]
@@ -46,30 +47,8 @@ async def list_datasets(
     offset: Annotated[int, Query(ge=0)] = 0,
     search: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
     domain: Literal["hr", "academic", "admissions"] | None = None,
-) -> list[Dataset]:
-    roles = set(user.get("roles", []))
-    domains = [domain for role, domain in UPLOAD_STAFF_DOMAINS.items() if role in roles]
-    is_admin = not DATA_WRITE_ROLES.isdisjoint(roles)
-    if not is_admin and not domains:
-        raise AppException("Không có quyền chọn bộ dữ liệu", code="FORBIDDEN", status_code=403)
-    query = (
-        select(Dataset)
-        .join(DataLayer, DataLayer.data_layer_id == Dataset.data_layer_id)
-        .join(SourceSystem, SourceSystem.source_system_id == Dataset.source_system_id)
-        .where(
-            Dataset.status == "ACTIVE",
-            DataLayer.layer_code == "BRONZE",
-            SourceSystem.is_active.is_(True),
-        )
-    )
-    if not is_admin:
-        query = query.where(Dataset.domain.in_(domains))
-    if domain is not None:
-        query = query.where(Dataset.domain == domain)
-    if search is not None:
-        # Tìm theo tên hiển thị; dấu phần trăm người dùng nhập không được hiểu thành lấy tất cả.
-        query = query.where(Dataset.dataset_name.icontains(search.strip(), autoescape=True))
-    return list(await db.scalars(query.order_by(Dataset.dataset_id).limit(limit).offset(offset)))
+) -> list[DatasetRead]:
+    return await datasets_service.list_datasets(db, user, limit, offset, search, domain)
 
 
 @router.get(
@@ -77,30 +56,8 @@ async def list_datasets(
     response_model=DatasetRead,
     summary="Chi tiết bộ dữ liệu được phép tải file",
 )
-async def get_dataset(dataset_id: Annotated[int, Path(gt=0)], db: DB, user: User) -> Dataset:
-    roles = set(user.get("roles", []))
-    domains = [domain for role, domain in UPLOAD_STAFF_DOMAINS.items() if role in roles]
-    is_admin = not DATA_WRITE_ROLES.isdisjoint(roles)
-    if not is_admin and not domains:
-        raise AppException("Không có quyền chọn bộ dữ liệu", code="FORBIDDEN", status_code=403)
-    query = (
-        select(Dataset)
-        .join(DataLayer, DataLayer.data_layer_id == Dataset.data_layer_id)
-        .join(SourceSystem, SourceSystem.source_system_id == Dataset.source_system_id)
-        .where(
-            Dataset.dataset_id == dataset_id,
-            Dataset.status == "ACTIVE",
-            DataLayer.layer_code == "BRONZE",
-            SourceSystem.is_active.is_(True),
-        )
-    )
-    if not is_admin:
-        query = query.where(Dataset.domain.in_(domains))
-    dataset = await db.scalar(query)
-    if dataset is None:
-        # Không tiết lộ bộ dữ liệu của lĩnh vực khác khi có người đoán mã.
-        raise AppException("Không tìm thấy bộ dữ liệu", code="DATASET_NOT_FOUND", status_code=404)
-    return dataset
+async def get_dataset(dataset_id: Annotated[int, Path(gt=0)], db: DB, user: User) -> DatasetRead:
+    return await datasets_service.get_dataset(dataset_id, db, user)
 
 
 @router.post(
