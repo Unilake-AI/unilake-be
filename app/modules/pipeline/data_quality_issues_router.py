@@ -2,21 +2,31 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, TypeVar
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from minio.error import MinioException
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
-from sqlalchemy import false, insert, select, text, update
+from sqlalchemy import false, func, insert, select, text, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from urllib3.exceptions import HTTPError
 
 from app.core.deps import get_current_user
 from app.core.exceptions import AppException
 from app.core.roles import DATA_WRITE_ROLES, RoleCode
 from app.dependencies import get_db
+from app.modules.ingestion.contracts.uploads import (
+    IngestionJobRead,
+    receive_issue_upload,
+    safe_upload_filename,
+    supported_parser_options,
+)
 from app.modules.pipeline.models import (
     CLEANING_RUNS,
     DATA_QUALITY_ISSUE_EVENTS,
@@ -24,6 +34,13 @@ from app.modules.pipeline.models import (
     DATA_QUALITY_ISSUES,
     DATASET_CATALOG,
     QUARANTINE_RECORDS,
+)
+from app.repositories import quality_issue_repo
+from app.repositories.department_access_repo import (
+    active_department_choices,
+    active_departments,
+    active_roles,
+    eligible_assignees,
 )
 
 router = APIRouter(prefix="/data-quality-issues", tags=["data-quality-issues"])
@@ -41,6 +58,7 @@ DEPARTMENT_ROLES = {
     "academic": {RoleCode.ACADEMIC_MANAGER, RoleCode.ACADEMIC_STAFF},
     "hr": {RoleCode.HR_MANAGER, RoleCode.HR_STAFF},
 }
+Result = TypeVar("Result")
 
 
 class IssueInput(BaseModel):
@@ -75,6 +93,7 @@ class IssueFilters(BaseModel):
     department_id: int | None = Field(default=None, gt=0)
     assignee_user_id: int | None = Field(default=None, gt=0)
     status: IssueStatus | None = None
+    mine_only: bool = False
     limit: int = Field(default=20, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
 
@@ -114,6 +133,27 @@ class IssueQuarantineRecord(BaseModel):
     bronze_version: str
     error_codes: list[str]
     issues: list[dict[str, Any]]
+    entity: str
+    source_table: str | None
+
+
+class IssueStats(BaseModel):
+    total: int
+    assigned: int
+    pending_verification: int
+    verified: int
+
+
+class AssigneeChoice(BaseModel):
+    user_id: int
+    username: str
+    full_name: str
+
+
+class IssueDepartmentChoice(BaseModel):
+    department_id: int
+    department_code: str
+    department_name: str
 
 
 class IssueDetail(IssueRead):
@@ -137,6 +177,15 @@ def _error(code: str, message: str, status: int = 422) -> AppException:
     return AppException(message, code=code, status_code=status)
 
 
+async def _read(operation: Awaitable[Result]) -> Result:
+    try:
+        return await operation
+    except SQLAlchemyError:
+        raise _error(
+            "QUALITY_ISSUE_METADATA_UNAVAILABLE", "Không thể đọc bằng chứng xử lý", 503
+        ) from None
+
+
 async def _execute(db: AsyncSession, statement: Any, params: dict[str, Any] | None = None) -> Any:
     try:
         return await db.execute(statement, params)
@@ -147,42 +196,23 @@ async def _execute(db: AsyncSession, statement: Any, params: dict[str, Any] | No
 
 
 async def _active_roles(db: AsyncSession, user_id: int) -> set[str]:
-    return set(
-        (
-            await _execute(
-                db,
-                text("""
-        SELECT r.role_code FROM app.app_user u
-        JOIN app.user_role ur ON ur.app_user_id = u.app_user_id
-        JOIN app.role r ON r.role_id = ur.role_id
-        WHERE u.app_user_id = :user_id AND u.is_active
-    """),
-                {"user_id": user_id},
-            )
-        ).scalars()
-    )
+    try:
+        return await active_roles(db, user_id)
+    except SQLAlchemyError:
+        raise _error(
+            "QUALITY_ISSUE_METADATA_UNAVAILABLE", "Không thể đọc quyền hiện hành", 503
+        ) from None
 
 
 async def _active_departments(db: AsyncSession, user_id: int) -> frozenset[int]:
-    return frozenset(
-        (
-            await _execute(
-                db,
-                text("""
-        SELECT a.department_id FROM app.app_user u
-        JOIN app.employee e ON e.employee_id = u.employee_id
-        JOIN app.assignment a ON a.employee_id = e.employee_id
-        JOIN app.department d ON d.department_id = a.department_id
-        WHERE u.app_user_id = :user_id AND u.is_active
-          AND upper(e.employee_status) = 'ACTIVE'
-          AND upper(a.assignment_status) = 'ACTIVE' AND d.status = 'ACTIVE'
-          AND a.start_date <= (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
-          AND (a.end_date IS NULL OR a.end_date >= (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date)
-    """),
-                {"user_id": user_id},
-            )
-        ).scalars()
-    )
+    try:
+        return frozenset(
+            row["department_id"] for row in await active_department_choices(db, user_id)
+        )
+    except SQLAlchemyError:
+        raise _error(
+            "QUALITY_ISSUE_METADATA_UNAVAILABLE", "Không thể đọc phân công phòng ban", 503
+        ) from None
 
 
 async def _actor(db: DB, user: User) -> IssueActor:
@@ -264,26 +294,7 @@ async def _detail(db: AsyncSession, issue: dict[str, Any]) -> IssueDetail:
         )
     ).mappings()
     # Phòng ban xem được lý do và vị trí lỗi trong yêu cầu đã giao, không đọc dòng Bronze qua API này.
-    records = (
-        await _execute(
-            db,
-            select(
-                RECORD.record_id,
-                RECORD.cleaning_run_id,
-                RECORD.locator,
-                RECORD.record_position,
-                RECORD.error_codes,
-                RECORD.issues,
-                RUN.ingestion_job_id,
-                RUN.bronze_version,
-            )
-            .select_from(DATA_QUALITY_ISSUE_RECORDS)
-            .join(QUARANTINE_RECORDS, RECORD.record_id == LINK.record_id)
-            .join(CLEANING_RUNS, RUN.run_id == RECORD.cleaning_run_id)
-            .where(LINK.issue_id == issue["issue_id"])
-            .order_by(RUN.started_at, RECORD.record_position, RECORD.record_id),
-        )
-    ).mappings()
+    records = await _read(quality_issue_repo.issue_records(db, issue["issue_id"]))
     linked = [IssueQuarantineRecord.model_validate(dict(record)) for record in records]
     return IssueDetail(
         **issue,
@@ -291,6 +302,41 @@ async def _detail(db: AsyncSession, issue: dict[str, Any]) -> IssueDetail:
         quarantine_records=linked,
         history=[IssueEventRead.model_validate(dict(row)) for row in rows],
     )
+
+
+def _require_assignee(actor: IssueActor, issue: dict[str, Any]) -> None:
+    if issue["assignee_user_id"] != actor.user_id or not actor.can_work_on(issue):
+        raise _error("FORBIDDEN", "Chỉ người phụ trách đang có quyền mới được báo đã sửa", 403)
+    if issue["status"] != "ASSIGNED":
+        raise _error("QUALITY_ISSUE_STATE_CONFLICT", "Yêu cầu chưa ở trạng thái cần xử lý", 409)
+
+
+async def _resolution_target(db: AsyncSession, issue_id: str) -> dict[str, Any]:
+    rows = await _read(quality_issue_repo.issue_targets(db, issue_id))
+    if len(rows) != 1:
+        raise _error(
+            "QUALITY_ISSUE_MULTIPLE_FILES",
+            "Yêu cầu phải xác định một loại dữ liệu và file cần sửa",
+            409,
+        )
+    return dict(rows[0])
+
+
+async def _resolution_options(db: AsyncSession, issue_id: str) -> str:
+    original = await _read(quality_issue_repo.latest_issue_output(db, issue_id))
+    options = original.get("parser_options") if isinstance(original, dict) else None
+    if not isinstance(options, dict):
+        raise _error(
+            "RESOLUTION_PARSER_REQUIRED",
+            "Bản nguồn chưa lưu cách đọc; hãy chọn cách đọc file khi tải bản sửa",
+        )
+    if options.get("has_header") is False:
+        raise _error(
+            "RESOLUTION_HEADER_REQUIRED",
+            "Nguồn cũ không có tiêu đề cột; cần quản trị thống nhất cách đọc trước khi sửa qua upload",
+        )
+    # Dùng cách đọc đã được ghi nhận của file lỗi, không tự đổi dấu phân cách hay sheet Excel.
+    return json.dumps(supported_parser_options(options))
 
 
 async def _event(
@@ -364,27 +410,21 @@ async def create_issue(request: CreateIssue, db: DB, actor: Actor) -> IssueDetai
     ).scalar_one_or_none()
     if department is None:
         raise _error("INVALID_ISSUE_DEPARTMENT", "Phòng ban không tồn tại hoặc đã ngừng hoạt động")
-    rows = (
-        (
-            await _execute(
-                db,
-                select(RECORD.record_id, RUN.dataset_id, RUN.domain, DATASET.owner_department_id)
-                .select_from(QUARANTINE_RECORDS)
-                .join(CLEANING_RUNS, RECORD.cleaning_run_id == RUN.run_id)
-                .join(DATASET_CATALOG, DATASET.dataset_id == RUN.dataset_id)
-                .where(RECORD.record_id.in_(record_ids)),
-            )
-        )
-        .mappings()
-        .all()
-    )
+    rows = await _read(quality_issue_repo.issue_candidates(db, record_ids))
     if len(rows) != len(record_ids):
         raise _error("QUARANTINE_RECORD_NOT_FOUND", "Không tìm thấy một hoặc nhiều hồ sơ", 404)
     first = rows[0]
     if any(
-        (row["dataset_id"], row["domain"]) != (first["dataset_id"], first["domain"]) for row in rows
+        any(
+            row[field] != first[field]
+            for field in ("dataset_id", "domain", "entity", "data_source_id", "source_table")
+        )
+        for row in rows
     ):
-        raise _error("QUALITY_ISSUE_DATASET_MISMATCH", "Các hồ sơ phải thuộc cùng dataset")
+        raise _error(
+            "QUALITY_ISSUE_DATASET_MISMATCH",
+            "Các hồ sơ phải thuộc cùng bộ dữ liệu, loại dữ liệu và file nguồn",
+        )
     if first["domain"] not in DEPARTMENT_ROLES or first["owner_department_id"] not in (
         None,
         department,
@@ -437,10 +477,7 @@ async def create_issue(request: CreateIssue, db: DB, actor: Actor) -> IssueDetai
     return await _detail(db, issue)
 
 
-@router.get("", response_model=list[IssueRead])
-async def list_issues(
-    db: DB, actor: Actor, filters: Annotated[IssueFilters, Query()]
-) -> list[IssueRead]:
+def _issue_query(actor: IssueActor, filters: IssueFilters) -> Any:
     query = select(DATA_QUALITY_ISSUES)
     if not actor.is_admin:
         query = (
@@ -454,6 +491,16 @@ async def list_issues(
         query = query.where(ISSUE.assignee_user_id == filters.assignee_user_id)
     if filters.status is not None:
         query = query.where(ISSUE.status == filters.status)
+    if filters.mine_only:
+        query = query.where(ISSUE.assignee_user_id == actor.user_id)
+    return query
+
+
+@router.get("", response_model=list[IssueRead])
+async def list_issues(
+    db: DB, actor: Actor, filters: Annotated[IssueFilters, Query()]
+) -> list[IssueRead]:
+    query = _issue_query(actor, filters)
     rows = (
         await _execute(
             db,
@@ -463,6 +510,64 @@ async def list_issues(
         )
     ).mappings()
     return [IssueRead.model_validate(dict(row)) for row in rows]
+
+
+@router.get("/stats", response_model=IssueStats, summary="Thống kê yêu cầu trong phạm vi được xem")
+async def issue_stats(
+    db: DB, actor: Actor, filters: Annotated[IssueFilters, Query()]
+) -> IssueStats:
+    items = _issue_query(actor, filters).subquery()
+    row = (
+        (
+            await _execute(
+                db,
+                select(
+                    func.count().label("total"),
+                    func.count().filter(items.c.status == "ASSIGNED").label("assigned"),
+                    func.count()
+                    .filter(items.c.status == "PENDING_VERIFICATION")
+                    .label("pending_verification"),
+                    func.count().filter(items.c.status == "VERIFIED").label("verified"),
+                ).select_from(items),
+            )
+        )
+        .mappings()
+        .one()
+    )
+    return IssueStats(**dict(row))
+
+
+@router.get(
+    "/departments",
+    response_model=list[IssueDepartmentChoice],
+    summary="Các phòng ban quản trị có thể giao xử lý",
+)
+async def issue_departments(db: DB, actor: Actor) -> list[IssueDepartmentChoice]:
+    _require_admin(actor)
+    rows = await _read(active_departments(db))
+    return [IssueDepartmentChoice(**row) for row in rows]
+
+
+@router.get(
+    "/assignees",
+    response_model=list[AssigneeChoice],
+    summary="Chọn người phụ trách đủ quyền và còn phân công",
+)
+async def issue_assignees(
+    db: DB,
+    actor: Actor,
+    department_id: Annotated[int, Query(gt=0)],
+    domain: Literal["hr", "academic", "admissions"],
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[AssigneeChoice]:
+    _require_admin(actor)
+    rows = await _read(
+        eligible_assignees(
+            db, department_id, {str(role) for role in DEPARTMENT_ROLES[domain]}, limit, offset
+        )
+    )
+    return [AssigneeChoice(**row) for row in rows]
 
 
 @router.get("/{issue_id}", response_model=IssueDetail)
@@ -497,55 +602,125 @@ async def assign_issue(issue_id: UUID, request: AssignIssue, db: DB, actor: Acto
     )
 
 
+@router.post(
+    "/{issue_id}/uploads",
+    response_model=IngestionJobRead,
+    status_code=202,
+    summary="Người phụ trách tải bản đã sửa vào đúng bộ dữ liệu của yêu cầu",
+)
+async def upload_resolution_file(
+    issue_id: UUID,
+    db: DB,
+    actor: Actor,
+    user: User,
+    file: Annotated[UploadFile, File(description="Bản đã sửa, giữ tên file nguồn của yêu cầu")],
+    parser_options: Annotated[
+        str | None, Form(description="Bỏ trống để dùng cách đọc đã ghi nhận của file nguồn")
+    ] = None,
+) -> IngestionJobRead:
+    try:
+        issue = await _issue(db, actor, issue_id, lock=True)
+        _require_assignee(actor, issue)
+        target = await _resolution_target(db, str(issue_id))
+        filename = safe_upload_filename(file.filename)
+        if filename != target["source_table"]:
+            raise _error(
+                "RESOLUTION_FILE_MISMATCH", "Hãy tải đúng file cần sửa và giữ tên file nguồn"
+            )
+        # Bộ dữ liệu lấy từ yêu cầu đã giao; không nhận mã hay lĩnh vực tùy ý từ người tải.
+        roles = await _active_roles(db, actor.user_id)
+        roles.intersection_update(user.get("roles", []))
+        options = (
+            await _resolution_options(db, str(issue_id))
+            if parser_options is None
+            else parser_options
+        )
+        return await receive_issue_upload(
+            db,
+            file,
+            issue["dataset_id"],
+            options,
+            {"sub": str(actor.user_id), "roles": sorted(roles)},
+            quality_issue_id=str(issue_id),
+        )
+    except SQLAlchemyError:
+        await db.rollback()
+        raise _error(
+            "INGESTION_QUEUE_UNAVAILABLE", "Không thể lưu lần tải file đã sửa", 503
+        ) from None
+    except (MinioException, HTTPError, OSError, ValueError):
+        await db.rollback()
+        raise _error("UPLOAD_STORAGE_UNAVAILABLE", "Không thể lưu file đã sửa", 503) from None
+    finally:
+        await file.close()
+
+
 @router.post("/{issue_id}/resolution", response_model=IssueDetail)
 async def submit_resolution(
     issue_id: UUID, request: SubmitResolution, db: DB, actor: Actor
 ) -> IssueDetail:
     issue = await _issue(db, actor, issue_id, lock=True)
-    # Kiểm tra người phụ trách trên dòng đã khóa. Quyền quản trị không cho phép nộp thay.
-    if issue["assignee_user_id"] != actor.user_id or not actor.can_work_on(issue):
-        raise _error("FORBIDDEN", "Chỉ người phụ trách đang có quyền mới được báo đã sửa", 403)
-    if issue["status"] != "ASSIGNED":
-        raise _error("QUALITY_ISSUE_STATE_CONFLICT", "Yêu cầu chưa ở trạng thái cần xử lý", 409)
-    job = (
-        await _execute(
+    _require_assignee(actor, issue)
+    target = await _resolution_target(db, str(issue_id))
+    job = await _read(
+        quality_issue_repo.resolution_job(
             db,
-            text("""
-        SELECT j.ingestion_job_id
-        FROM app.ingestion_job j JOIN app.data_layer l ON l.data_layer_id = j.target_layer_id
-        WHERE j.ingestion_job_id = :job_id AND j.dataset_id = :dataset_id
-          AND j.status = 'SUCCESS' AND j.job_type = 'EXECUTION_V1' AND l.layer_code = 'BRONZE'
-          AND j.created_at > COALESCE(
-              (SELECT previous.created_at FROM app.ingestion_job previous
-               WHERE previous.ingestion_job_id = :previous_job_id),
-              '-infinity'::timestamp
-          )
-          AND j.created_at > (
-              SELECT max(old.created_at) FROM app.data_quality_issue_record ir
-              JOIN app.quarantine_record q ON q.record_id = ir.record_id
-              JOIN app.cleaning_run r ON r.run_id = q.cleaning_run_id
-              JOIN app.ingestion_job old ON old.ingestion_job_id = r.ingestion_job_id
-              WHERE ir.issue_id = :issue_id
-          )
-    """),
-            {
-                "job_id": request.ingestion_job_id,
-                "dataset_id": issue["dataset_id"],
-                "previous_job_id": issue["resolution_job_id"],
-                "issue_id": str(issue_id),
-            },
+            request.ingestion_job_id,
+            dataset_id=issue["dataset_id"],
+            source_id=target["data_source_id"],
+            filename=target["source_table"],
         )
-    ).scalar_one_or_none()
+    )
     if job is None:
-        raise _error("INVALID_RESOLUTION_JOB", "Cần job Bronze mới đã thành công của cùng dataset")
+        raise _error(
+            "INVALID_RESOLUTION_JOB",
+            "Cần lần nạp Bronze thành công, đúng bộ dữ liệu và file cần sửa",
+        )
+    root = await _read(
+        quality_issue_repo.resolution_job(db, job.root_job_id or job.ingestion_job_id)
+    )
+    if root is None or root.created_at is None:
+        raise _error("INVALID_RESOLUTION_JOB", "Không tìm thấy lần nạp gốc của file đã sửa")
+    if job.job_type == "UPLOAD_V1":
+        evidence = root.upload_input or {}
+        if root.requested_by != str(actor.user_id) or evidence.get("quality_issue_id") not in (
+            None,
+            str(issue_id),
+        ):
+            raise _error(
+                "INVALID_RESOLUTION_OWNER", "File phải do người phụ trách tải lên cho yêu cầu này"
+            )
+    old_time = await _read(quality_issue_repo.latest_invalid_created_at(db, str(issue_id)))
+    if old_time is None or root.created_at <= old_time:
+        raise _error(
+            "INVALID_RESOLUTION_JOB",
+            "Cần tải bản mới sau lần nạp có lỗi; chạy lại file cũ chưa phải bản sửa",
+        )
+    if issue["resolution_job_id"] is not None:
+        previous = await _read(quality_issue_repo.resolution_job(db, issue["resolution_job_id"]))
+        previous_root = (
+            await _read(
+                quality_issue_repo.resolution_job(
+                    db, previous.root_job_id or previous.ingestion_job_id
+                )
+            )
+            if previous is not None
+            else None
+        )
+        if (
+            previous_root is None
+            or previous_root.created_at is None
+            or root.created_at <= previous_root.created_at
+        ):
+            raise _error("INVALID_RESOLUTION_JOB", "Lần nộp tiếp theo phải dùng một bản tải mới")
     return await _transition(
         db,
         actor,
         issue,
         status="PENDING_VERIFICATION",
         event_type="RESOLUTION_SUBMITTED",
-        details={"ingestion_job_id": job, "note": request.note},
-        resolution_job_id=job,
+        details={"ingestion_job_id": job.ingestion_job_id, "note": request.note},
+        resolution_job_id=job.ingestion_job_id,
         verification_run_id=None,
     )
 
@@ -562,7 +737,9 @@ async def verify_issue(
         (
             await _execute(
                 db,
-                select(RUN.cleaning_status, RUN.publication_status, RUN.finished_at).where(
+                select(
+                    RUN.cleaning_status, RUN.publication_status, RUN.finished_at, RUN.entity
+                ).where(
                     RUN.run_id == str(request.cleaning_run_id),
                     RUN.ingestion_job_id == issue["resolution_job_id"],
                     RUN.dataset_id == issue["dataset_id"],
@@ -574,6 +751,9 @@ async def verify_issue(
     )
     if run is None or run["finished_at"] is None:
         raise _error("INVALID_VERIFICATION_RUN", "Cần lượt Cleaning đã kết thúc của đúng job sửa")
+    target = await _resolution_target(db, str(issue_id))
+    if run["entity"] != target["entity"]:
+        raise _error("INVALID_VERIFICATION_RUN", "Lượt kiểm tra phải đúng loại dữ liệu cần sửa")
     confirmed = set(request.confirmed_record_ids)
     if request.verified:
         if run["cleaning_status"] != "COMPLETED" or run["publication_status"] not in {

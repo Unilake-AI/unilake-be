@@ -34,6 +34,7 @@ jobs:
       DB_PASSWORD: unilake
       DB_NAME: unilake
       JWT_SECRET_KEY: ci-secret
+      STAFF_API_INTEGRATION_TEST: "1"
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

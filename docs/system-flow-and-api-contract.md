@@ -6,6 +6,8 @@ Tài liệu này tập hợp luồng đang có và phương án cần thống nh
 
 **Cập nhật sau rà soát:** đã triển khai phần STAFF đặt tên bộ dữ liệu mới và tải file trong một yêu cầu. Backend tự cấp mã và xác định lĩnh vực theo quyền; không cần nhập ID kỹ thuật. Phân quyền theo từng đơn vị con, tự gắn profile và chuyển Silver sang job vẫn chưa triển khai.
 
+**Cập nhật API STAFF:** đã thêm thông tin quyền/lựa chọn cho UI, chi tiết và tìm bộ dữ liệu, lọc lịch sử cá nhân, thống kê yêu cầu, upload bản sửa trong yêu cầu và hỗ trợ gửi xác nhận từ job `UPLOAD_V1`. Xem [hướng dẫn STAFF](staff-api.md) về toàn bộ luồng và điều kiện phân công đơn vị.
+
 ## 1. Mục tiêu và ranh giới các tầng
 
 UniLake AI tiếp nhận dữ liệu của các phòng ban, giữ được bản nguồn, tạo lớp dữ liệu sạch và thống nhất, rồi dùng lớp đó để xây dữ liệu phân tích và trả lời câu hỏi.
@@ -326,11 +328,11 @@ Luồng dự kiến sử dụng các API đã có:
 
 1. Data Admin xem `/cleaning-runs/{run_id}/report` và `/quarantine-records`.
 2. Tạo `/data-quality-issues`, gắn các hồ sơ dòng lỗi, đơn vị và người phụ trách.
-3. Người phụ trách sửa file nguồn rồi nạp bản mới; đợi Bronze thành công.
+3. Người phụ trách sửa file nguồn rồi gọi `/data-quality-issues/{issue_id}/uploads`; backend lấy dataset từ yêu cầu và giữ cách đọc đã ghi nhận nếu không chọn lại. Đợi Bronze thành công.
 4. Người phụ trách gửi `/resolution` kèm job mới và ghi chú.
 5. Data Admin chạy cleaning cho job mới rồi gửi `/verification` kèm cleaning run và kết quả đối chiếu.
 
-**Khoảng trống đã thấy trong code:** `/resolution` hiện chỉ chấp nhận `job_type='EXECUTION_V1'`, chưa chấp nhận `UPLOAD_V1`. Vì vậy bước 4 chưa dùng được với file sửa bằng API upload. Không coi quy trình upload → sửa → xác minh là đã hoàn chỉnh.
+`/resolution` đã nhận cả `UPLOAD_V1` và `EXECUTION_V1`. File upload phải do người phụ trách tải (đối chiếu job gốc nếu retry), đúng dataset/nguồn/tên file và thực sự là lần nạp mới hơn. Không lấy job thành công của file chấm công để xác nhận sửa file nhân viên dù dùng chung dataset. Yêu cầu sửa chỉ gộp hồ sơ cùng loại dữ liệu và file; lượt xác minh cũng phải đúng entity. Thiếu phân công đơn vị vẫn chặn nhận/nộp yêu cầu; `/staff/context` cho UI biết rõ điều kiện này.
 
 Điều kiện quyền riêng của yêu cầu sửa: kiểm tra role còn hiệu lực và phân công đơn vị đang hiệu lực trong database. Chỉ người được giao và còn quyền mới được báo đã sửa; quản trị không được nộp thay chỉ nhờ có role quản trị. Xác minh đạt yêu cầu cleaning run đã công bố Silver và xác nhận đủ các hồ sơ liên quan. Trạng thái: `ASSIGNED` → `PENDING_VERIFICATION` → `VERIFIED`; xác minh không đạt quay về `ASSIGNED`.
 
@@ -354,7 +356,7 @@ Không xóa Bronze chỉ vì file staging hết hạn. Không ghi đè trạng t
 
 ## 10. Danh sách toàn bộ API hiện đang đăng ký
 
-Tất cả đường dẫn dưới đây dùng tiền tố **`/api/v1`**, trừ bảng vận hành cuối mục. Đây là danh sách từ `app.openapi()` của code đã rà soát: **52 thao tác nghiệp vụ + 2 thao tác gốc/health = 54**, không tính trang tài liệu tự sinh. Không dùng số lượng endpoint để kết luận chức năng đã hoàn chỉnh.
+Tất cả đường dẫn dưới đây dùng tiền tố **`/api/v1`**, trừ bảng vận hành. Đây là danh sách từ `app.openapi()` của code đã rà soát: **58 thao tác nghiệp vụ + 2 thao tác gốc/health = 60**, không tính trang tài liệu tự sinh. Không dùng số lượng endpoint để kết luận chức năng đã hoàn chỉnh.
 
 Request có xác thực dùng `Authorization: Bearer <access_token>`. Các body dưới đây là JSON, trừ upload dùng multipart. Các ID phải lấy từ response hoặc danh sách tương ứng, không lấy số minh họa làm giá trị thật. Danh sách dùng `limit`, `offset` trừ nguồn dữ liệu dùng `page`, `page_size`.
 
@@ -368,12 +370,13 @@ Request có xác thực dùng `Authorization: Bearer <access_token>`. Các body 
 | `GET /auth/sessions` | Danh sách phiên của chính người đang đăng nhập | Đã đăng nhập |
 | `POST /auth/revoke-session/{session_id}` | Thu hồi một phiên thuộc chính tài khoản đó | Đã đăng nhập |
 
-### 10.2. Hệ thống nguồn, dataset và kết nối — 7 thao tác
+### 10.2. Hệ thống nguồn, dataset và kết nối — 8 thao tác
 
 | API | Cách dùng / đầu vào | Quyền |
 | --- | --- | --- |
 | `GET /source-systems` | Chọn hệ thống nguồn đang hoạt động trước khi quản trị tạo dataset | ADMIN / DATA_ADMIN |
-| `GET /datasets` | Danh sách dataset Bronze đủ điều kiện upload; `limit`, `offset`; UI hiển thị tên | Quản trị hoặc STAFF đúng lĩnh vực |
+| `GET /datasets` | Danh sách dataset Bronze; tìm `search`, lọc `domain`, `limit`, `offset`; UI hiển thị tên | Quản trị hoặc STAFF đúng lĩnh vực |
+| `GET /datasets/{dataset_id}` | Chi tiết bộ được phép upload; ngoài phạm vi trả `404` | Quản trị hoặc STAFF đúng lĩnh vực |
 | `POST /datasets` | `{dataset_code, dataset_name, domain, source_system_id, description?}`; backend chọn tầng Bronze | ADMIN / DATA_ADMIN |
 | `GET /datasources` | Xem nguồn; lọc `source_system_id`, `source_type`, `is_active`, `page`, `page_size` | ADMIN / DATA_ADMIN / VIEWER |
 | `GET /datasources/{data_source_id}` | Xem chi tiết nguồn, không trả cấu hình bí mật | ADMIN / DATA_ADMIN / VIEWER |
@@ -386,7 +389,7 @@ Request có xác thực dùng `Authorization: Bearer <access_token>`. Các body 
 | --- | --- | --- |
 | `POST /ingestion/uploads` | Multipart `{file, dataset_id, parser_options?}` cho bộ cũ hoặc `{file, dataset_name, description?, domain?, parser_options?}` cho bộ mới; nhận job `202` | Quản trị hoặc STAFF đúng lĩnh vực |
 | `POST /ingestion/jobs` | `{data_source_id, dataset_id, source_table, validation_policy?}`; thu thập nguồn đăng ký sẵn | ADMIN / DATA_ADMIN |
-| `GET /ingestion/jobs` | Liệt kê job; lọc `data_source_id`, phân trang | Quản trị / STAFF trong phạm vi |
+| `GET /ingestion/jobs` | Lọc `data_source_id`, `dataset_id`, `status`, `mine_only`; phân trang | Quản trị / STAFF trong phạm vi |
 | `GET /ingestion/jobs/{job_id}` | Theo dõi `status`, `stage`, số dòng, lỗi, `validation_report`, `output` | Quản trị / STAFF trong phạm vi |
 | `GET /ingestion/jobs/stats` | Số job theo nhóm trạng thái trong phạm vi được đọc | Quản trị / STAFF trong phạm vi |
 | `GET /ingestion/jobs/metrics` | Thời gian chờ, xử lý trung bình, tỷ lệ thất bại và job chờ lâu nhất | Quản trị / STAFF trong phạm vi |
@@ -433,15 +436,19 @@ Tất cả dành cho `ADMIN` / `DATA_ADMIN`.
 | `GET /quarantine-records/{record_id}` | Chi tiết lỗi và vị trí dòng trong nguồn |
 | `GET /quarantine-records/{record_id}/source` | Đọc giá trị dòng nguồn ở các cột được phép xem |
 
-### 10.7. Giao sửa và xác minh — 6 thao tác
+### 10.7. Giao sửa và xác minh — 10 thao tác
 
 | API | Cách dùng / đầu vào | Quyền |
 | --- | --- | --- |
 | `POST /data-quality-issues` | `{title, description?, department_id, assignee_user_id?, quarantine_record_ids}` | ADMIN / DATA_ADMIN |
-| `GET /data-quality-issues` | Lọc `department_id`, `assignee_user_id`, `status`; phân trang | Quản trị; phòng ban theo phạm vi thực tế |
+| `GET /data-quality-issues` | Lọc `department_id`, `assignee_user_id`, `status`, `mine_only`; phân trang | Quản trị; phòng ban theo phạm vi thực tế |
+| `GET /data-quality-issues/stats` | Thống kê theo cùng quyền và bộ lọc của danh sách, không cắt trang | Quản trị; phòng ban theo phạm vi thực tế |
+| `GET /data-quality-issues/departments` | Danh sách đơn vị còn hoạt động để chọn khi giao yêu cầu | ADMIN / DATA_ADMIN |
+| `GET /data-quality-issues/assignees` | Query `department_id`, `domain`, `limit`, `offset`; chỉ người đủ role và phân công | ADMIN / DATA_ADMIN |
 | `GET /data-quality-issues/{issue_id}` | Xem yêu cầu, hồ sơ lỗi liên quan và lịch sử xử lý | Người có quyền với yêu cầu |
 | `PATCH /data-quality-issues/{issue_id}/assignment` | `{assignee_user_id}`; giao người phụ trách khi yêu cầu còn ASSIGNED | ADMIN / DATA_ADMIN |
-| `POST /data-quality-issues/{issue_id}/resolution` | `{ingestion_job_id, note}`; tham chiếu job mới cùng dataset; hiện chỉ nhận EXECUTION_V1 | Đúng người được giao, còn quyền |
+| `POST /data-quality-issues/{issue_id}/uploads` | Multipart `file`, `parser_options?`; tự lấy dataset, giữ tên file; chưa đổi trạng thái yêu cầu | Đúng người được giao, còn quyền upload |
+| `POST /data-quality-issues/{issue_id}/resolution` | `{ingestion_job_id, note}`; nhận EXECUTION_V1/UPLOAD_V1 đúng nguồn, file, người nộp và mới hơn | Đúng người được giao, còn quyền |
 | `POST /data-quality-issues/{issue_id}/verification` | `{cleaning_run_id, verified, note, confirmed_record_ids?}`; khi xác nhận đạt phải đủ hồ sơ liên quan | ADMIN / DATA_ADMIN |
 
 ### 10.8. Catalog và nguồn gốc — 6 thao tác
@@ -482,6 +489,12 @@ Luồng đích sau này là: Silver đã công bố → xây bảng/chỉ số G
 | `/docs`, `/redoc` | Giao diện tài liệu tự sinh |
 | `/openapi.json` | Hợp đồng API được tạo từ code đang triển khai |
 
+### 10.11. Thông tin màn hình STAFF — 1 thao tác
+
+| API | Cách dùng / đầu vào | Quyền |
+| --- | --- | --- |
+| `GET /staff/context` | Chính tài khoản: role, lĩnh vực, đơn vị hiệu lực, quyền thao tác và giới hạn upload; báo khi thiếu phân công | STAFF hoặc quản trị có role hiện hành |
+
 ## 11. Những chỗ chưa thống nhất cần xử lý trước
 
 | Vấn đề | Hệ quả với người dùng | Hướng xử lý đề xuất |
@@ -490,7 +503,7 @@ Luồng đích sau này là: Silver đã công bố → xây bảng/chỉ số G
 | UI chưa có hợp đồng chọn dataset rõ ràng | Người dùng phải hiểu ID nội bộ | Chọn theo tên; ID chỉ dùng giữa frontend và backend |
 | Phân quyền domain và đơn vị khác nhau giữa các module | Có thể upload được nhưng không nộp yêu cầu sửa được | Dùng chung quy định quyền và quan hệ chủ quản |
 | Profile gắn tên file và cấu trúc kỹ thuật phức tạp | Đổi tên file hoặc lần tải đầu tiên cần can thiệp thủ công | Gắn cấu hình ổn định theo bộ dữ liệu/loại nội dung; quản trị xác nhận thay đổi cấu trúc |
-| `/resolution` chưa nhận UPLOAD_V1 | Không khép kín quy trình sửa file đã upload | Chấp nhận job upload hợp lệ, cùng dataset, đúng phạm vi và mới hơn bản lỗi |
+| Quy trình sửa file upload | Đã khép kín: tải trong yêu cầu → Bronze → nộp → xác minh hoặc giao sửa tiếp | Kiểm tra nguồn, tên file, người nộp, lần nạp gốc và entity; vẫn yêu cầu phân công đơn vị thật |
 | Validation nguồn đăng ký là tùy chọn | Hai cách vào Bronze có mức bằng chứng kiểm tra khác nhau | Quy định tối thiểu chung; nguồn thật phải có cấu hình kiểm tra phù hợp |
 | Silver chạy trong HTTP và nạp dữ liệu vào bộ nhớ | Dễ timeout với dữ liệu lớn; mất kết nối không thể coi là đã hủy xử lý | Chuyển thành job riêng trước khi mở rộng quy mô |
 | Retry/cleanup/đối soát chưa bao phủ đầy đủ các tình huống | Có thể lặp tác vụ hoặc còn staging mồ côi | Đã sửa giữ số dòng/cách đọc và đối chiếu tham chiếu Bronze → Silver sau phục hồi; tiếp tục rà soát cạnh tranh retry và dọn file |
