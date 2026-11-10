@@ -118,6 +118,7 @@ def harness(monkeypatch):
 def excel_bytes(*, formula=False):
     workbook = Workbook()
     sheet = workbook.active
+    assert sheet is not None
     sheet.title = "NhanSu"
     sheet.append(["id", "name"])
     sheet.append(["001", "=1+1" if formula else "Nhân viên"])
@@ -154,6 +155,7 @@ async def test_http_upload_through_worker_preserves_original_bronze_bytes(
     )
     output = repository.finish.call_args.kwargs.get("output")
     assert output is not None, repository.finish.call_args
+    assert job.upload_input is not None
     assert output["sha256"] == hashlib.sha256(content).hexdigest()
     assert output["source_version_id"] == job.upload_input["version_id"]
     assert repository.save_validation.call_args.args[1].can_accept
@@ -256,6 +258,7 @@ async def test_pinned_version_and_excel_validation_block_bad_inputs(harness, mon
     if failure == "version":
         harness.storage.bad_version = True
     elif failure == "checksum":
+        assert job.upload_input is not None
         job.upload_input["sha256"] = "a" * 64
     elif failure == "expanded":
         monkeypatch.setattr(settings, "upload_max_expanded_bytes", 1)

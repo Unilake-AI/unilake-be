@@ -179,8 +179,13 @@ class IngestionRepository:
         for chain in grouped.values():
             if not all(job.status in terminal for job in chain):
                 continue
-            latest = max((job.finished_at or job.created_at) for job in chain)
-            if latest is None or latest > before:
+            timestamps = [job.finished_at or job.created_at for job in chain]
+            known_timestamps = [timestamp for timestamp in timestamps if timestamp is not None]
+            # Thiếu thời điểm của một lần chạy thì giữ file để tránh xóa quá sớm.
+            if len(known_timestamps) != len(chain):
+                continue
+            latest = max(known_timestamps)
+            if latest > before:
                 continue
             evidence = chain[0].upload_input
             if isinstance(evidence, dict):

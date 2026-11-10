@@ -104,7 +104,12 @@ def stage_file(
     if not result.version_id or result.version_id == "null":
         raise ValueError("UPLOAD_VERSION_REQUIRED")
     stat = storage.stat_object(bucket, key, version_id=result.version_id)
-    if stat.version_id != result.version_id or stat.size != path.stat().st_size:
+    stored_size = stat.size
+    if (
+        stat.version_id != result.version_id
+        or stored_size is None
+        or stored_size != path.stat().st_size
+    ):
         raise ValueError("UPLOAD_STORAGE_MISMATCH")
     # Đọc lại đúng phiên bản để chỉ tạo job khi nội dung đã được lưu đầy đủ.
     response = storage.get_object(bucket, key, version_id=result.version_id)
@@ -112,11 +117,11 @@ def stage_file(
         digest, count, started = hashlib.sha256(), 0, monotonic()
         for chunk in response.stream(1024 * 1024):
             count += len(chunk)
-            if count > stat.size or monotonic() - started > settings.upload_timeout_seconds:
+            if count > stored_size or monotonic() - started > settings.upload_timeout_seconds:
                 raise ValueError("UPLOAD_STORAGE_LIMIT_EXCEEDED")
             digest.update(chunk)
         if (
-            count != stat.size
+            count != stored_size
             or response.headers.get("x-amz-version-id") != result.version_id
             or digest.hexdigest() != sha256
         ):
@@ -128,7 +133,7 @@ def stage_file(
         "uri": f"s3://{bucket}/{key}",
         "version_id": result.version_id,
         "sha256": sha256,
-        "size_bytes": stat.size,
+        "size_bytes": stored_size,
         "filename": path.name,
         "parser_options": options,
     }
