@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
@@ -18,17 +21,41 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infra.db.base import Base
 
 __all__ = [
     "CatalogColumn",
+    "CatalogMetadata",
     "CatalogTable",
     "DataLineage",
     "DataQualityRule",
     "DataQualityRun",
+    "PipelineLineage",
 ]
+
+
+class CatalogMetadata(Base):
+    """Metadata quản trị đè lên khai báo tĩnh, độc lập với schema chạy pipeline."""
+
+    __tablename__ = "catalog_metadata"
+    __table_args__ = ({"schema": "app"},)
+
+    # Khóa ghép cho phép hai lĩnh vực có dataset trùng tên.
+    domain_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    dataset: Mapped[str] = mapped_column(String(150), primary_key=True)
+    metadata_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"), nullable=False
+    )
+    # Giữ dấu xóa để dataset khai báo trong code không xuất hiện lại sau restart.
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class CatalogTable(Base):
@@ -154,3 +181,36 @@ class DataQualityRun(Base):
     pass_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
     execution_status: Mapped[str] = mapped_column(String(30), nullable=False)
     failure_sample_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PipelineLineage(Base):
+    """Lưu trữ quan hệ nguồn - đích và thông tin kiểm toán từng chặng của pipeline."""
+
+    __tablename__ = "pipeline_lineage"
+    __table_args__ = (
+        Index("ix_pipeline_lineage_source", "source_layer", "source_name"),
+        Index("ix_pipeline_lineage_target", "target_layer", "target_name"),
+        Index("ix_pipeline_lineage_created", "created_at"),
+        {"schema": "app"},
+    )
+
+    lineage_id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer(), "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+        index=True,
+    )
+    source_layer: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_name: Mapped[str] = mapped_column(Text, nullable=False)
+    target_layer: Mapped[str] = mapped_column(String(50), nullable=False)
+    target_name: Mapped[str] = mapped_column(Text, nullable=False)
+    lineage_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata",
+        JSON().with_variant(JSONB(), "postgresql"),
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

@@ -107,7 +107,7 @@ async def test_get_data_source_rejects_user_without_allowed_role() -> None:
     _repo(service).list_with_source_system = list_mock
 
     with pytest.raises(AppException) as exc_info:
-        await service.get_data_source(DataSourceFilter(), {"roles": ["STUDENT"]})
+        await service.get_data_source(DataSourceFilter(), {"roles": ["HR_STAFF"]})
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.code == "FORBIDDEN"
@@ -121,7 +121,7 @@ async def test_get_data_source_detail_returns_public_payload() -> None:
     detail_mock = AsyncMock(return_value=(_data_source(), "Admissions System"))
     _repo(service).get_with_source_system = detail_mock
 
-    response = await service.get_data_source_detail(10, {"roles": ["ANALYST"]})
+    response = await service.get_data_source_detail(10, {"roles": ["VIEWER"]})
 
     assert response.data_source_id == 10
     assert response.source_system_name == "Admissions System"

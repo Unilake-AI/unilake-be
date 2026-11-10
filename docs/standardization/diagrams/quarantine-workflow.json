@@ -1,0 +1,183 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "UniLake · Luồng xử lý lỗi dữ liệu",
+    "quality_profile": "showcase",
+    "legend": {
+      "mode": "hidden"
+    },
+    "viewBox": [
+      1220,
+      550
+    ]
+  },
+  "lanes": [
+    {
+      "id": "pipeline",
+      "label": "Xử lý dữ liệu"
+    },
+    {
+      "id": "handling",
+      "label": "Xử lý hồ sơ lỗi"
+    },
+    {
+      "id": "retry",
+      "label": "Khi bản sửa chưa đạt",
+      "variant": "exception"
+    }
+  ],
+  "mainPath": [
+    "bronze",
+    "clean",
+    "quarantine",
+    "assign",
+    "submit",
+    "verify",
+    "closed"
+  ],
+  "nodes": [
+    {
+      "id": "bronze",
+      "lane": "pipeline",
+      "col": 0,
+      "type": "database",
+      "label": "Đọc bản Bronze",
+      "sublabel": "Đúng phiên bản đã lưu",
+      "width": 156
+    },
+    {
+      "id": "clean",
+      "lane": "pipeline",
+      "col": 1,
+      "type": "backend",
+      "label": "Làm sạch dữ liệu",
+      "sublabel": "Tách dòng đạt và dòng lỗi",
+      "width": 156
+    },
+    {
+      "id": "silver",
+      "lane": "pipeline",
+      "col": 2,
+      "type": "database",
+      "label": "Kết quả Silver",
+      "sublabel": "Xuất bản nếu đủ điều kiện",
+      "width": 156
+    },
+    {
+      "id": "quarantine",
+      "lane": "handling",
+      "col": 1,
+      "type": "database",
+      "label": "Lưu hồ sơ cách ly",
+      "sublabel": "Vị trí dòng và lý do lỗi",
+      "width": 156
+    },
+    {
+      "id": "assign",
+      "lane": "handling",
+      "col": 2,
+      "type": "frontend",
+      "label": "Giao yêu cầu",
+      "sublabel": "Data Admin chọn người xử lý",
+      "width": 156
+    },
+    {
+      "id": "submit",
+      "lane": "handling",
+      "col": 3,
+      "type": "external",
+      "label": "Sửa và báo lại",
+      "sublabel": "Người được giao gửi job mới",
+      "width": 156
+    },
+    {
+      "id": "verify",
+      "lane": "handling",
+      "col": 4,
+      "type": "security",
+      "label": "Xác minh bản sửa",
+      "sublabel": "Data Admin đối chiếu Silver",
+      "width": 156
+    },
+    {
+      "id": "closed",
+      "lane": "handling",
+      "col": 5,
+      "type": "backend",
+      "label": "Đã xác minh",
+      "sublabel": "Lưu lịch sử xử lý",
+      "width": 156
+    },
+    {
+      "id": "rework",
+      "lane": "retry",
+      "col": 4,
+      "type": "frontend",
+      "label": "Trả về xử lý",
+      "sublabel": "Data Admin ghi lý do",
+      "width": 156
+    }
+  ],
+  "edges": [
+    {
+      "id": "bronze-clean",
+      "from": "bronze",
+      "to": "clean",
+      "role": "main"
+    },
+    {
+      "id": "clean-silver",
+      "from": "clean",
+      "to": "silver",
+      "label": "Theo chính sách",
+      "role": "branch"
+    },
+    {
+      "id": "clean-quarantine",
+      "from": "clean",
+      "to": "quarantine",
+      "label": "Có dòng lỗi",
+      "role": "main"
+    },
+    {
+      "id": "quarantine-assign",
+      "from": "quarantine",
+      "to": "assign",
+      "role": "main"
+    },
+    {
+      "id": "assign-submit",
+      "from": "assign",
+      "to": "submit",
+      "role": "main"
+    },
+    {
+      "id": "submit-verify",
+      "from": "submit",
+      "to": "verify",
+      "role": "main"
+    },
+    {
+      "id": "verify-close",
+      "from": "verify",
+      "to": "closed",
+      "label": "Đạt",
+      "role": "main"
+    },
+    {
+      "id": "verify-rework",
+      "from": "verify",
+      "to": "rework",
+      "label": "Chưa đạt",
+      "role": "error"
+    },
+    {
+      "id": "rework-submit",
+      "from": "rework",
+      "to": "submit",
+      "label": "Nộp lại",
+      "role": "return"
+    }
+  ]
+}

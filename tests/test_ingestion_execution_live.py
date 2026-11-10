@@ -193,7 +193,10 @@ async def test_api_queue_worker_storage_failures_and_recovery(tmp_path, monkeypa
             job_id = next(r.json()["ingestion_job_id"] for r in responses if r.status_code == 202)
             # Worker thật, phiên riêng biệt, thực sự chụp/đọc/ghi/kiểm tra checksum.
             assert sorted(
-                await asyncio.gather(ingestion_worker.run_once(), ingestion_worker.run_once())
+                await asyncio.gather(
+                    ingestion_worker.run_once(ingestion_worker.WorkerState()),
+                    ingestion_worker.run_once(ingestion_worker.WorkerState()),
+                )
             ) == [False, True]
             result = (await api.get(f"/ingestion/jobs/{job_id}")).json()
             assert result["status"] == "SUCCESS", result
@@ -241,7 +244,7 @@ async def test_api_queue_worker_storage_failures_and_recovery(tmp_path, monkeypa
             blocked_id = (await api.post("/ingestion/jobs", json=payload)).json()[
                 "ingestion_job_id"
             ]
-            assert await ingestion_worker.run_once()
+            assert await ingestion_worker.run_once(ingestion_worker.WorkerState())
             blocked = (await api.get(f"/ingestion/jobs/{blocked_id}")).json()
             assert blocked["status"] == "FAILED"
             assert blocked["error_message"] == "BRONZE_INPUT_VALIDATION_BLOCKED"
@@ -258,7 +261,7 @@ async def test_api_queue_worker_storage_failures_and_recovery(tmp_path, monkeypa
             # Worker kiểm tra lại sự tồn tại/cấu hình nguồn; đầu vào thiếu được ghi nhận lỗi bền vững.
             path.unlink()
             failed_id = (await api.post("/ingestion/jobs", json=payload)).json()["ingestion_job_id"]
-            assert await ingestion_worker.run_once()
+            assert await ingestion_worker.run_once(ingestion_worker.WorkerState())
             failed = (await api.get(f"/ingestion/jobs/{failed_id}")).json()
             assert failed["error_message"] == "INGESTION_READING_FAILED"
             # Giả lập worker dừng đột ngột; job hết hạn không thể công bố thành công hay gửi heartbeat.
@@ -292,7 +295,7 @@ async def test_api_queue_worker_storage_failures_and_recovery(tmp_path, monkeypa
 
             monkeypatch.setattr(ingestion_worker, "store_bronze", fail_store)
             write_id = (await api.post("/ingestion/jobs", json=payload)).json()["ingestion_job_id"]
-            assert await ingestion_worker.run_once()
+            assert await ingestion_worker.run_once(ingestion_worker.WorkerState())
             write_failed = (await api.get(f"/ingestion/jobs/{write_id}")).json()
             assert write_failed["error_message"] == "INGESTION_WRITING_FAILED"
             assert write_failed["rows_read"] == 1
@@ -441,7 +444,7 @@ async def test_validated_excel_and_postgresql_are_written_to_bronze(
             queued = await api.post("/ingestion/jobs", json=payload)
             assert queued.status_code == 202, queued.text
             job_id = queued.json()["ingestion_job_id"]
-            assert await ingestion_worker.run_once()
+            assert await ingestion_worker.run_once(ingestion_worker.WorkerState())
             result = (await api.get(f"/ingestion/jobs/{job_id}")).json()
         assert result["status"] == "SUCCESS", result
         assert result["validation_report"]["result"] == "PASS"

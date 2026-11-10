@@ -9,6 +9,7 @@ from datetime import UTC
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 import pyarrow as pa
@@ -185,3 +186,27 @@ def store_bronze(
         # Giữ cùng metadata trong kết quả job để đối chiếu object với lịch sử ingestion.
         "metadata": metadata,
     }
+
+
+def verify_bronze_output(output: dict[str, Any]) -> None:
+    """Đọc lại Bronze đã ghi để lần chạy lại không tạo bản sao trùng."""
+    uri = urlsplit(str(output.get("uri", "")))
+    if uri.scheme != "s3" or uri.netloc != settings.minio_bucket_bronze or not uri.path:
+        raise ValueError("BRONZE_RECONCILIATION_LOCATION_INVALID")
+    version = output.get("version_id")
+    checksum = output.get("sha256")
+    if not isinstance(version, str) or not isinstance(checksum, str):
+        raise ValueError("BRONZE_RECONCILIATION_EVIDENCE_INVALID")
+    key = uri.path.lstrip("/")
+    response = bronze_verifier_client().get_object(
+        settings.minio_bucket_bronze, key, version_id=version
+    )
+    try:
+        digest = hashlib.sha256()
+        for chunk in response.stream(1024 * 1024):
+            digest.update(chunk)
+        if response.headers.get("x-amz-version-id") != version or digest.hexdigest() != checksum:
+            raise ValueError("BRONZE_RECONCILIATION_CHECKSUM_MISMATCH")
+    finally:
+        response.close()
+        response.release_conn()

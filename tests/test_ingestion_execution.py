@@ -74,7 +74,7 @@ async def test_rejection_is_persisted(duplicate):
     assert repo.create.call_args.kwargs["status"] == "REJECTED"
 
 
-@pytest.mark.parametrize("roles", [[], ["VIEWER"], ["ANALYST"], None])
+@pytest.mark.parametrize("roles", [[], ["VIEWER"], ["HR_STAFF"], None])
 def test_write_authorization(roles):
     with pytest.raises(AppException, match="Không có quyền"):
         authorize({"roles": roles}, write=True)
@@ -143,10 +143,21 @@ async def test_execution_stages_and_sanitized_failures(failure):
     )
     if failure:
         code = "INGESTION_READING_FAILED" if failure == "read" else "INGESTION_WRITING_FAILED"
-        repo.finish.assert_awaited_once_with(10, error=code)
+        repo.finish.assert_awaited_once_with(10, error=code, retryable=False)
     else:
         repo.stage.assert_awaited_once_with(10, "WRITING", 3)
-        repo.finish.assert_awaited_once_with(10, output=store.return_value)
+        saved = repo.finish.call_args.kwargs["output"]
+        assert saved["uri"] == store.return_value["uri"]
+        assert saved["source_type"] == "CSV"
+        assert saved["parser_options"] == {
+            "delimiter": ",",
+            "encoding": "utf-8",
+            "has_header": True,
+        }
+        evidence = saved["lineage"]
+        assert evidence["run_ref"] == "ingestion:10"
+        assert evidence["derivations"][0]["output"]["version"] == "v1"
+        assert evidence["derivations"][0]["inputs"][0]["layer"] == "SOURCE"
         # Writer nhận ID hệ thống từ catalog và thời gian capture, không nhận credentials.
         write_context = store.call_args.args[2]
         assert write_context.source_system_id == 1

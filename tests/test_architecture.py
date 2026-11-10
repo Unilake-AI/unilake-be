@@ -40,7 +40,7 @@ def test_request_id_middleware_sets_header() -> None:
 def test_security_password_and_token_helpers() -> None:
     password_hash = hash_password("secret")
     token = create_access_token(
-        "user-1", expires_delta=timedelta(minutes=5), claims={"roles": ["admin"]}
+        "user-1", expires_delta=timedelta(minutes=5), claims={"roles": ["ADMIN"]}
     )
 
     assert verify_password("secret", password_hash)
@@ -50,12 +50,12 @@ def test_security_password_and_token_helpers() -> None:
 
 @pytest.mark.asyncio
 async def test_auth_dependencies_resolve_user_and_roles() -> None:
-    token = create_access_token("user-1", claims={"roles": ["admin"]})
+    token = create_access_token("user-1", claims={"roles": ["ADMIN"]})
     user = await get_current_user(f"Bearer {token}")
-    role_dependency = require_role("admin")
+    role_dependency = require_role("ADMIN")
 
     assert user["sub"] == "user-1"
-    assert role_dependency(user)["roles"] == ["admin"]
+    assert role_dependency(user)["roles"] == ["ADMIN"]
 
 
 @pytest.mark.asyncio
@@ -63,9 +63,9 @@ async def test_auth_dependencies_reject_missing_or_wrong_role() -> None:
     with pytest.raises(AppException):
         await get_current_user(None)
 
-    role_dependency = require_role("admin")
+    role_dependency = require_role("ADMIN")
     with pytest.raises(AppException):
-        role_dependency({"roles": ["viewer"]})
+        role_dependency({"roles": ["VIEWER"]})
 
 
 @pytest.mark.asyncio
@@ -76,7 +76,7 @@ async def test_nlq_flow_helpers_and_endpoint() -> None:
     assert parse_intent("Danh sách sinh viên") == "lookup"
     schema_context = retrieve_schema_context("lookup")
     assert "Intent: lookup" in schema_context
-    assert "Gold dataset demo_student_summary" in schema_context
+    assert "demo_student_summary" not in schema_context
     assert validate_read_only_sql("select 1") == "select 1"
     with pytest.raises(AppException):
         validate_read_only_sql("drop table users")

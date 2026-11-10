@@ -67,7 +67,7 @@ def publisher(tmp_path) -> Iterator[SilverPublicationService]:
         storage=LocalSilverStore(tmp_path / "objects"),
         contracts=CONTRACTS,
         scope="cleaning-integration",
-        mode="rehearsal",
+        mode="test",
     )
     yield service
     engine.dispose()

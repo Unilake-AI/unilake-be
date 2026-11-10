@@ -11,7 +11,7 @@ Repository này bao gồm API FastAPI, ingestion worker và pipeline chuẩn hó
 - [Phạm vi chức năng](#phạm-vi-chức-năng)
 - [Kiến trúc và công nghệ](#kiến-trúc-và-công-nghệ)
 - [Cài đặt và khởi chạy](#cài-đặt-và-khởi-chạy)
-- [Giao diện API](#giao-diện-api)
+- [Giao diện API]
 - [Quản lý cơ sở dữ liệu](#quản-lý-cơ-sở-dữ-liệu)
 - [Kiểm thử và chất lượng mã nguồn](#kiểm-thử-và-chất-lượng-mã-nguồn)
 - [Cấu trúc dự án](#cấu-trúc-dự-án)
@@ -23,13 +23,13 @@ Repository này bao gồm API FastAPI, ingestion worker và pipeline chuẩn hó
 | --- | --- | --- |
 | Xác thực | Đăng nhập, cấp lại token, đăng xuất, quản lý và thu hồi phiên | Đã triển khai |
 | Nguồn dữ liệu | Quản lý danh mục nguồn; đọc CSV, Excel và PostgreSQL | Đã triển khai |
-| Ingestion | Tạo và theo dõi tác vụ; xử lý bất đồng bộ; lưu Bronze; xác minh phiên bản và checksum | Đã triển khai |
-| Chuẩn hóa và Silver | Làm sạch, chuẩn hóa, cách ly bản ghi lỗi và xuất bản Silver | API thủ công giới hạn ở ba profile `DEMO_FLOW_*` phục vụ demo |
+| Ingestion | Thu thập nguồn đã đăng ký hoặc tải CSV/Excel qua API; dùng chung worker để kiểm tra và lưu Bronze | Đã triển khai; có heartbeat worker, thống kê và chạy lại thủ công cho file upload |
+| Chuẩn hóa và Silver | Làm sạch, chuẩn hóa, cách ly bản ghi lỗi và xuất bản Silver | API dùng cấu hình riêng của từng nguồn CSV/Excel; kiểm tra và lưu Silver theo phiên bản Bronze |
 | Quản trị dữ liệu | Tra cứu danh mục dữ liệu | Đã có API đọc catalog |
 | Truy vấn ngôn ngữ tự nhiên (NLQ) | Tiếp nhận câu hỏi và xử lý luồng truy vấn | Đang sử dụng LLM mô phỏng và bộ thực thi trả kết quả rỗng |
 | Dashboard, lịch sử truy vấn, quản lý người dùng | Cấu trúc module | Chưa có endpoint nghiệp vụ |
 
-Schema Silver đang ở giai đoạn dự thảo; bộ quy tắc nghiệp vụ và phê duyệt sử dụng trong môi trường production chưa hoàn tất. NLQ hiện được cấu hình cố định với `MockLLMClient` và `EmptyGoldQueryExecutor` trong `app/providers.py`; thay đổi `LLM_PROVIDER` chưa kích hoạt kết nối LLM thực tế.
+Silver được cấu hình theo từng nguồn qua API `/pipeline/profiles`, lưu trong PostgreSQL. Cấu hình có sẵn trong `config/silver/profiles.json` (mặc định trống) vẫn được hỗ trợ. Các phép tính nghiệp vụ và bộ 39 quy định trong tài liệu cũ không còn là điều kiện bắt buộc để công bố Silver. Cấu trúc, kiểu dữ liệu, khóa và nguồn gốc vẫn được kiểm tra. NLQ hiện được cấu hình cố định với `MockLLMClient` và `EmptyGoldQueryExecutor` trong `app/providers.py`; thay đổi `LLM_PROVIDER` chưa kích hoạt kết nối LLM thực tế.
 
 ## Kiến trúc và công nghệ
 
@@ -57,7 +57,7 @@ Nguồn dữ liệu: CSV / Excel / PostgreSQL
             Xuất bản lớp Silver
 ```
 
-API ingestion trả HTTP `202 Accepted` sau khi lưu tác vụ vào PostgreSQL. Worker tiếp nhận tác vụ và xử lý độc lập với tiến trình API. Phạm vi mỗi tác vụ ingestion là **Source → Bronze**; pipeline Bronze → Silver được kích hoạt riêng. Luồng tự động đến Gold chưa được hoàn thiện.
+API ingestion trả HTTP `202 Accepted` sau khi lưu tác vụ vào PostgreSQL. Với file tải trực tiếp, API phải lưu và xác minh file trong kho tiếp nhận trước khi tạo tác vụ. Worker tiếp nhận tác vụ và xử lý độc lập với tiến trình API. Phạm vi mỗi tác vụ ingestion là **Source → Bronze**; pipeline Bronze → Silver được kích hoạt riêng. Luồng tự động đến Gold chưa được hoàn thiện.
 
 | Thành phần | Công nghệ |
 | --- | --- |
@@ -72,6 +72,8 @@ API ingestion trả HTTP `202 Accepted` sau khi lưu tác vụ vào PostgreSQL. 
 Docker Compose có cấu hình Redis. Hàng đợi ingestion hiện sử dụng PostgreSQL.
 
 ## Cài đặt và khởi chạy
+
+Deploy lên Render: xem [hướng dẫn Render](docs/render.md).
 
 ### Yêu cầu môi trường
 
@@ -201,7 +203,9 @@ Frontend sử dụng API base URL `http://localhost:8000/api/v1` với cấu hì
 
 ## Giao diện API
 
-Các endpoint dưới đây sử dụng prefix mặc định `/api/v1`. Swagger UI cung cấp chi tiết về dữ liệu đầu vào, phản hồi và yêu cầu xác thực.
+Xem [handoff API cho frontend](docs/api/fe-handoff.md) để tra quyền theo role, request và response của tất cả endpoint. Dùng [OpenAPI JSON](docs/api/openapi.json) để import vào Postman hoặc sinh type.
+
+Các endpoint thường dùng dưới đây sử dụng prefix mặc định `/api/v1`.
 
 | Phân hệ | Phương thức | Đường dẫn |
 | --- | --- | --- |
@@ -214,15 +218,48 @@ Các endpoint dưới đây sử dụng prefix mặc định `/api/v1`. Swagger 
 | Tạo tác vụ ingestion | `POST` | `/api/v1/ingestion/jobs` |
 | Danh sách tác vụ | `GET` | `/api/v1/ingestion/jobs` |
 | Chi tiết tác vụ | `GET` | `/api/v1/ingestion/jobs/{job_id}` |
-| Chuẩn hóa dữ liệu demo | `POST` | `/api/v1/pipeline/cleaning/ingestion-jobs/{ingestion_job_id}` |
+| Tải file trực tiếp vào Bronze | `POST` | `/api/v1/ingestion/uploads` |
+| Làm sạch và lưu Silver | `POST` | `/api/v1/pipeline/cleaning/ingestion-jobs/{ingestion_job_id}` |
 | Danh mục dữ liệu | `GET` | `/api/v1/governance/catalog` |
 | NLQ mô phỏng | `POST` | `/api/v1/nlq/ask` |
 
-Tạo tác vụ ingestion và chạy cleaning yêu cầu vai trò `ADMIN` hoặc `DATA_ADMIN`. Nguồn và dataset phải được cấu hình hợp lệ trong catalog trước khi tạo tác vụ.
+Tạo tác vụ ingestion nguồn có sẵn, chạy cleaning và chạy lại job yêu cầu vai trò `ADMIN` hoặc `DATA_ADMIN`. Tải file cho phép `ADMIN`, `DATA_ADMIN`, `HR_STAFF`, `ACADEMIC_STAFF` và `ADMISSIONS_STAFF`; STAFF chỉ tải, xem job và thống kê trong miền phòng ban tương ứng. `VIEWER` không xem được dữ liệu ingestion. Thu thập nguồn có sẵn cần nguồn và bộ dữ liệu hợp lệ trong danh mục. Tải file chỉ cần chọn bộ dữ liệu Bronze hợp lệ; backend tự tạo nguồn tải lên.
 
-Tham khảo [đặc tả ingestion](docs/ingestion-execution.md) để tra cứu payload, vòng đời tác vụ và mã lỗi. Quy trình Bronze → Silver với dữ liệu tổng hợp được mô tả trong [hướng dẫn demo chuẩn hóa](docs/standardization/manual-live-demo.md).
+Hướng dẫn [tải file qua API](docs/ingestion-uploads.md) mô tả cách tiếp nhận trực tiếp từ máy người dùng. Tham khảo [đặc tả ingestion](docs/ingestion-execution.md) để tra cứu payload, vòng đời tác vụ và mã lỗi. Quy trình và cấu hình Bronze → Silver nằm trong [hướng dẫn nguồn thật](docs/standardization/source-silver-flow.md).
+
+Theo dõi worker, thống kê và chạy lại thủ công được mô tả trong [hướng dẫn độ tin cậy ingestion](docs/ingestion-reliability.md).
+
+Các API chọn bộ dữ liệu Bronze, quản lý profile, xem trước và lựa chọn phiên bản Silver nằm trong [hướng dẫn quản lý Silver trên Swagger](docs/silver-management-api.md). Profile tạo qua API được lưu trong PostgreSQL; cần áp dụng migration `20261110_silver_management.sql` trên database đích trước khi sử dụng.
 
 ## Quản lý cơ sở dữ liệu
+
+### Role và tài khoản mẫu
+
+Seed tạo 9 role dưới đây, mỗi tài khoản mẫu được gán đúng một role.
+Mật khẩu khởi tạo cho các tài khoản phát triển cục bộ: `Password@123`.
+
+| Role | Tên đăng nhập | Trách nhiệm |
+| --- | --- | --- |
+| `ADMIN` | `admin` | Quản trị hệ thống, tài khoản và phân quyền |
+| `DATA_ADMIN` | `dataadmin` | Quản lý nguồn, pipeline, chất lượng dữ liệu; truy vấn AI xuyên phòng ban |
+| `VIEWER` | `viewer` | Ban Giám hiệu xem dashboard và báo cáo tổng hợp |
+| `ADMISSIONS_MANAGER` | `admissions_manager` | Trưởng phòng Tuyển sinh |
+| `ADMISSIONS_STAFF` | `admissions_staff` | Nhân viên phòng Tuyển sinh |
+| `ACADEMIC_MANAGER` | `academic_manager` | Trưởng phòng Đào tạo |
+| `ACADEMIC_STAFF` | `academic_staff` | Nhân viên phòng Đào tạo |
+| `HR_MANAGER` | `hr_manager` | Trưởng phòng Nhân sự |
+| `HR_STAFF` | `hr_staff` | Nhân viên phòng Nhân sự |
+
+Áp dụng vào database đã có schema bằng `python -m app.seed`.
+Seed đồng bộ quyền của 9 role và gán lại role cho các tài khoản mẫu; chạy lại không
+ghi đè mật khẩu hoặc trạng thái của các tài khoản này. Tài khoản ngoài seed cần
+được gán ít nhất một role trong bảng trên để đăng nhập.
+
+`DATA_ADMIN` có thêm quyền `query.execute`. Sáu role phòng ban được khai báo quyền
+xem dataset, catalog, dashboard, thực thi và xem lịch sử truy vấn. Hiện manager
+và staff có cùng tập quyền; backend chưa thực thi giới hạn dữ liệu theo phòng ban.
+Bảng `role_permission` là cấu hình quyền; các endpoint hiện chưa kiểm tra đầy đủ
+bảng này. Xem trạng thái triển khai từng phân hệ ở phần phạm vi chức năng.
 
 DDL, dữ liệu khởi tạo và SQL migration được quản lý trong `infra/postgres/`. Schema dữ liệu nằm tại `docs/data-schema/`.
 
@@ -290,7 +327,7 @@ app/
 └── ingestion_worker.py   # Điểm khởi chạy worker
 alembic/                  # Cấu hình Alembic
 infra/postgres/           # DDL, seed và SQL migration
-scripts/standardization/  # Công cụ xem trước, chạy thử và demo
+scripts/standardization/  # Công cụ quản lý cấu trúc, xem trước và đối chiếu mã
 data/                     # Dữ liệu mẫu, bộ sinh dữ liệu và fixture
 docs/                     # Kiến trúc, schema và hướng dẫn kỹ thuật
 tests/                    # Kiểm thử đơn vị, contract và tích hợp

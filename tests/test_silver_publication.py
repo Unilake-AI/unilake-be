@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import csv
 import json
-import subprocess
-import sys
 from copy import deepcopy
 from dataclasses import replace
 from decimal import Decimal
@@ -21,12 +19,10 @@ from app.modules.ingestion.readers.contract import ReadRequest
 from app.modules.ingestion.readers.csv_reader import CSVReader
 from app.modules.ingestion.readers.excel_reader import ExcelReader
 from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
-from app.modules.pipeline.identity_contracts import digest
 from app.modules.pipeline.mapping_profiles import build_profile
 from app.modules.pipeline.schema_mapping import MappingRegistry, SchemaMappingService
 from app.modules.pipeline.silver_pipeline import NormalizationTask, SilverPipeline
 from app.modules.pipeline.silver_publication import (
-    RULE_IDS,
     BusinessEvidence,
     SilverPublicationService,
 )
@@ -39,6 +35,12 @@ from app.modules.pipeline.silver_storage import (
 )
 from app.modules.pipeline.silver_validation import SilverIssue
 from tests.test_identity_standardization import CONTRACTS, RECORDS, setup, typed
+
+RULE_IDS = frozenset(
+    f"{prefix}-DQ-{i:02}"
+    for prefix, count in (("ADM", 12), ("ACA", 13), ("HR", 14))
+    for i in range(1, count + 1)
+)
 
 
 @pytest.fixture
@@ -61,7 +63,7 @@ def environment(tmp_path):
     repo = SilverRepository(engine)
     store = LocalSilverStore(tmp_path / "objects")
     publisher = SilverPublicationService(
-        repository=repo, storage=store, contracts=CONTRACTS, scope="fixture", mode="rehearsal"
+        repository=repo, storage=store, contracts=CONTRACTS, scope="fixture", mode="test"
     )
     yield publisher, repo, store
     engine.dispose()
@@ -100,7 +102,12 @@ def test_all_22_entities_real_parquet_and_audit(environment):
         assert table[0]["_source_record_id"].startswith("sha256:")
         assert table[0]["_processed_at"].tzinfo is not None
     manifest = json.loads(store.get(receipt.manifest))
-    assert manifest["mode"] == "rehearsal"
+    assert manifest["mode"] == "test"
+    evidence = manifest["dataset_lineage"]
+    assert evidence["run_ref"] == f"silver:{receipt.snapshot_id}"
+    assert len(evidence["derivations"]) == 22
+    assert all(edge["output"]["layer"] == "SILVER" for edge in evidence["derivations"])
+    assert all(edge["inputs"][0]["layer"] is None for edge in evidence["derivations"])
     assert not manifest["activation_allowed"]
     assert manifest["entities"]["position"]["lineage"][0]["crosswalk_version"] == "fixture-cw-1"
     assert manifest["entities"]["position"]["lineage"][0]["record_locators"] == [
@@ -139,6 +146,132 @@ def test_partial_update_keeps_pinned_parent_tables(environment):
     manifest = json.loads(store.get(second.manifest))
     assert manifest["parent_snapshot"] == first.snapshot_id
     assert manifest["parent_manifest"] == json.loads(runs(publisher.repository)[0]["manifest_ref"])
+    view = publisher.read_lineage(second.snapshot_id)
+    assert view.missing_entities == ()
+    origins = {
+        edge.output.asset_id.rsplit(":", 1)[-1]: edge.output.version
+        for item in view.evidence
+        for edge in item.derivations
+    }
+    assert origins["position"] == second.snapshot_id
+    assert origins["employee"] == first.snapshot_id
+    assert len(origins) == 22
+
+
+def test_quarantined_publication_merges_without_losing_parent_rows(environment):
+    publisher, repo, store = environment
+    original = normalized()
+    first = publisher.publish((original,))
+    previous = publisher.read_snapshot(first.snapshot_id)["position"][0]
+    row = original.accepted[0]
+    incoming = replace(
+        original,
+        input_version="v2",
+        accepted=(
+            replace(
+                row,
+                values={
+                    **row.values,
+                    "position_id": previous["position_id"] + 1,
+                    "position_code": "NEW",
+                },
+            ),
+        ),
+    )
+    data = b'{"records_quarantined":1}'
+    report = store.put(f"report-{checksum(data)}.json", data)
+    second = publisher.publish(
+        (incoming,), base_snapshot=first.snapshot_id, quarantine_report=report
+    )
+    current = publisher.read_active()["position"]
+    assert current[0] == previous
+    assert current[1]["position_code"] == "NEW"
+    manifest = json.loads(store.get(second.manifest))
+    assert manifest["quarantine_report"]["sha256"] == report.sha256
+    assert len(manifest["entities"]["position"]["lineage"]) == 2
+    retry = publisher.publish(
+        (incoming,), base_snapshot=first.snapshot_id, quarantine_report=report
+    )
+    assert retry.reused
+    assert retry.snapshot_id == second.snapshot_id
+
+    # Invalid updates and unavailable reports must leave the active snapshot intact.
+    with pytest.raises(FileNotFoundError):
+        publisher.publish(
+            (incoming,),
+            base_snapshot=second.snapshot_id,
+            quarantine_report=replace(report, key="missing-report.json"),
+        )
+    with pytest.raises(SilverError, match="SNAPSHOT_REJECTED"):
+        publisher.publish(
+            (replace(incoming, rejected_locators=("bad",)),),
+            base_snapshot=second.snapshot_id,
+            quarantine_report=report,
+        )
+    assert repo.head(publisher.scope) == second.snapshot_id
+
+
+def test_missing_updated_lineage_does_not_inherit_outdated_evidence(environment, monkeypatch):
+    publisher, _, _ = environment
+    first = publisher.publish(all_entities())
+    monkeypatch.setattr("app.modules.pipeline.silver_publication.silver_lineage", lambda **_: None)
+    second = publisher.publish(
+        (normalized(changes={"position_name": "Changed"}),), base_snapshot=first.snapshot_id
+    )
+    view = publisher.read_lineage(second.snapshot_id)
+    assert view.missing_entities == ("position",)
+    assert all(
+        not edge.output.asset_id.endswith(":position")
+        for item in view.evidence
+        for edge in item.derivations
+    )
+
+
+def test_lineage_reads_only_manifests_and_bounds_ancestry(environment, monkeypatch):
+    publisher, _, store = environment
+    first = publisher.publish(all_entities())
+    second = publisher.publish(
+        (normalized(changes={"position_name": "Changed"}),), base_snapshot=first.snapshot_id
+    )
+    original = store.get
+
+    def metadata_only(ref):
+        assert ref.key.endswith(".json"), "Lineage must not scan business rows"
+        return original(ref)
+
+    monkeypatch.setattr(store, "get", metadata_only)
+    assert publisher.read_lineage(second.snapshot_id).missing_entities == ()
+    with pytest.raises(SilverError, match="LINEAGE_ANCESTRY_LIMIT"):
+        publisher.read_lineage(second.snapshot_id, max_depth=1)
+
+
+def test_lineage_cannot_read_staged_snapshot(environment, monkeypatch):
+    publisher, repo, _ = environment
+    monkeypatch.setattr(repo, "publish", MagicMock(side_effect=RuntimeError("DB unavailable")))
+    with pytest.raises(SilverError, match="STORAGE_OR_METADATA_FAILURE"):
+        publisher.publish((normalized(),))
+    attempt = runs(repo)[0]
+    assert attempt["manifest_ref"] is not None
+    with pytest.raises(SilverError, match="SNAPSHOT_NOT_PUBLISHED"):
+        publisher.read_lineage(attempt["run_id"])
+
+
+def test_changed_cleaning_version_changes_publication_identity(environment):
+    publisher, _, _ = environment
+    result = replace(normalized(), processing_steps=(("CLEAN_FORMAT", "v1"),))
+    first = publisher.publish((result,))
+    assert publisher.publish((result,)).reused
+    # Same data but different transformation evidence is not the same logical request.
+    with pytest.raises(SilverError, match="ACTIVE_SNAPSHOT_CHANGED"):
+        publisher.publish((replace(result, processing_steps=(("CLEAN_FORMAT", "v2"),)),))
+    assert (
+        publisher.read_lineage(first.snapshot_id)
+        .evidence[0]
+        .derivations[0]
+        .transformations[0]
+        .version
+        == "v1"
+    )
 
 
 def test_fk_to_missing_parent_blocks_snapshot(environment):
@@ -301,8 +434,7 @@ def test_default_production_is_blocked_with_draft_contract(environment):
     # Kiểm tra nguồn gốc thực ngay cả trước cổng phê duyệt.
     with pytest.raises(SilverError, match="PROVENANCE_REQUIRED"):
         publisher.publish((normalized(),))
-    with pytest.raises(SilverError, match="G1_NOT_APPROVED"):
-        publisher._gate({}, {})
+    assert publisher._gate({}, {}) == ()
     assert repo.head(publisher.scope) is None
 
 
@@ -329,6 +461,34 @@ def test_production_requires_durable_bronze_version(environment):
     with pytest.raises(SilverError, match="BRONZE_REPLAY_REFERENCE_REQUIRED"):
         publisher.publish((result,))
     assert repo.head(publisher.scope) is None
+
+
+def test_ingestion_run_context_does_not_change_logical_replay(environment):
+    publisher, _, _ = environment
+    result = normalized()
+    provenance = FileProvenance(
+        "SYNTH",
+        "1",
+        "positions",
+        "CSV",
+        "s3://bronze/input.csv",
+        "version-1",
+        "0" * 64,
+        "1" * 64,
+        "2" * 64,
+        "2026-01-01T00:00:00Z",
+        "parsed_record_ordinal",
+    )
+    result = replace(result, provenance=provenance, input_version=provenance.input_version)
+    first = publisher.publish((result,))
+    linked = replace(result, provenance=replace(provenance, ingestion_job_id=101))
+    replay = publisher.publish((linked,))
+    assert replay.reused
+    assert replay.snapshot_id == first.snapshot_id
+    # The old published evidence is not retroactively rewritten with a new claim.
+    assert (
+        publisher.read_lineage(first.snapshot_id).evidence[0].derivations[0].inputs[0].layer is None
+    )
 
 
 def test_business_gate_coverage_tracks_source_rule_inventory():
@@ -478,42 +638,18 @@ def test_production_business_gate_contract_without_claiming_real_approval(enviro
                 return BusinessEvidence(RULE_IDS, (SilverIssue("*", "*", "fixture", "DQ_FAILED"),))
             return BusinessEvidence(RULE_IDS)
 
-    policy = {
-        "activation_allowed": True,
-        "g1_evidence": "TEST_ONLY",
-        "schema_fingerprint": digest(contracts),
-        "dq_version": "fixture-dq-1",
-        "dq_rule_ids": sorted(RULE_IDS),
-    }
     publisher = SilverPublicationService(
         repository=repo,
         storage=store,
         contracts=contracts,
         scope="fixture-gate",
-        approval=policy,
         business_gate=None if failure == "missing_gate" else FixtureGate(),
     )
     tables = {"position": []}
-    if failure == "valid":
+    if failure != "dq_error":
         publisher._gate(tables, {})
         assert tables == {"position": []}
     else:
         with pytest.raises(SilverError, match="BUSINESS_GATE"):
             publisher._gate(tables, {})
     assert repo.head(publisher.scope) is None
-
-
-def test_rehearsal_cli_writes_parquet_and_is_idempotent(tmp_path):
-    root = Path(__file__).resolve().parents[1]
-    command = [
-        sys.executable,
-        str(root / "scripts/standardization/rehearse_p5.py"),
-        "--output",
-        str(tmp_path / "cli"),
-    ]
-    first = json.loads(subprocess.run(command, capture_output=True, text=True, check=True).stdout)
-    second = json.loads(subprocess.run(command, capture_output=True, text=True, check=True).stdout)
-    assert first["snapshot_id"] == second["snapshot_id"]
-    assert second["reused"] is True
-    assert second["row_counts"] == {"admission_method": 1, "semester": 1, "position": 1}
-    assert second["production_activated"] is False

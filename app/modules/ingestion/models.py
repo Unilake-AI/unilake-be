@@ -54,3 +54,24 @@ class IngestionJob(Base):
     output: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     validation_input: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     validation_report: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    upload_input: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    bronze_output: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    root_job_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("app.ingestion_job.ingestion_job_id"), nullable=True
+    )
+    attempt_number: Mapped[int] = mapped_column(nullable=False, default=1)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    retryable: Mapped[bool] = mapped_column(nullable=False, default=False)
+
+
+class IngestionWorkerHeartbeat(Base):
+    """Dấu hiệu worker còn kết nối được hàng đợi, kể cả lúc không có job."""
+
+    __tablename__ = "ingestion_worker_heartbeat"
+    __table_args__ = {"schema": "app"}
+
+    worker_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    current_job_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("app.ingestion_job.ingestion_job_id"), nullable=True
+    )
+    last_heartbeat_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

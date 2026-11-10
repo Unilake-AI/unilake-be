@@ -5,16 +5,17 @@ from dataclasses import replace
 import pytest
 
 from app.domains.base import DataLayer
-from app.domains.registry import DomainRegistry, DomainRegistryError, get_domain_registry
+from app.domains.registry import DomainRegistry, DomainRegistryError
 from app.modules.governance.service import GovernanceService
 from app.modules.ingestion.service import InMemoryBronzeRepository, ingest_records
 from app.modules.nlq.schema_retriever import retrieve_schema_context
 from app.modules.pipeline.contracts import InMemoryLayerPublisher
 from app.modules.pipeline.service import PipelineOrchestrator, PipelineQualityError
+from tests.fixtures.registry import sample_registry
 
 
 def test_demo_domain_runs_through_generic_pipeline() -> None:
-    registry = get_domain_registry()
+    registry = sample_registry()
     bronze = InMemoryBronzeRepository()
     published = InMemoryLayerPublisher()
     governance = GovernanceService(registry)
@@ -47,7 +48,7 @@ def test_demo_domain_runs_through_generic_pipeline() -> None:
 
 
 def test_governance_and_nlq_consume_registered_metadata() -> None:
-    registry = get_domain_registry()
+    registry = sample_registry()
     governance = GovernanceService(registry)
     catalog = governance.catalog(domain_id="demo")
     quality_rules = governance.quality_rules(domain_id="demo")
@@ -64,7 +65,7 @@ def test_governance_and_nlq_consume_registered_metadata() -> None:
 
 
 def test_pipeline_stops_before_publish_when_quality_fails() -> None:
-    registry = get_domain_registry()
+    registry = sample_registry()
     bronze = InMemoryBronzeRepository()
     published = InMemoryLayerPublisher()
     batch = ingest_records(
@@ -82,7 +83,7 @@ def test_pipeline_stops_before_publish_when_quality_fails() -> None:
 
 
 def test_registry_rejects_duplicate_domain_ids() -> None:
-    definition = get_domain_registry().get("demo")
+    definition = sample_registry().get("demo")
     registry = DomainRegistry()
     registry.register(definition)
 
@@ -91,7 +92,7 @@ def test_registry_rejects_duplicate_domain_ids() -> None:
 
 
 def test_registry_rejects_domain_without_required_layers() -> None:
-    definition = get_domain_registry().get("demo")
+    definition = sample_registry().get("demo")
     silver_only = replace(
         definition,
         datasets=tuple(

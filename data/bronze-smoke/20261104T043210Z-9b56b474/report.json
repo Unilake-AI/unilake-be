@@ -1,0 +1,276 @@
+{
+  "run_id": "20261104T043210Z-9b56b474",
+  "postgres_source_table": "bronze_smoke_ca56cac1d495.employee",
+  "cases": {
+    "EXCEL": {
+      "job": {
+        "ingestion_job_id": 3,
+        "data_source_id": 2,
+        "dataset_id": 2,
+        "status": "SUCCESS",
+        "stage": "COMPLETED",
+        "source_table": "academic.xlsx",
+        "created_at": "2026-11-04T04:32:10.312439",
+        "started_at": "2026-11-04T04:32:11.570122",
+        "finished_at": "2026-11-04T04:32:11.621104",
+        "requested_by": "1",
+        "rows_read": 2,
+        "rows_written": 2,
+        "rows_rejected": 0,
+        "error_message": null,
+        "output": {
+          "uri": "s3://bronze/excel-smoke/2026/11/04/job-3/academic.xlsx",
+          "sha256": "6117aa0af4cbb1b0bf88dc0cf2e8d3ff50dd59a450b9de54dd91c7fdc836d8a3",
+          "metadata": {
+            "sha256": "6117aa0af4cbb1b0bf88dc0cf2e8d3ff50dd59a450b9de54dd91c7fdc836d8a3",
+            "batch-id": "job-3",
+            "source-system-id": "6",
+            "ingestion-timestamp": "2026-11-04T04:32:11.583673+00:00"
+          },
+          "size_bytes": 4921,
+          "version_id": "3b1e6898-620e-4a7d-9250-41653c602646",
+          "source_version_id": null
+        },
+        "validation_report": {
+          "checks": [
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-001",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-002",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-003",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-004",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-005",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-006",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-007",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-008",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-XLS-001",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-XLS-002",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-XLS-003",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-XLS-004",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-XLS-005",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-XLS-006",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-XLS-007",
+              "required": true
+            }
+          ],
+          "issues": [],
+          "result": "PASS",
+          "policy_id": "excel-smoke-v1",
+          "report_id": "387cbe65-b246-42ae-b44a-f087649c79fd",
+          "attempt_id": "job-3",
+          "can_accept": true,
+          "source_type": "EXCEL",
+          "total_errors": 0,
+          "scan_complete": true,
+          "policy_version": "1",
+          "total_warnings": 0,
+          "records_scanned": 2,
+          "ingestion_job_id": 3,
+          "issues_truncated": false,
+          "blank_rows_skipped": 0,
+          "policy_fingerprint": "sha256:518567e8366a24aa42561059781b0f1325de0707a2262495f259297d967cfb33"
+        }
+      },
+      "verification": {
+        "sha256_match": true,
+        "metadata_match": true,
+        "version_verified": true,
+        "size_match": true,
+        "bytes_match": true,
+        "worksheet_rows_match": true,
+        "source_unchanged": true
+      }
+    },
+    "POSTGRESQL": {
+      "job": {
+        "ingestion_job_id": 4,
+        "data_source_id": 3,
+        "dataset_id": 3,
+        "status": "SUCCESS",
+        "stage": "COMPLETED",
+        "source_table": "bronze_smoke_ca56cac1d495.employee",
+        "created_at": "2026-11-04T04:32:12.376183",
+        "started_at": "2026-11-04T04:32:13.636844",
+        "finished_at": "2026-11-04T04:32:13.699115",
+        "requested_by": "1",
+        "rows_read": 2,
+        "rows_written": 2,
+        "rows_rejected": 0,
+        "error_message": null,
+        "output": {
+          "uri": "s3://bronze/postgres-smoke/2026/11/04/job-4/snapshot.parquet",
+          "sha256": "c4942934f9cb22a2c74e4832de49477e7ebb1ac9ca07555e0e63befc78eeba3a",
+          "metadata": {
+            "sha256": "c4942934f9cb22a2c74e4832de49477e7ebb1ac9ca07555e0e63befc78eeba3a",
+            "batch-id": "job-4",
+            "source-system-id": "7",
+            "ingestion-timestamp": "2026-11-04T04:32:13.644250+00:00"
+          },
+          "size_bytes": 1395,
+          "version_id": "a30b5861-24c8-41eb-84c3-cdf15458cca6",
+          "source_version_id": null
+        },
+        "validation_report": {
+          "checks": [
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-001",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-002",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-003",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-004",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-005",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-006",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-007",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-COM-008",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-PG-001",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-PG-002",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-PG-003",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-PG-004",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-PG-005",
+              "required": true
+            },
+            {
+              "status": "PASS",
+              "rule_id": "IN-PG-006",
+              "required": true
+            }
+          ],
+          "issues": [],
+          "result": "PASS",
+          "policy_id": "postgresql-smoke-v1",
+          "report_id": "1f15d3d2-78d2-48ff-88bd-afec023018c6",
+          "attempt_id": "job-4",
+          "can_accept": true,
+          "source_type": "POSTGRESQL",
+          "total_errors": 0,
+          "scan_complete": true,
+          "policy_version": "1",
+          "total_warnings": 0,
+          "records_scanned": 2,
+          "ingestion_job_id": 4,
+          "issues_truncated": false,
+          "blank_rows_skipped": 0,
+          "policy_fingerprint": "sha256:ee4da0bc9718c0ba98702cc326bda267526b92b0b6d4a10855a9ed2548f82d53"
+        }
+      },
+      "parquet_schema": "employee_id: int32\nfull_name: string\nsalary: decimal128(10, 2)\nstart_date: date32[day]",
+      "verification": {
+        "sha256_match": true,
+        "metadata_match": true,
+        "version_verified": true,
+        "size_match": true,
+        "rows_match": true,
+        "integer_type_preserved": true,
+        "decimal_precision_preserved": true,
+        "date_type_preserved": true,
+        "null_preserved": true,
+        "source_unchanged": true
+      }
+    }
+  },
+  "result": "PASS"
+}

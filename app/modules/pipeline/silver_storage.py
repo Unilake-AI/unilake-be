@@ -1,4 +1,4 @@
-"""Lưu byte cho các sản phẩm Silver bất biến, được định địa chỉ bằng checksum."""
+"""Lưu các tệp Silver và dùng mã kiểm tra nội dung để phát hiện dữ liệu bị thay đổi."""
 
 from __future__ import annotations
 
@@ -52,11 +52,11 @@ class SilverObjectStore(Protocol):
 
 
 class LocalSilverStore:
-    """Lưu trữ diễn tập cục bộ. Quét thư mục không phải tín hiệu công bố dữ liệu."""
+    """Lưu tệp chạy thử trên máy. Tệp tồn tại chưa có nghĩa là dữ liệu đã được công bố."""
 
     def __init__(self, root: Path) -> None:
         self.root = root.resolve()
-        # Khóa chứa mã lần chạy/checksum vượt MAX_PATH trong thư mục tạm dài trên Windows.
+        # Cho phép dùng đường dẫn dài trên Windows khi tên tệp có cả mã lần chạy và mã kiểm tra nội dung.
         if os.name == "nt" and not str(self.root).startswith("\\\\?\\"):
             name = str(self.root)
             self.root = Path(
@@ -86,7 +86,7 @@ class LocalSilverStore:
 
 
 class MinioSilverStore:
-    """Khóa theo nội dung do ứng dụng quản lý; vẫn cần IAM/quản lý phiên bản của kho lưu trữ."""
+    """Lưu tệp trên MinIO theo nội dung; kho lưu trữ vẫn cần được phân quyền và quản lý phiên bản."""
 
     def __init__(self, client: Minio, bucket: str) -> None:
         self.client, self.bucket = client, bucket
@@ -94,7 +94,7 @@ class MinioSilverStore:
     def put(self, key: str, data: bytes) -> ObjectRef:
         valid_key(key)
         digest = checksum(data)
-        # Bên gọi chỉ được ghi khóa chứa đầy đủ checksum nội dung của nó.
+        # Tên tệp phải chứa đầy đủ mã kiểm tra nội dung của tệp đó.
         if not PurePosixPath(key).stem.endswith("-" + digest):
             raise SilverError("CONTENT_ADDRESSED_KEY_REQUIRED")
         result = self.client.put_object(

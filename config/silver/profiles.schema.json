@@ -1,0 +1,176 @@
+{
+  "$defs": {
+    "SourceProfile": {
+      "additionalProperties": false,
+      "description": "Các quy tắc của một bảng nguồn; thay đổi cấu hình được ghi nhận bằng mã nội dung mới.",
+      "properties": {
+        "data_source_id": {
+          "exclusiveMinimum": 0,
+          "title": "Data Source Id",
+          "type": "integer"
+        },
+        "dataset_id": {
+          "exclusiveMinimum": 0,
+          "title": "Dataset Id",
+          "type": "integer"
+        },
+        "source_system_id": {
+          "exclusiveMinimum": 0,
+          "title": "Source System Id",
+          "type": "integer"
+        },
+        "source_type": {
+          "enum": [
+            "CSV",
+            "EXCEL"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "source_table": {
+          "minLength": 1,
+          "title": "Source Table",
+          "type": "string"
+        },
+        "domain": {
+          "pattern": "^[a-z][a-z0-9_-]{0,62}$",
+          "title": "Domain",
+          "type": "string"
+        },
+        "entity": {
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Entity",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "scope": {
+          "pattern": "^[A-Za-z0-9_-]{1,40}$",
+          "title": "Scope",
+          "type": "string"
+        },
+        "source_schema_version": {
+          "minLength": 1,
+          "title": "Source Schema Version",
+          "type": "string"
+        },
+        "source_schema": {
+          "additionalProperties": true,
+          "title": "Source Schema",
+          "type": "object"
+        },
+        "contracts": {
+          "additionalProperties": true,
+          "title": "Contracts",
+          "type": "object"
+        },
+        "field_mapping": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Field Mapping",
+          "type": "object"
+        },
+        "ignored_columns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ignored Columns",
+          "type": "array"
+        },
+        "format_options": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Format Options",
+          "type": "object"
+        },
+        "type_options": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Type Options",
+          "type": "object"
+        },
+        "null_tokens": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Null Tokens",
+          "type": "object"
+        },
+        "dictionaries": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": "Dictionaries",
+          "type": "object"
+        },
+        "reference_namespaces": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Reference Namespaces",
+          "type": "object"
+        },
+        "crosswalk_release": {
+          "minLength": 1,
+          "title": "Crosswalk Release",
+          "type": "string"
+        },
+        "effective_at": {
+          "format": "date-time",
+          "title": "Effective At",
+          "type": "string"
+        },
+        "collapse_exact_duplicates": {
+          "default": false,
+          "title": "Collapse Exact Duplicates",
+          "type": "boolean"
+        },
+        "source_preview_columns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Preview Columns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "data_source_id",
+        "dataset_id",
+        "source_system_id",
+        "source_type",
+        "source_table",
+        "domain",
+        "entity",
+        "version",
+        "scope",
+        "source_schema_version",
+        "source_schema",
+        "contracts",
+        "field_mapping",
+        "crosswalk_release",
+        "effective_at"
+      ],
+      "title": "SourceProfile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": {
+    "$ref": "#/$defs/SourceProfile"
+  },
+  "type": "object"
+}

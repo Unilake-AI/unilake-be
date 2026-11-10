@@ -60,8 +60,7 @@ COPY --from=builder /opt/venv /opt/venv
 
 # Sao chép mã nguồn ứng dụng, migration và cấu hình
 COPY app ./app
-COPY docs ./docs
-COPY data/standardization ./data/standardization
+COPY config ./config
 COPY alembic ./alembic
 COPY alembic.ini pyproject.toml ./
 
@@ -77,7 +76,7 @@ EXPOSE 8000
 
 # Cấu hình kiểm tra tình trạng hoạt động
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f "http://localhost:${PORT:-8000}/health" || exit 1
 
 # Khởi chạy máy chủ ASGI Uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port \"${PORT:-8000}\""]

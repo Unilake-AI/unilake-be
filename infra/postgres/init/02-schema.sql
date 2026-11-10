@@ -381,7 +381,13 @@ CREATE TABLE IF NOT EXISTS ingestion_job (
     lease_expires_at TIMESTAMP,
     output JSONB,
     validation_input JSONB,
-    validation_report JSONB
+    validation_report JSONB,
+    upload_input JSONB,
+    bronze_output JSONB,
+    root_job_id BIGINT REFERENCES ingestion_job(ingestion_job_id),
+    attempt_number INTEGER NOT NULL DEFAULT 1,
+    next_attempt_at TIMESTAMP,
+    retryable BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ingestion_execution_active_source
@@ -389,6 +395,111 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_ingestion_execution_active_source
     WHERE job_type = 'EXECUTION_V1' AND status IN ('QUEUED', 'RUNNING');
 CREATE INDEX IF NOT EXISTS ix_ingestion_execution_queue
     ON ingestion_job(status, ingestion_job_id) WHERE job_type = 'EXECUTION_V1';
+CREATE INDEX IF NOT EXISTS ix_ingestion_job_root_attempt
+    ON ingestion_job(root_job_id, attempt_number);
+
+CREATE TABLE IF NOT EXISTS silver_source_profile (
+    profile_id VARCHAR(100) PRIMARY KEY,
+    definition JSONB NOT NULL,
+    fingerprint VARCHAR(64) NOT NULL,
+    revision INTEGER NOT NULL CHECK (revision > 0),
+    updated_by VARCHAR(100) NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ingestion_worker_heartbeat (
+    worker_id VARCHAR(100) PRIMARY KEY,
+    current_job_id BIGINT REFERENCES ingestion_job(ingestion_job_id),
+    last_heartbeat_at TIMESTAMP NOT NULL
+);
+
+-- Mỗi lần chạy cleaning có ID riêng, kể cả khi dùng lại cùng job Bronze.
+CREATE TABLE IF NOT EXISTS cleaning_run (
+    run_id VARCHAR(36) PRIMARY KEY,
+    ingestion_job_id BIGINT NOT NULL REFERENCES ingestion_job(ingestion_job_id),
+    dataset_id BIGINT NOT NULL REFERENCES dataset(dataset_id),
+    domain VARCHAR(50) NOT NULL,
+    entity VARCHAR(100) NOT NULL,
+    requested_by VARCHAR(100) NOT NULL,
+    session VARCHAR(40) NOT NULL,
+    bronze_version TEXT NOT NULL,
+    input_version TEXT,
+    cleaning_status VARCHAR(20) NOT NULL,
+    publication_status VARCHAR(30) NOT NULL,
+    records_read BIGINT,
+    records_passed BIGINT,
+    records_quarantined BIGINT,
+    records_collapsed BIGINT,
+    records_published BIGINT NOT NULL,
+    silver_snapshot_id VARCHAR(36),
+    report_ref JSON,
+    quarantine_source JSON,
+    error_code VARCHAR(80),
+    started_at TIMESTAMPTZ NOT NULL,
+    finished_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS ix_cleaning_run_started
+    ON cleaning_run(started_at DESC, run_id DESC);
+CREATE INDEX IF NOT EXISTS ix_cleaning_run_dataset_started
+    ON cleaning_run(dataset_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS ix_cleaning_run_job_started
+    ON cleaning_run(ingestion_job_id, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS quarantine_record (
+    record_id VARCHAR(36) PRIMARY KEY,
+    cleaning_run_id VARCHAR(36) NOT NULL REFERENCES cleaning_run(run_id),
+    locator TEXT NOT NULL,
+    record_position BIGINT NOT NULL CHECK (record_position > 0),
+    issues JSON NOT NULL,
+    error_codes JSONB NOT NULL,
+    UNIQUE (cleaning_run_id, locator)
+);
+
+CREATE INDEX IF NOT EXISTS ix_quarantine_record_error_codes
+    ON quarantine_record USING GIN (error_codes jsonb_path_ops);
+
+CREATE TABLE IF NOT EXISTS data_quality_issue (
+    issue_id VARCHAR(36) PRIMARY KEY,
+    dataset_id BIGINT NOT NULL REFERENCES dataset(dataset_id),
+    department_id BIGINT NOT NULL REFERENCES department(department_id),
+    domain VARCHAR(50) NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    description TEXT NOT NULL,
+    status VARCHAR(30) NOT NULL CHECK (status IN ('ASSIGNED', 'PENDING_VERIFICATION', 'VERIFIED')),
+    created_by BIGINT NOT NULL REFERENCES app_user(app_user_id),
+    assignee_user_id BIGINT REFERENCES app_user(app_user_id),
+    resolution_job_id BIGINT REFERENCES ingestion_job(ingestion_job_id),
+    verification_run_id VARCHAR(36) REFERENCES cleaning_run(run_id),
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS data_quality_issue_record (
+    issue_id VARCHAR(36) NOT NULL REFERENCES data_quality_issue(issue_id),
+    record_id VARCHAR(36) NOT NULL REFERENCES quarantine_record(record_id),
+    PRIMARY KEY (issue_id, record_id)
+);
+
+CREATE TABLE IF NOT EXISTS data_quality_issue_event (
+    event_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    issue_id VARCHAR(36) NOT NULL REFERENCES data_quality_issue(issue_id),
+    actor_id BIGINT NOT NULL REFERENCES app_user(app_user_id),
+    event_type VARCHAR(30) NOT NULL,
+    from_status VARCHAR(30),
+    to_status VARCHAR(30) NOT NULL,
+    details JSON NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_quality_issue_department_status
+    ON data_quality_issue(department_id, status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS ix_quality_issue_updated
+    ON data_quality_issue(updated_at DESC, issue_id DESC);
+CREATE INDEX IF NOT EXISTS ix_quality_issue_assignee_updated
+    ON data_quality_issue(assignee_user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS ix_quality_issue_event_issue
+    ON data_quality_issue_event(issue_id, event_id);
 
 CREATE TABLE IF NOT EXISTS transformation_step (
     transformation_step_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -452,6 +563,25 @@ CREATE TABLE IF NOT EXISTS data_lineage (
     transformation_expression TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS pipeline_lineage (
+    lineage_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    source_layer VARCHAR(50) NOT NULL,
+    source_name TEXT NOT NULL,
+    target_layer VARCHAR(50) NOT NULL,
+    target_name TEXT NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_pipeline_lineage_source
+    ON pipeline_lineage(source_layer, source_name);
+CREATE INDEX IF NOT EXISTS ix_pipeline_lineage_target
+    ON pipeline_lineage(target_layer, target_name);
+CREATE INDEX IF NOT EXISTS ix_pipeline_lineage_created
+    ON pipeline_lineage(created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_pipeline_lineage_metadata
+    ON pipeline_lineage USING GIN (metadata jsonb_path_ops);
 
 CREATE TABLE IF NOT EXISTS data_quality_rule (
     data_quality_rule_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -587,3 +717,15 @@ CREATE TABLE IF NOT EXISTS chart_widget (
     width INT,
     height INT
 );
+
+-- Metadata quản trị catalog; khai báo tĩnh vẫn là dữ liệu nền.
+CREATE TABLE IF NOT EXISTS app.catalog_metadata (
+    domain_id VARCHAR(50) NOT NULL,
+    dataset VARCHAR(150) NOT NULL,
+    metadata_payload JSONB NOT NULL,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (domain_id, dataset)
+);
+
+CREATE INDEX IF NOT EXISTS ix_ingestion_upload_queue ON ingestion_job(status, ingestion_job_id) WHERE job_type = 'UPLOAD_V1';

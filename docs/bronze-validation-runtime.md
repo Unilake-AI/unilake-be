@@ -843,4 +843,4 @@ Giữ manifest, request và evidence để so sánh. Fixture thủ công đượ
 - [Metadata/hàng đợi](../backend/app/repositories/ingestion_repo.py)
 - [Migration validation](../infra/postgres/migrations/20261022_bronze_validation.sql)
 - [JSON policy nền](examples/bronze-validation-job.json)
-- [Hướng dẫn Bronze → Silver riêng](standardization/manual-live-demo.md)
+- [Hướng dẫn Bronze → Silver riêng](standardization/source-silver-flow.md)

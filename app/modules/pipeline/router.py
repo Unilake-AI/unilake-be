@@ -1,17 +1,20 @@
-"""Các tuyến API pipeline."""
+"""Cung cấp chức năng chạy làm sạch và lưu dữ liệu vào Silver."""
 
 from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Query
 from minio.error import S3Error
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.deps import require_role
 from app.core.exceptions import AppException
-from app.modules.pipeline.manual_cleaning import run_manual_cleaning
+from app.core.roles import RoleCode
+from app.modules.pipeline.management_db import management_engine
+from app.modules.pipeline.source_cleaning import preview_cleaning, run_manual_cleaning
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
@@ -19,11 +22,12 @@ router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 class ManualCleaningRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    session: str = Field(default="default", pattern=r"^[A-Za-z0-9-]{1,40}$")
+    profile_id: str = Field(min_length=1, max_length=100)
     base_snapshot: str | None = Field(default="active", min_length=1, max_length=36)
 
 
 class ManualCleaningResponse(BaseModel):
+    run_id: str
     status: str
     ingestion_job_id: int
     requested_by: str
@@ -36,20 +40,43 @@ class ManualCleaningResponse(BaseModel):
     records_collapsed: int
     issues: list[dict[str, Any]]
     publication: dict[str, Any] | None
+    quarantine_report: dict[str, Any] | None = None
 
 
-Admin = Annotated[dict[str, Any], Depends(require_role("ADMIN", "DATA_ADMIN"))]
+Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.ADMIN, RoleCode.DATA_ADMIN))]
+
+
+class CleaningPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    profile_id: str = Field(min_length=1, max_length=100)
+
+
+@router.post(
+    "/cleaning/ingestion-jobs/{ingestion_job_id}/preview",
+    tags=["silver-preview"],
+    summary="Xem trước làm sạch và chuẩn hóa từ Bronze",
+    description="Kiểm tra toàn bộ file và trả mẫu tối đa 100 dòng. Không lưu bản ghi lỗi, không ghi Silver, không thay đổi phiên bản hiện hành.",
+)
+def preview_cleaning_for_job(
+    ingestion_job_id: Annotated[int, Path(gt=0)],
+    request: CleaningPreviewRequest,
+    _admin: Admin,
+    db: Annotated[Engine, Depends(management_engine)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> dict[str, Any]:
+    try:
+        return preview_cleaning(db, ingestion_job_id, request.profile_id, limit)
+    except LookupError:
+        raise AppException(
+            "Không tìm thấy ingestion job", code="INGESTION_JOB_NOT_FOUND", status_code=404
+        ) from None
 
 
 @router.post(
     "/cleaning/ingestion-jobs/{ingestion_job_id}",
     response_model=ManualCleaningResponse,
-    summary="Run manual cleaning for a completed demo Bronze job",
-    description=(
-        "Runs the pinned Bronze object through cleaning and Silver rehearsal. "
-        "Only the dedicated synthetic DEMO_FLOW catalog profiles are currently supported. "
-        "Any quarantined row prevents Silver publication."
-    ),
+    summary="Làm sạch và lưu Silver từ dữ liệu Bronze đã thu thập thành công",
+    description="Áp dụng cấu hình nguồn được khai báo trên máy chủ; kiểm tra dữ liệu trước khi công bố Silver.",
 )
 def run_cleaning_for_ingestion_job(
     ingestion_job_id: Annotated[int, Path(gt=0)],
@@ -60,7 +87,7 @@ def run_cleaning_for_ingestion_job(
         return run_manual_cleaning(
             ingestion_job_id,
             requested_by=str(_admin.get("sub", "")),
-            session=request.session,
+            profile_id=request.profile_id,
             base_snapshot=request.base_snapshot,
         )
     except LookupError as exc:

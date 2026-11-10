@@ -130,7 +130,11 @@ Một số username có sẵn:
 ```text
 admin
 dataadmin
-analyst
-manager
 viewer
+admissions_manager
+admissions_staff
+academic_manager
+academic_staff
+hr_manager
+hr_staff
 ```

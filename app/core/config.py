@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import socket
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -26,7 +28,11 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, alias="DEBUG")
     api_v1_prefix: str = Field(default="/api/v1", alias="API_V1_PREFIX")  # MỚI
     cors_origins: str = Field(
-        default="http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001",
+        default=(
+            "http://localhost:3000,http://localhost:3001,"
+            "http://127.0.0.1:3000,http://127.0.0.1:3001,"
+            "https://unilake-fe.vercel.app"
+        ),
         alias="CORS_ORIGINS",
     )  # MỚI
 
@@ -63,6 +69,43 @@ class Settings(BaseSettings):
     minio_region: str = Field(default="us-east-1", alias="MINIO_REGION")
     minio_bucket_bronze: str = Field(default="bronze", alias="MINIO_BUCKET_BRONZE")
     minio_bucket_silver: str = Field(default="silver", alias="MINIO_BUCKET_SILVER")
+    silver_profiles_path: str = Field(
+        default="config/silver/profiles.json", alias="SILVER_PROFILES_PATH"
+    )
+
+    minio_bucket_uploads: str = Field(default="ingestion-uploads", alias="MINIO_BUCKET_UPLOADS")
+    upload_writer_access_key: str = Field(default="", alias="UPLOAD_WRITER_ACCESS_KEY")
+    upload_writer_secret_key: str = Field(default="", alias="UPLOAD_WRITER_SECRET_KEY", repr=False)
+    upload_reader_access_key: str = Field(default="", alias="UPLOAD_READER_ACCESS_KEY")
+    upload_reader_secret_key: str = Field(default="", alias="UPLOAD_READER_SECRET_KEY", repr=False)
+    upload_cleanup_access_key: str = Field(default="", alias="UPLOAD_CLEANUP_ACCESS_KEY")
+    upload_cleanup_secret_key: str = Field(
+        default="", alias="UPLOAD_CLEANUP_SECRET_KEY", repr=False
+    )
+    upload_max_bytes: int = Field(default=50 * 1024 * 1024, gt=0, alias="UPLOAD_MAX_BYTES")
+    upload_max_records: int = Field(default=1_000_000, gt=0, alias="UPLOAD_MAX_RECORDS")
+    upload_max_columns: int = Field(default=500, gt=0, alias="UPLOAD_MAX_COLUMNS")
+    upload_max_cell_chars: int = Field(default=1_000_000, gt=0, alias="UPLOAD_MAX_CELL_CHARS")
+    upload_timeout_seconds: int = Field(default=60, gt=0, alias="UPLOAD_TIMEOUT_SECONDS")
+    upload_max_expanded_bytes: int = Field(
+        default=200 * 1024 * 1024, gt=0, alias="UPLOAD_MAX_EXPANDED_BYTES"
+    )
+    ingestion_worker_id: str = Field(
+        default_factory=socket.gethostname, alias="INGESTION_WORKER_ID"
+    )
+    worker_heartbeat_seconds: int = Field(default=10, gt=0, alias="WORKER_HEARTBEAT_SECONDS")
+    worker_health_stale_seconds: int = Field(default=45, gt=0, alias="WORKER_HEALTH_STALE_SECONDS")
+    ingestion_retry_max_attempts: int = Field(default=3, ge=1, alias="INGESTION_RETRY_MAX_ATTEMPTS")
+    ingestion_retry_first_delay_seconds: int = Field(
+        default=10, gt=0, alias="INGESTION_RETRY_FIRST_DELAY_SECONDS"
+    )
+    ingestion_retry_second_delay_seconds: int = Field(
+        default=30, gt=0, alias="INGESTION_RETRY_SECOND_DELAY_SECONDS"
+    )
+    upload_staging_retention_hours: int = Field(
+        default=168, gt=0, alias="UPLOAD_STAGING_RETENTION_HOURS"
+    )
+
     minio_bucket_gold: str = Field(default="gold", alias="MINIO_BUCKET_GOLD")
 
     # MỚI: DuckDB

@@ -1,3 +1,5 @@
+> Cập nhật 09/11/2026: các mô tả luồng mẫu bên dưới là lịch sử và đã được thay thế. Xem [luồng nguồn thật → Silver](../standardization/source-silver-flow.md) để sử dụng cấu hình và API hiện hành.
+
 # Quy tắc làm sạch dữ liệu — Admissions, Academic/Training và HR
 
 | Thuộc tính | Giá trị |
@@ -314,7 +316,7 @@ profile/mapping production được owner phê duyệt cho mọi nguồn. Pipeli
 thay thế việc phê duyệt đó và không trích xuất PDF/DOCX.
 
 Để rehearsal Cleaning→Silver qua Swagger trên ba profile tổng hợp, xem
-[hướng dẫn endpoint thủ công](../standardization/manual-live-demo.md#chạy-cleaning-qua-swagger).
+[hướng dẫn endpoint thủ công](../standardization/source-silver-flow.md).
 Endpoint chỉ nhận ingestion job demo `DEMO_FLOW_*` thành công, yêu cầu role
 `ADMIN`/`DATA_ADMIN`, crosswalk release `manual-ingestion-demo-v1` và Silver
 writer service account riêng. Đây không phải luồng production hoặc API xử lý
