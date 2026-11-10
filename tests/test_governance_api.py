@@ -30,7 +30,7 @@ PAYLOAD = {
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
+def client(monkeypatch) -> Iterator[TestClient]:
     # Dùng SQL thật để kiểm tra UPSERT, unique key và khả năng đọc lại qua request mới.
     # Bỏ schema app riêng cho SQLite; không kết nối hay sửa database của người dùng.
     engine = create_engine(
@@ -48,6 +48,11 @@ def client() -> Iterator[TestClient]:
                 metadata_payload=PAYLOAD | {"dataset": "legacy_students"},
             )
         )
+    from tests.fixtures.registry import sample_registry
+
+    monkeypatch.setattr(
+        "app.modules.governance.catalog_service.get_domain_registry", sample_registry
+    )
     application = create_app()
 
     def override_db() -> Iterator[MagicMock]:

@@ -1,3 +1,5 @@
+> Cập nhật 09/11/2026: các mô tả luồng mẫu bên dưới là lịch sử và đã được thay thế. Xem [luồng nguồn thật → Silver](source-silver-flow.md) để sử dụng cấu hình và API hiện hành.
+
 # P5 — Tích hợp Silver qua Parquet và manifest
 
 Ngày triển khai: 15/10/2026. Đã có pipeline versioned và luồng rehearsal ghi/đọc

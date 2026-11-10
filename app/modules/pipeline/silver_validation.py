@@ -1,4 +1,4 @@
-"""Kiểm tra kiểu vật lý nghiêm ngặt, PK/unique/FK trên toàn bộ bản chụp ứng viên."""
+"""Kiểm tra kiểu dữ liệu, mã định danh, dữ liệu trùng và liên kết giữa các bảng trước khi công bố."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Các tuyến API pipeline."""
+"""Cung cấp chức năng chạy làm sạch và lưu dữ liệu vào Silver."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.deps import require_role
 from app.core.exceptions import AppException
 from app.core.roles import RoleCode
-from app.modules.pipeline.manual_cleaning import run_manual_cleaning
+from app.modules.pipeline.source_cleaning import run_manual_cleaning
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 class ManualCleaningRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    session: str = Field(default="default", pattern=r"^[A-Za-z0-9-]{1,40}$")
+    profile_id: str = Field(min_length=1, max_length=100)
     base_snapshot: str | None = Field(default="active", min_length=1, max_length=36)
 
 
@@ -47,12 +47,8 @@ Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.ADMIN, RoleCode.
 @router.post(
     "/cleaning/ingestion-jobs/{ingestion_job_id}",
     response_model=ManualCleaningResponse,
-    summary="Run manual cleaning for a completed demo Bronze job",
-    description=(
-        "Runs the pinned Bronze object through cleaning and Silver rehearsal. "
-        "Only the dedicated synthetic DEMO_FLOW catalog profiles are currently supported. "
-        "Only the HR position profile can publish with quarantined rows, within its policy limits."
-    ),
+    summary="Làm sạch và lưu Silver từ dữ liệu Bronze đã thu thập thành công",
+    description="Áp dụng cấu hình nguồn được khai báo trên máy chủ; kiểm tra dữ liệu trước khi công bố Silver.",
 )
 def run_cleaning_for_ingestion_job(
     ingestion_job_id: Annotated[int, Path(gt=0)],
@@ -63,7 +59,7 @@ def run_cleaning_for_ingestion_job(
         return run_manual_cleaning(
             ingestion_job_id,
             requested_by=str(_admin.get("sub", "")),
-            session=request.session,
+            profile_id=request.profile_id,
             base_snapshot=request.base_snapshot,
         )
     except LookupError as exc:

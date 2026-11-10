@@ -76,7 +76,7 @@ async def test_nlq_flow_helpers_and_endpoint() -> None:
     assert parse_intent("Danh sách sinh viên") == "lookup"
     schema_context = retrieve_schema_context("lookup")
     assert "Intent: lookup" in schema_context
-    assert "Gold dataset demo_student_summary" in schema_context
+    assert "demo_student_summary" not in schema_context
     assert validate_read_only_sql("select 1") == "select 1"
     with pytest.raises(AppException):
         validate_read_only_sql("drop table users")

@@ -1,4 +1,4 @@
-"""Orchestrate Bronze record cleaning before versioned Standardization."""
+"""Làm sạch dữ liệu Bronze trước khi chuẩn hóa theo bộ quy tắc đã chọn."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ CleaningIssue = MissingValueIssue | FormatIssue | DuplicateIssue
 
 @dataclass(frozen=True)
 class CleaningTask:
-    """Bronze batch and source-bound cleaning policies for one domain entity."""
+    """Dữ liệu Bronze và các quy tắc làm sạch phù hợp với nguồn dữ liệu."""
 
     batch: BronzeBatch
     missing_profile: MissingValueProfile
@@ -72,7 +72,7 @@ class CleaningResult:
 
 
 class CleaningReportSink(Protocol):
-    """Persist cleaning outcomes/issues in the caller's audit store."""
+    """Lưu kết quả làm sạch và các vấn đề phát hiện được để tra cứu sau này."""
 
     def publish(self, report: CleaningReport) -> None: ...
 
@@ -93,7 +93,7 @@ class CleaningPublicationResult:
 
 
 class CleaningPipeline:
-    """Run Missing Values → formats/validation → duplicates on a parsed BronzeBatch."""
+    """Xử lý dữ liệu thiếu, kiểm tra định dạng và xử lý bản ghi trùng trong dữ liệu Bronze."""
 
     def __init__(self, issue_sink: CleaningReportSink | None = None) -> None:
         self._issue_sink = issue_sink
@@ -200,7 +200,7 @@ class CleaningPipeline:
 
 
 class CleaningSilverPipeline:
-    """Clean input batches, then pass only accepted records through SilverPipeline."""
+    """Làm sạch dữ liệu đầu vào, chỉ chuyển các bản ghi đạt yêu cầu sang bước chuẩn hóa và lưu vào Silver."""
 
     def __init__(
         self,

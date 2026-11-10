@@ -31,12 +31,6 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 Q = QUARANTINE_RECORDS.c
 R = CLEANING_RUNS.c
 D = DATASET_CATALOG.c
-# Chỉ mở các cột đã biết của bộ dữ liệu giả lập. Cột ngoài danh sách không được trả.
-_DEMO_SOURCE_COLUMNS = {
-    ("hr", "position"): {"id", "ma", "ten", "cap"},
-    ("academic", "semester"): {"id", "ma", "nam", "tu", "den", "state"},
-    ("admissions", "admission_method"): {"id", "ma", "ten", "diem", "active"},
-}
 
 
 class QuarantineFilters(BaseModel):
@@ -224,12 +218,8 @@ async def get_quarantine_source(
     record: Annotated[dict[str, Any], Depends(_get_record)], response: Response
 ) -> dict[str, Any]:
     # Kiểm tra phạm vi dataset trước khi gọi MinIO, kể cả với tài khoản quản trị.
-    allowed = _DEMO_SOURCE_COLUMNS.get((record["domain"], record["entity"]))
-    if (
-        allowed is None
-        or record["dataset_status"] != "ACTIVE"
-        or record["dataset_code"] != f"DEMO_FLOW_{record['domain']}_BRONZE"
-    ):
+    allowed = set(record["quarantine_source"].get("allowed_columns", []))
+    if not allowed or record["dataset_status"] != "ACTIVE":
         raise AppException(
             "Dataset không được phép xem dòng nguồn",
             code="QUARANTINE_SOURCE_FORBIDDEN",

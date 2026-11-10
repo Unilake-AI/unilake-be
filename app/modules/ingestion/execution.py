@@ -7,8 +7,17 @@ import contextlib
 import re
 from typing import TYPE_CHECKING, Any, ParamSpec, Protocol, TypeVar
 
+from minio.error import MinioException
+from sqlalchemy.exc import SQLAlchemyError
+from urllib3.exceptions import HTTPError
+
 from app.core.exceptions import AppException
-from app.core.roles import DATA_READ_ROLES, DATA_WRITE_ROLES
+from app.core.roles import (
+    DATA_READ_ROLES,
+    DATA_WRITE_ROLES,
+    UPLOAD_STAFF_DOMAINS,
+    UPLOAD_WRITE_ROLES,
+)
 from app.modules.datasources.contracts import CatalogSource
 from app.modules.governance.contracts import (
     AssetReference,
@@ -52,6 +61,48 @@ def authorize(user: dict[str, Any], *, write: bool = False) -> None:
         )
 
 
+def upload_domains(user: dict[str, Any]) -> frozenset[str] | None:
+    """Trả về miền được tải file; ``None`` nghĩa là được tải mọi miền."""
+    roles = user.get("roles", [])
+    roles = [roles] if isinstance(roles, str) else roles
+    if not isinstance(roles, list | tuple | set):
+        raise AppException("Không có quyền tải file", code="FORBIDDEN", status_code=403)
+    role_set = set(roles)
+    if not UPLOAD_WRITE_ROLES.isdisjoint(role_set):
+        if not DATA_WRITE_ROLES.isdisjoint(role_set):
+            return None
+        return frozenset(
+            domain for role, domain in UPLOAD_STAFF_DOMAINS.items() if role in role_set
+        )
+    raise AppException("Không có quyền tải file", code="FORBIDDEN", status_code=403)
+
+
+def ingestion_read_domains(user: dict[str, Any]) -> frozenset[str] | None:
+    """Trả về miền job có thể xem; quản trị dữ liệu được xem toàn bộ."""
+    roles = user.get("roles", [])
+    roles = [roles] if isinstance(roles, str) else roles
+    if not isinstance(roles, list | tuple | set):
+        raise AppException("Không có quyền xem tác vụ ingestion", code="FORBIDDEN", status_code=403)
+    role_set = set(roles)
+    if not DATA_WRITE_ROLES.isdisjoint(role_set):
+        return None
+    domains = frozenset(
+        domain for role, domain in UPLOAD_STAFF_DOMAINS.items() if role in role_set
+    )
+    if domains:
+        return domains
+    raise AppException("Không có quyền xem tác vụ ingestion", code="FORBIDDEN", status_code=403)
+
+
+def classify_failure(stage: str, exc: Exception) -> tuple[str, bool]:
+    """Đổi lỗi kỹ thuật thành mã an toàn và cho biết có thể thử lại hay không."""
+    if isinstance(exc, (MinioException, HTTPError, ConnectionError, TimeoutError, SQLAlchemyError)):
+        return f"INGESTION_{stage}_TRANSIENT", True
+    if isinstance(exc, ValidationBlockedError):
+        return "BRONZE_INPUT_VALIDATION_BLOCKED", False
+    return f"INGESTION_{stage}_FAILED", False
+
+
 def validate_context(context: SourceContext, source_table: str) -> ReadRequest:
     source, dataset, layer, system = context
     if not system or not system.is_active or not source.is_active:
@@ -62,6 +113,8 @@ def validate_context(context: SourceContext, source_table: str) -> ReadRequest:
         raise ValueError("DATASET_SOURCE_MISMATCH_OR_INACTIVE")
     if not re.fullmatch(r"[a-z][a-z0-9_-]{0,62}", dataset.domain):
         raise ValueError("INVALID_PARTITION_DOMAIN")
+    if source.connection_type == "UPLOAD":
+        raise ValueError("USE_INGESTION_UPLOAD_ENDPOINT")
     try:
         request = build_read_request(
             CatalogSource(
@@ -150,7 +203,24 @@ class IngestionExecutionService:
             if job.source_table is None or job.created_at is None:
                 raise ValueError("INGESTION_JOB_CONTEXT_REQUIRED")
             context = await repo.context(job.data_source_id, job.dataset_id)
-            request = validate_context(context, job.source_table)
+            is_upload = job.job_type == "UPLOAD_V1"
+            if job.bronze_output is not None:
+                from app.bronze_capture import verify_bronze_output
+
+                stage = "RECONCILING"
+                await repo.stage(job_id, stage, 0)
+                await run_io(verify_bronze_output, job.bronze_output)
+                await repo.finish(
+                    job_id,
+                    output={**job.bronze_output, "domain": context[1].domain, "reused_bronze": True},
+                )
+                return
+            if is_upload:
+                from app.modules.ingestion.upload_capture import upload_request
+
+                request = upload_request(job, context)
+            else:
+                request = validate_context(context, job.source_table)
             if job.validation_input is not None:
                 request = bind_policy(job.validation_input, context, request, job_id)
             domain = context[1].domain
@@ -164,31 +234,61 @@ class IngestionExecutionService:
             )
             # Kết thúc giao dịch đọc trước khi thực hiện I/O nguồn có thể kéo dài.
             await repo.db.commit()
-            if request.validation_policy is not None:
+            if request.validation_policy is not None or is_upload:
                 stage = "VALIDATING"
                 await repo.stage(job_id, stage, 0)
             with capture() as captured:
                 artifact = await run_io(captured.read, request)
-                if request.validation_policy is not None:
+                if request.validation_policy is not None or is_upload:
                     report = artifact.validation_report
                     if (
                         report is None
                         or not report.can_accept
                         or report.ingestion_job_id != job_id
-                        or report.policy_fingerprint != request.validation_policy.fingerprint
+                        or (
+                            request.validation_policy is not None
+                            and report.policy_fingerprint != request.validation_policy.fingerprint
+                        )
                         or {c.rule_id for c in report.checks if c.required}
                         != set(required_rule_ids(request.source_type))
                     ):
                         raise ValueError("VALIDATION_REPORT_REQUIRED")
                     # Nếu PostgreSQL không lưu được báo cáo, không gọi upload.
                     await repo.save_validation(job_id, report)
+                if is_upload:
+                    evidence = job.upload_input or {}
+                    if (
+                        artifact.sha256 != evidence.get("sha256")
+                        or artifact.source_version_id != evidence.get("version_id")
+                        or artifact.path.stat().st_size != evidence.get("size_bytes")
+                    ):
+                        raise ValueError("UPLOAD_CAPTURE_MISMATCH")
                 stage = "WRITING"
                 await repo.stage(job_id, stage, artifact.rows)
                 output = await run_io(store, artifact, domain, write_context)
                 stage = "COMMITTING"
+                # Nếu tiến trình dừng trước khi chốt SUCCESS, retry sẽ biết Bronze đã có object.
+                await repo.checkpoint_bronze(job_id, output)
                 output = {
                     **output,
                     "domain": domain,
+                    "source_type": request.source_type,
+                    "parser_options": artifact.parser_options
+                    if is_upload
+                    else {
+                        key: value
+                        for key, value in request.configuration.items()
+                        if key
+                        in {
+                            "delimiter",
+                            "encoding",
+                            "has_header",
+                            "quote_char",
+                            "skip_rows",
+                            "sheet_name",
+                            "header_row",
+                        }
+                    },
                     "lineage": LineageEvidence(
                         run_ref=f"ingestion:{job_id}",
                         mode="ingestion",
@@ -200,6 +300,12 @@ class IngestionExecutionService:
                                         layer="SOURCE",
                                         domain=domain,
                                         version=output.get("source_version_id"),
+                                        uri=(job.upload_input or {}).get("uri")
+                                        if is_upload
+                                        else None,
+                                        checksum=(job.upload_input or {}).get("sha256")
+                                        if is_upload
+                                        else None,
                                     ),
                                 ),
                                 output=AssetReference(
@@ -224,8 +330,11 @@ class IngestionExecutionService:
             await repo.db.rollback()
             await repo.save_validation(job_id, exc.report)
             await repo.finish(job_id, error="BRONZE_INPUT_VALIDATION_BLOCKED")
-        except Exception:
+        except Exception as exc:
             # Ngoại lệ từ bộ kết nối có thể chứa thông tin xác thực hoặc giá trị dữ liệu nguồn.
             # Chỉ công khai các mã lỗi có kiểm soát theo từng giai đoạn.
             await repo.db.rollback()
-            await repo.finish(job_id, error=f"INGESTION_{stage}_FAILED")
+            error, retryable = classify_failure(stage, exc)
+            await repo.finish(job_id, error=error, **({"retryable": True} if retryable else {}))
+            if retryable:
+                await repo.schedule_retry(job_id, error)

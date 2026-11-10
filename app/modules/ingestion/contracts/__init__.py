@@ -23,6 +23,7 @@ class CapturedArtifact:
     sha256: str
     source_version_id: str | None = None
     validation_report: ValidationReport | None = None
+    parser_options: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)

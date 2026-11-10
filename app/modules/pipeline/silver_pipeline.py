@@ -1,4 +1,4 @@
-"""Luồng S2/S3/S4 → Silver tường minh có phiên bản; không gọi phép biến đổi Gold cũ."""
+"""Chuẩn hóa tên trường, kiểu dữ liệu và mã định danh trước khi lưu vào Silver."""
 
 from __future__ import annotations
 
