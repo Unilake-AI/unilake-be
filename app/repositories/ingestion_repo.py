@@ -117,20 +117,27 @@ class IngestionRepository:
                 Dataset.domain.in_(domains)
             )
         row = (await self.db.execute(query)).one()
-        return {name: int(getattr(row, name) or 0) for name in ("total", "queued", "running", "success", "failed")}
+        return {
+            name: int(getattr(row, name) or 0)
+            for name in ("total", "queued", "running", "success", "failed")
+        }
 
     async def metrics(self, domains: frozenset[str] | None = None) -> dict[str, float | None]:
         """Tính số liệu vận hành từ thời điểm job đã lưu, không dùng dữ liệu ở giao diện."""
         wait = func.extract("epoch", IngestionJob.started_at - IngestionJob.created_at)
         processing = func.extract("epoch", IngestionJob.finished_at - IngestionJob.started_at)
         now = func.now()
-        oldest = func.extract("epoch", now - func.min(IngestionJob.created_at).filter(IngestionJob.status == "QUEUED"))
+        oldest = func.extract(
+            "epoch", now - func.min(IngestionJob.created_at).filter(IngestionJob.status == "QUEUED")
+        )
         query = select(
             func.avg(wait).filter(IngestionJob.started_at.is_not(None)).label("wait"),
             func.avg(processing)
             .filter(IngestionJob.finished_at.is_not(None), IngestionJob.started_at.is_not(None))
             .label("processing"),
-            (100.0 * func.avg(case((IngestionJob.status == "FAILED", 1), else_=0))).label("failure"),
+            (100.0 * func.avg(case((IngestionJob.status == "FAILED", 1), else_=0))).label(
+                "failure"
+            ),
             oldest.label("oldest"),
         ).where(IngestionJob.job_type.in_(SUPPORTED_JOB_TYPES))
         if domains is not None:
@@ -140,7 +147,9 @@ class IngestionRepository:
         row = (await self.db.execute(query)).one()
         return {
             "average_wait_seconds": float(row.wait) if row.wait is not None else None,
-            "average_processing_seconds": float(row.processing) if row.processing is not None else None,
+            "average_processing_seconds": float(row.processing)
+            if row.processing is not None
+            else None,
             "failure_rate_percent": float(row.failure) if row.failure is not None else None,
             "oldest_queued_seconds": float(row.oldest) if row.oldest is not None else None,
         }
@@ -181,9 +190,7 @@ class IngestionRepository:
     async def retry(self, job_id: int, requested_by: str) -> IngestionJob:
         """Tạo lần chạy lại từ file upload đã ghim; không sửa lịch sử job cũ."""
         original = await self.db.scalar(
-            select(IngestionJob)
-            .where(IngestionJob.ingestion_job_id == job_id)
-            .with_for_update()
+            select(IngestionJob).where(IngestionJob.ingestion_job_id == job_id).with_for_update()
         )
         if original is None or original.job_type not in SUPPORTED_JOB_TYPES:
             raise AppException("Job không tồn tại", code="INGESTION_JOB_NOT_FOUND", status_code=404)
@@ -202,23 +209,28 @@ class IngestionRepository:
             )
         root_id = original.root_job_id or original.ingestion_job_id
         root = await self.db.scalar(
-            select(IngestionJob)
-            .where(IngestionJob.ingestion_job_id == root_id)
-            .with_for_update()
+            select(IngestionJob).where(IngestionJob.ingestion_job_id == root_id).with_for_update()
         )
         if root is None:
-            raise AppException("Không tìm thấy chuỗi job", code="INGESTION_RETRY_ROOT_NOT_FOUND", status_code=409)
+            raise AppException(
+                "Không tìm thấy chuỗi job", code="INGESTION_RETRY_ROOT_NOT_FOUND", status_code=409
+            )
         existing_bronze = await self.db.scalar(
-            select(IngestionJob.bronze_output).where(
+            select(IngestionJob.bronze_output)
+            .where(
                 IngestionJob.root_job_id == root_id,
                 IngestionJob.bronze_output.is_not(None),
-            ).order_by(IngestionJob.ingestion_job_id.desc()).limit(1)
+            )
+            .order_by(IngestionJob.ingestion_job_id.desc())
+            .limit(1)
         )
         active = await self.db.scalar(
-            select(IngestionJob.ingestion_job_id).where(
+            select(IngestionJob.ingestion_job_id)
+            .where(
                 IngestionJob.root_job_id == root_id,
                 IngestionJob.status.in_(("QUEUED", "RUNNING")),
-            ).limit(1)
+            )
+            .limit(1)
         )
         if active is not None:
             raise AppException(

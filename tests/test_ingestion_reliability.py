@@ -15,7 +15,9 @@ from app.modules.ingestion.execution import ingestion_read_domains
 @pytest.mark.asyncio
 async def test_stats_uses_staff_domain(monkeypatch):
     repository = Mock()
-    repository.stats = AsyncMock(return_value={"total": 2, "queued": 1, "running": 0, "success": 1, "failed": 0})
+    repository.stats = AsyncMock(
+        return_value={"total": 2, "queued": 1, "running": 0, "success": 1, "failed": 0}
+    )
     monkeypatch.setattr(router, "IngestionRepository", lambda _db: repository)
 
     result = await router.job_stats(AsyncMock(), {"roles": ["HR_STAFF"]})

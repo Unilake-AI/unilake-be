@@ -352,9 +352,7 @@ async def test_upload_target_creates_and_reuses_source_with_real_sql():
         assert exc.value.status_code == 404
         # Nhân viên HR chỉ được chọn bộ dữ liệu đã đăng ký trong miền HR.
         with pytest.raises(AppException) as exc:
-            await uploads.upload_target(
-                db, 7, "CSV", "1", allowed_domains=frozenset({"academic"})
-            )
+            await uploads.upload_target(db, 7, "CSV", "1", allowed_domains=frozenset({"academic"}))
         assert exc.value.code == "UPLOAD_DOMAIN_FORBIDDEN"
         first.is_active = False
         session.commit()

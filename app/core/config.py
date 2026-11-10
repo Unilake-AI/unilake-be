@@ -79,7 +79,9 @@ class Settings(BaseSettings):
     upload_reader_access_key: str = Field(default="", alias="UPLOAD_READER_ACCESS_KEY")
     upload_reader_secret_key: str = Field(default="", alias="UPLOAD_READER_SECRET_KEY", repr=False)
     upload_cleanup_access_key: str = Field(default="", alias="UPLOAD_CLEANUP_ACCESS_KEY")
-    upload_cleanup_secret_key: str = Field(default="", alias="UPLOAD_CLEANUP_SECRET_KEY", repr=False)
+    upload_cleanup_secret_key: str = Field(
+        default="", alias="UPLOAD_CLEANUP_SECRET_KEY", repr=False
+    )
     upload_max_bytes: int = Field(default=50 * 1024 * 1024, gt=0, alias="UPLOAD_MAX_BYTES")
     upload_max_records: int = Field(default=1_000_000, gt=0, alias="UPLOAD_MAX_RECORDS")
     upload_max_columns: int = Field(default=500, gt=0, alias="UPLOAD_MAX_COLUMNS")
@@ -92,9 +94,7 @@ class Settings(BaseSettings):
         default_factory=socket.gethostname, alias="INGESTION_WORKER_ID"
     )
     worker_heartbeat_seconds: int = Field(default=10, gt=0, alias="WORKER_HEARTBEAT_SECONDS")
-    worker_health_stale_seconds: int = Field(
-        default=45, gt=0, alias="WORKER_HEALTH_STALE_SECONDS"
-    )
+    worker_health_stale_seconds: int = Field(default=45, gt=0, alias="WORKER_HEALTH_STALE_SECONDS")
     ingestion_retry_max_attempts: int = Field(default=3, ge=1, alias="INGESTION_RETRY_MAX_ATTEMPTS")
     ingestion_retry_first_delay_seconds: int = Field(
         default=10, gt=0, alias="INGESTION_RETRY_FIRST_DELAY_SECONDS"

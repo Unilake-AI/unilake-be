@@ -86,9 +86,7 @@ def ingestion_read_domains(user: dict[str, Any]) -> frozenset[str] | None:
     role_set = set(roles)
     if not DATA_WRITE_ROLES.isdisjoint(role_set):
         return None
-    domains = frozenset(
-        domain for role, domain in UPLOAD_STAFF_DOMAINS.items() if role in role_set
-    )
+    domains = frozenset(domain for role, domain in UPLOAD_STAFF_DOMAINS.items() if role in role_set)
     if domains:
         return domains
     raise AppException("Không có quyền xem tác vụ ingestion", code="FORBIDDEN", status_code=403)
@@ -212,7 +210,11 @@ class IngestionExecutionService:
                 await run_io(verify_bronze_output, job.bronze_output)
                 await repo.finish(
                     job_id,
-                    output={**job.bronze_output, "domain": context[1].domain, "reused_bronze": True},
+                    output={
+                        **job.bronze_output,
+                        "domain": context[1].domain,
+                        "reused_bronze": True,
+                    },
                 )
                 return
             if is_upload:

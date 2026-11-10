@@ -9,8 +9,8 @@ from datetime import UTC
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
-from zoneinfo import ZoneInfo
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -198,7 +198,9 @@ def verify_bronze_output(output: dict[str, Any]) -> None:
     if not isinstance(version, str) or not isinstance(checksum, str):
         raise ValueError("BRONZE_RECONCILIATION_EVIDENCE_INVALID")
     key = uri.path.lstrip("/")
-    response = bronze_verifier_client().get_object(settings.minio_bucket_bronze, key, version_id=version)
+    response = bronze_verifier_client().get_object(
+        settings.minio_bucket_bronze, key, version_id=version
+    )
     try:
         digest = hashlib.sha256()
         for chunk in response.stream(1024 * 1024):
