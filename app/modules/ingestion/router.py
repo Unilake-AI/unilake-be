@@ -22,6 +22,7 @@ from app.modules.ingestion.schemas import (
     IngestionJobMetrics,
     IngestionJobRead,
     IngestionJobStats,
+    IngestionJobStatus,
     IngestionStart,
     IngestionWorkerRead,
 )
@@ -56,9 +57,18 @@ async def list_jobs(
     data_source_id: Annotated[int | None, Query(gt=0)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
+    dataset_id: Annotated[int | None, Query(gt=0)] = None,
+    status: IngestionJobStatus | None = None,
+    mine_only: bool = False,
 ) -> list[IngestionJob]:
     return await IngestionRepository(db).list(
-        data_source_id, limit, offset, ingestion_read_domains(user)
+        data_source_id,
+        limit,
+        offset,
+        ingestion_read_domains(user),
+        dataset_id=dataset_id,
+        status=status,
+        requested_by=str(user["sub"]) if mine_only else None,
     )
 
 

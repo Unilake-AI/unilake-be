@@ -193,6 +193,7 @@ async def receive_upload(
     dataset_name: str | None = None,
     description: str | None = None,
     domain: UploadDomain | None = None,
+    quality_issue_id: str | None = None,
 ) -> IngestionJob:
     allowed_domains = upload_domains(user)
     try:
@@ -269,6 +270,9 @@ async def receive_upload(
             },
             max_expanded_bytes=settings.upload_max_expanded_bytes,
         )
+        if quality_issue_id is not None:
+            # Chỉ luồng sửa lỗi đã kiểm tra người phụ trách mới được gắn yêu cầu vào file.
+            reference["quality_issue_id"] = quality_issue_id
         return await IngestionRepository(db).create(
             job_type=UPLOAD_JOB_TYPE,
             data_source_id=source.data_source_id,

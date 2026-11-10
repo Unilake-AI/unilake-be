@@ -110,6 +110,9 @@ class IngestionRepository:
             func.count(IngestionJob.ingestion_job_id)
             .filter(IngestionJob.status.in_(("FAILED", "REJECTED")))
             .label("failed"),
+            func.count(IngestionJob.ingestion_job_id)
+            .filter(IngestionJob.status == "RETRY_WAIT")
+            .label("retry_wait"),
         ).where(IngestionJob.job_type.in_(SUPPORTED_JOB_TYPES))
         if domains is not None:
             query = query.join(Dataset, Dataset.dataset_id == IngestionJob.dataset_id).where(
@@ -117,8 +120,8 @@ class IngestionRepository:
             )
         row = (await self.db.execute(query)).one()
         return {
-            name: int(getattr(row, name) or 0)
-            for name in ("total", "queued", "running", "success", "failed")
+            name: int(getattr(row, name, 0) or 0)
+            for name in ("total", "queued", "running", "success", "failed", "retry_wait")
         }
 
     async def metrics(self, domains: frozenset[str] | None = None) -> dict[str, float | None]:
@@ -333,7 +336,15 @@ class IngestionRepository:
         return job
 
     async def list(
-        self, source_id: int | None, limit: int, offset: int, domains: frozenset[str] | None = None
+        self,
+        source_id: int | None,
+        limit: int,
+        offset: int,
+        domains: frozenset[str] | None = None,
+        *,
+        dataset_id: int | None = None,
+        status: str | None = None,
+        requested_by: str | None = None,
     ) -> list[IngestionJob]:
         query = select(IngestionJob).where(IngestionJob.job_type.in_(SUPPORTED_JOB_TYPES))
         if domains is not None:
@@ -342,6 +353,18 @@ class IngestionRepository:
             )
         if source_id is not None:
             query = query.where(IngestionJob.data_source_id == source_id)
+        if dataset_id is not None:
+            query = query.where(IngestionJob.dataset_id == dataset_id)
+        if status is not None:
+            query = query.where(IngestionJob.status == status)
+        if requested_by is not None:
+            # Tính cả những lần hệ thống chạy lại từ file chính người dùng đã nạp.
+            roots = select(
+                func.coalesce(IngestionJob.root_job_id, IngestionJob.ingestion_job_id)
+            ).where(IngestionJob.requested_by == requested_by)
+            query = query.where(
+                func.coalesce(IngestionJob.root_job_id, IngestionJob.ingestion_job_id).in_(roots)
+            )
         result = await self.db.scalars(
             query.order_by(IngestionJob.ingestion_job_id.desc()).limit(limit).offset(offset)
         )

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+IngestionJobStatus = Literal["QUEUED", "RETRY_WAIT", "RUNNING", "SUCCESS", "FAILED", "REJECTED"]
 
 
 class IngestionStart(BaseModel):
@@ -41,6 +43,7 @@ class IngestionJobRead(BaseModel):
     root_job_id: int | None = None
     # Job cũ chỉ xuất hiện trước khi migration hoàn tất mới có thể chưa mang số lần chạy.
     attempt_number: int | None = None
+    quality_issue_id: str | None = None
 
 
 class IngestionJobStats(BaseModel):
@@ -49,6 +52,7 @@ class IngestionJobStats(BaseModel):
     running: int
     success: int
     failed: int
+    retry_wait: int = 0
 
 
 class IngestionJobMetrics(BaseModel):

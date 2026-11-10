@@ -10,7 +10,7 @@ Hỗ trợ CSV, Excel `.xlsx` và `.xlsm`. File phải có dòng tiêu đề. B�
 
 `ADMIN` và `DATA_ADMIN` được tải file vào mọi bộ dữ liệu Bronze hợp lệ. STAFF chỉ tải/tạo trong lĩnh vực được cấp: `HR_STAFF` → `hr`, `ACADEMIC_STAFF` → `academic`, `ADMISSIONS_STAFF` → `admissions`. Với bộ đã có, lấy lĩnh vực từ dataset, không cho thay đổi qua form. Với bộ mới, tự lấy từ role nếu chỉ có một lĩnh vực; quản trị hoặc tài khoản nhiều lĩnh vực phải chọn `domain`, backend kiểm tra lại quyền. `VIEWER` và role `*_MANAGER` không có thêm role upload vẫn không được tải hoặc tạo bộ qua API này.
 
-Phạm vi hiện vẫn theo ba lĩnh vực, chưa phải từng đơn vị con. Nguồn upload được quản lý chung theo lĩnh vực (`UPLOAD_HR`, `UPLOAD_ACADEMIC`, `UPLOAD_ADMISSIONS`). Khi tạo nguồn lần đầu, `owner_department_id` chưa được gán; backend không đoán đơn vị từ tên file hoặc tạo đơn vị giả. Điều kiện phân công đơn vị của chức năng giao sửa lỗi vẫn là phần cần thống nhất riêng.
+Phạm vi upload hiện theo ba lĩnh vực, chưa phải từng đơn vị con. Nguồn upload được quản lý chung theo lĩnh vực (`UPLOAD_HR`, `UPLOAD_ACADEMIC`, `UPLOAD_ADMISSIONS`). Khi tạo nguồn lần đầu, `owner_department_id` chưa được gán; backend không đoán đơn vị từ tên file hoặc tạo đơn vị giả. Quy trình nhận yêu cầu, tải bản sửa và nộp xác nhận đã có API riêng theo đơn vị và người phụ trách, xem [hướng dẫn STAFF](staff-api.md).
 
 ## 2. Luồng xử lý
 

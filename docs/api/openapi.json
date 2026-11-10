@@ -692,6 +692,45 @@
               "default": 0,
               "title": "Offset"
             }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "domain",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "hr",
+                    "academic",
+                    "admissions"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Domain"
+            }
           }
         ],
         "responses": {
@@ -744,6 +783,54 @@
         },
         "responses": {
           "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/datasets/{dataset_id}": {
+      "get": {
+        "tags": [
+          "datasets"
+        ],
+        "summary": "Chi tiết bộ dữ liệu được phép tải file",
+        "operationId": "get_dataset_api_v1_datasets__dataset_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -861,6 +948,57 @@
               "minimum": 0,
               "default": 0,
               "title": "Offset"
+            }
+          },
+          {
+            "name": "dataset_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "QUEUED",
+                    "RETRY_WAIT",
+                    "RUNNING",
+                    "SUCCESS",
+                    "FAILED",
+                    "REJECTED"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "mine_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Mine Only"
             }
           }
         ],
@@ -2626,6 +2764,16 @@
             }
           },
           {
+            "name": "mine_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Mine Only"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -2660,6 +2808,251 @@
                     "$ref": "#/components/schemas/IssueRead"
                   },
                   "title": "Response List Issues Api V1 Data Quality Issues Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data-quality-issues/stats": {
+      "get": {
+        "tags": [
+          "data-quality-issues"
+        ],
+        "summary": "Thống kê yêu cầu trong phạm vi được xem",
+        "operationId": "issue_stats_api_v1_data_quality_issues_stats_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "department_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department Id"
+            }
+          },
+          {
+            "name": "assignee_user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Assignee User Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "ASSIGNED",
+                    "PENDING_VERIFICATION",
+                    "VERIFIED"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "mine_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Mine Only"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueStats"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data-quality-issues/departments": {
+      "get": {
+        "tags": [
+          "data-quality-issues"
+        ],
+        "summary": "Các phòng ban quản trị có thể giao xử lý",
+        "operationId": "issue_departments_api_v1_data_quality_issues_departments_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IssueDepartmentChoice"
+                  },
+                  "type": "array",
+                  "title": "Response Issue Departments Api V1 Data Quality Issues Departments Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/data-quality-issues/assignees": {
+      "get": {
+        "tags": [
+          "data-quality-issues"
+        ],
+        "summary": "Chọn người phụ trách đủ quyền và còn phân công",
+        "operationId": "issue_assignees_api_v1_data_quality_issues_assignees_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "department_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Department Id"
+            }
+          },
+          {
+            "name": "domain",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "hr",
+                "academic",
+                "admissions"
+              ],
+              "type": "string",
+              "title": "Domain"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AssigneeChoice"
+                  },
+                  "title": "Response Issue Assignees Api V1 Data Quality Issues Assignees Get"
                 }
               }
             }
@@ -2766,6 +3159,64 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/IssueDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/data-quality-issues/{issue_id}/uploads": {
+      "post": {
+        "tags": [
+          "data-quality-issues"
+        ],
+        "summary": "Người phụ trách tải bản đã sửa vào đúng bộ dữ liệu của yêu cầu",
+        "operationId": "upload_resolution_file_api_v1_data_quality_issues__issue_id__uploads_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Issue Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_resolution_file_api_v1_data_quality_issues__issue_id__uploads_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionJobRead"
                 }
               }
             }
@@ -3602,6 +4053,32 @@
         }
       }
     },
+    "/api/v1/staff/context": {
+      "get": {
+        "tags": [
+          "staff"
+        ],
+        "summary": "Quyền và lựa chọn cho màn hình STAFF",
+        "operationId": "staff_context_api_v1_staff_context_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffContext"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/": {
       "get": {
         "summary": "Read Root",
@@ -3686,6 +4163,29 @@
         ],
         "title": "AssignIssue"
       },
+      "AssigneeChoice": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "full_name": {
+            "type": "string",
+            "title": "Full Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "username",
+          "full_name"
+        ],
+        "title": "AssigneeChoice"
+      },
       "Body_upload_ingestion_api_v1_ingestion_uploads_post": {
         "properties": {
           "file": {
@@ -3763,6 +4263,33 @@
           "file"
         ],
         "title": "Body_upload_ingestion_api_v1_ingestion_uploads_post"
+      },
+      "Body_upload_resolution_file_api_v1_data_quality_issues__issue_id__uploads_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "Bản đã sửa, giữ tên file nguồn của yêu cầu"
+          },
+          "parser_options": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parser Options",
+            "description": "Bỏ trống để dùng cách đọc đã ghi nhận của file nguồn"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_resolution_file_api_v1_data_quality_issues__issue_id__uploads_post"
       },
       "CatalogEntrySchema": {
         "properties": {
@@ -4675,6 +5202,47 @@
         "title": "DatasetRead",
         "description": "Payload trả về metadata của dataset đã đăng ký."
       },
+      "DepartmentChoice": {
+        "properties": {
+          "department_id": {
+            "type": "integer",
+            "title": "Department Id"
+          },
+          "department_code": {
+            "type": "string",
+            "title": "Department Code"
+          },
+          "department_name": {
+            "type": "string",
+            "title": "Department Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "department_id",
+          "department_code",
+          "department_name"
+        ],
+        "title": "DepartmentChoice"
+      },
+      "DomainChoice": {
+        "properties": {
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain",
+          "name"
+        ],
+        "title": "DomainChoice"
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -5117,6 +5685,17 @@
               }
             ],
             "title": "Attempt Number"
+          },
+          "quality_issue_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality Issue Id"
           }
         },
         "type": "object",
@@ -5161,6 +5740,11 @@
           "failed": {
             "type": "integer",
             "title": "Failed"
+          },
+          "retry_wait": {
+            "type": "integer",
+            "title": "Retry Wait",
+            "default": 0
           }
         },
         "type": "object",
@@ -5248,6 +5832,29 @@
           "last_heartbeat_at"
         ],
         "title": "IngestionWorkerRead"
+      },
+      "IssueDepartmentChoice": {
+        "properties": {
+          "department_id": {
+            "type": "integer",
+            "title": "Department Id"
+          },
+          "department_code": {
+            "type": "string",
+            "title": "Department Code"
+          },
+          "department_name": {
+            "type": "string",
+            "title": "Department Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "department_id",
+          "department_code",
+          "department_name"
+        ],
+        "title": "IssueDepartmentChoice"
       },
       "IssueDetail": {
         "properties": {
@@ -5481,6 +6088,21 @@
             },
             "type": "array",
             "title": "Issues"
+          },
+          "entity": {
+            "type": "string",
+            "title": "Entity"
+          },
+          "source_table": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Table"
           }
         },
         "type": "object",
@@ -5492,7 +6114,9 @@
           "record_position",
           "bronze_version",
           "error_codes",
-          "issues"
+          "issues",
+          "entity",
+          "source_table"
         ],
         "title": "IssueQuarantineRecord"
       },
@@ -5598,6 +6222,34 @@
           "updated_at"
         ],
         "title": "IssueRead"
+      },
+      "IssueStats": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "assigned": {
+            "type": "integer",
+            "title": "Assigned"
+          },
+          "pending_verification": {
+            "type": "integer",
+            "title": "Pending Verification"
+          },
+          "verified": {
+            "type": "integer",
+            "title": "Verified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "assigned",
+          "pending_verification",
+          "verified"
+        ],
+        "title": "IssueStats"
       },
       "LineageEdge": {
         "properties": {
@@ -6547,6 +7199,103 @@
         ],
         "title": "SourceSystemRead",
         "description": "Payload trả về thông tin hệ thống nguồn nghiệp vụ."
+      },
+      "StaffContext": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Roles"
+          },
+          "domains": {
+            "items": {
+              "$ref": "#/components/schemas/DomainChoice"
+            },
+            "type": "array",
+            "title": "Domains"
+          },
+          "default_domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Domain"
+          },
+          "departments": {
+            "items": {
+              "$ref": "#/components/schemas/DepartmentChoice"
+            },
+            "type": "array",
+            "title": "Departments"
+          },
+          "can_upload": {
+            "type": "boolean",
+            "title": "Can Upload"
+          },
+          "can_resolve_issues": {
+            "type": "boolean",
+            "title": "Can Resolve Issues"
+          },
+          "can_manage_silver": {
+            "type": "boolean",
+            "title": "Can Manage Silver"
+          },
+          "needs_department_assignment": {
+            "type": "boolean",
+            "title": "Needs Department Assignment"
+          },
+          "accepted_extensions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Accepted Extensions"
+          },
+          "max_file_bytes": {
+            "type": "integer",
+            "title": "Max File Bytes"
+          },
+          "max_records": {
+            "type": "integer",
+            "title": "Max Records"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "username",
+          "roles",
+          "domains",
+          "default_domain",
+          "departments",
+          "can_upload",
+          "can_resolve_issues",
+          "can_manage_silver",
+          "needs_department_assignment",
+          "accepted_extensions",
+          "max_file_bytes",
+          "max_records",
+          "note"
+        ],
+        "title": "StaffContext"
       },
       "SubmitResolution": {
         "properties": {

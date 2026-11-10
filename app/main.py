@@ -22,6 +22,7 @@ from app.modules.pipeline.quarantine_records_router import router as quarantine_
 from app.modules.pipeline.router import router as pipeline_router
 from app.modules.pipeline.snapshots_router import router as snapshots_router
 from app.modules.query_history.router import router as query_history_router
+from app.modules.staff.router import router as staff_router
 from app.modules.users.router import router as users_router
 from app.providers import provide_nlq_service
 
@@ -55,6 +56,7 @@ def create_app() -> FastAPI:
     application.include_router(nlq_router, prefix=api_prefix)
     application.include_router(dashboard_router, prefix=api_prefix)
     application.include_router(query_history_router, prefix=api_prefix)
+    application.include_router(staff_router, prefix=api_prefix)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,

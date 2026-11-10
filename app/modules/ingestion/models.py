@@ -63,6 +63,12 @@ class IngestionJob(Base):
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     retryable: Mapped[bool] = mapped_column(nullable=False, default=False)
 
+    @property
+    def quality_issue_id(self) -> str | None:
+        """Cho giao diện biết file này được tải để sửa yêu cầu nào."""
+        value = (self.upload_input or {}).get("quality_issue_id")
+        return value if isinstance(value, str) else None
+
 
 class IngestionWorkerHeartbeat(Base):
     """Dấu hiệu worker còn kết nối được hàng đợi, kể cả lúc không có job."""

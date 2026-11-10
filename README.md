@@ -339,6 +339,7 @@ Schema và profile trong `docs/` và `data/standardization/` là tài nguyên c�
 
 | Chủ đề | Tài liệu |
 | --- | --- |
+| API nhân viên phòng ban | [Luồng STAFF: chọn dữ liệu, upload, theo dõi và nộp bản sửa](docs/staff-api.md) |
 | Luồng và hợp đồng API | [Toàn bộ luồng hiện tại, API và phương án cần thống nhất](docs/system-flow-and-api-contract.md) |
 | Kiến trúc | [Kiến trúc xử lý dữ liệu](docs/architecture/data-processing-architecture.md) |
 | Cơ sở dữ liệu | [Database và schema](docs/database.md) · [Đồng bộ môi trường local](docs/db-local-sync.md) |
