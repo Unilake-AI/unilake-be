@@ -143,7 +143,7 @@ async def test_execution_stages_and_sanitized_failures(failure):
     )
     if failure:
         code = "INGESTION_READING_FAILED" if failure == "read" else "INGESTION_WRITING_FAILED"
-        repo.finish.assert_awaited_once_with(10, error=code)
+        repo.finish.assert_awaited_once_with(10, error=code, retryable=False)
     else:
         repo.stage.assert_awaited_once_with(10, "WRITING", 3)
         saved = repo.finish.call_args.kwargs["output"]

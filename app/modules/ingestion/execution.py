@@ -337,6 +337,6 @@ class IngestionExecutionService:
             # Chỉ công khai các mã lỗi có kiểm soát theo từng giai đoạn.
             await repo.db.rollback()
             error, retryable = classify_failure(stage, exc)
-            await repo.finish(job_id, error=error, **({"retryable": True} if retryable else {}))
+            await repo.finish(job_id, error=error, retryable=retryable)
             if retryable:
                 await repo.schedule_retry(job_id, error)

@@ -110,6 +110,7 @@ def test_file_to_cleaning_to_production_parquet(
 
         workbook = Workbook()
         sheet = workbook.active
+        assert sheet is not None
         sheet.title = "Positions"
         sheet.append(columns)
         for row in rows:
@@ -124,9 +125,11 @@ def test_file_to_cleaning_to_production_parquet(
         dataset_id="31",
     )
     uri = f"s3://{settings.minio_bucket_bronze}/hr/2026/11/09/job-42/{path.name}"
+    assert parsed.provenance is not None
     parsed = replace(
         parsed, provenance=replace(parsed.provenance, source_ref=uri, object_version_id="pinned")
     )
+    assert parsed.provenance is not None
     context = {
         "ingestion_job_id": 42,
         "status": "SUCCESS",
