@@ -1125,6 +1125,7 @@
           "ingestion"
         ],
         "summary": "Tải file lên để kiểm tra và lưu vào Bronze",
+        "description": "Chọn bộ dữ liệu đã có bằng dataset_id, hoặc tạo bộ mới bằng dataset_name. Với bộ mới, nhân viên có một lĩnh vực không cần nhập domain; hệ thống lấy từ quyền. Quản trị hoặc tài khoản nhiều lĩnh vực cần chọn domain hợp lệ. Không gửi thông tin tạo bộ mới khi đã chọn dataset_id.",
         "operationId": "upload_ingestion_api_v1_ingestion_uploads_post",
         "requestBody": {
           "content": {
@@ -3694,21 +3695,72 @@
             "description": "File CSV, XLSX hoặc XLSM"
           },
           "dataset_id": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
-            "title": "Dataset Id"
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id",
+            "description": "Bộ dữ liệu đã chọn trên giao diện; bỏ trống khi tạo mới"
           },
           "parser_options": {
             "type": "string",
             "title": "Parser Options",
             "description": "Tùy chọn đọc file dưới dạng JSON",
             "default": "{}"
+          },
+          "dataset_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Name",
+            "description": "Tên bộ dữ liệu mới"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Mô tả bộ dữ liệu mới"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "hr",
+                  "academic",
+                  "admissions"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain",
+            "description": "Chỉ cần chọn khi tạo mới và tài khoản có nhiều lĩnh vực hoặc là quản trị"
           }
         },
         "type": "object",
         "required": [
-          "file",
-          "dataset_id"
+          "file"
         ],
         "title": "Body_upload_ingestion_api_v1_ingestion_uploads_post"
       },

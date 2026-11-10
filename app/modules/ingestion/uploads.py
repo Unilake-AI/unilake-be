@@ -8,23 +8,67 @@ import re
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import monotonic
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, Self
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.modules.ingestion.execution import run_io, upload_domains
 from app.providers import upload_writer_client
 from app.repositories.ingestion_repo import UPLOAD_JOB_TYPE, IngestionRepository
-from app.repositories.upload_repo import upload_target
+from app.repositories.upload_repo import create_upload_target, upload_target
 
 if TYPE_CHECKING:
     from fastapi import UploadFile
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from app.modules.ingestion.models import IngestionJob
+
+
+UploadDomain = Literal["hr", "academic", "admissions"]
+
+
+class UploadDestination(BaseModel):
+    """Người dùng chọn một bộ đã có hoặc đặt tên cho một bộ mới, không làm cả hai."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    dataset_id: int | None = Field(default=None, gt=0)
+    dataset_name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    domain: UploadDomain | None = None
+
+    @model_validator(mode="after")
+    def check_choice(self) -> Self:
+        if self.dataset_id is not None:
+            if any(
+                value is not None for value in (self.dataset_name, self.description, self.domain)
+            ):
+                raise ValueError("EXISTING_DATASET_CANNOT_BE_REDEFINED")
+        elif self.dataset_name is None:
+            raise ValueError("DATASET_NAME_REQUIRED")
+        return self
+
+
+def new_upload_domain(requested: str | None, allowed: frozenset[str] | None) -> str:
+    """Lấy lĩnh vực từ quyền; chỉ yêu cầu chọn khi tài khoản có nhiều lựa chọn."""
+    if requested is not None:
+        if allowed is not None and requested not in allowed:
+            raise AppException(
+                "Bạn chỉ được tạo bộ dữ liệu trong lĩnh vực được cấp quyền",
+                code="UPLOAD_DOMAIN_FORBIDDEN",
+                status_code=403,
+            )
+        return requested
+    if allowed is not None and len(allowed) == 1:
+        return next(iter(allowed))
+    raise AppException(
+        "Hãy chọn lĩnh vực cho bộ dữ liệu mới",
+        code="UPLOAD_DOMAIN_REQUIRED",
+        status_code=422,
+    )
 
 
 class UploadParser(BaseModel):
@@ -140,15 +184,34 @@ def stage_file(
 
 
 async def receive_upload(
-    db: AsyncSession, file: UploadFile, dataset_id: int, parser_options: str, user: dict[str, Any]
+    db: AsyncSession,
+    file: UploadFile,
+    dataset_id: int | None,
+    parser_options: str,
+    user: dict[str, Any],
+    *,
+    dataset_name: str | None = None,
+    description: str | None = None,
+    domain: UploadDomain | None = None,
 ) -> IngestionJob:
     allowed_domains = upload_domains(user)
+    try:
+        destination = UploadDestination(
+            dataset_id=dataset_id, dataset_name=dataset_name, description=description, domain=domain
+        )
+    except ValidationError:
+        raise AppException(
+            "Hãy chọn bộ dữ liệu đã có hoặc nhập tên bộ mới; không gửi cả hai",
+            code="UPLOAD_DESTINATION_INVALID",
+            status_code=422,
+        ) from None
+    # Tài khoản một lĩnh vực không phải tự khai báo phòng ban hay nhập mã nội bộ.
+    new_domain = (
+        new_upload_domain(destination.domain, allowed_domains) if dataset_id is None else None
+    )
     filename, source_type = file_type(file.filename)
     options = parse_options(parser_options, source_type)
     actor = str(user.get("sub", ""))[:100]
-    source, dataset = await upload_target(
-        db, dataset_id, source_type, actor, allowed_domains=allowed_domains
-    )
     try:
         with TemporaryDirectory(prefix="unilake_upload_") as directory:
             path = Path(directory) / filename
@@ -167,10 +230,29 @@ async def receive_upload(
                     output.write(chunk)
             if size == 0:
                 raise AppException("File không có nội dung", code="UPLOAD_EMPTY", status_code=422)
+
+            # Chưa tạo đăng ký nào trước khi biết file có nội dung và nằm trong giới hạn.
+            if dataset_id is not None:
+                source, dataset = await upload_target(
+                    db, dataset_id, source_type, actor, allowed_domains=allowed_domains
+                )
+            else:
+                assert destination.dataset_name is not None
+                assert new_domain is not None
+                source, dataset = await create_upload_target(
+                    db,
+                    destination.dataset_name,
+                    source_type,
+                    actor,
+                    domain=new_domain,
+                    description=destination.description,
+                )
+            dataset_id = dataset.dataset_id
             reference = await run_io(
                 stage_file, path, dataset_id=dataset_id, sha256=digest.hexdigest(), options=options
             )
-        # Job chỉ nhìn thấy được sau khi file tiếp nhận đã lưu bền vững và có phiên bản cố định.
+        # Lưu bộ dữ liệu, nguồn và job cùng một lần sau khi file đã được xác minh.
+        # Worker chỉ nhìn thấy job khi toàn bộ phần tiếp nhận này đã thành công.
         reference.update(
             source_type=source_type,
             source_system_id=source.source_system_id,

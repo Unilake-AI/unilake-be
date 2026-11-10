@@ -223,7 +223,7 @@ Các endpoint thường dùng dưới đây sử dụng prefix mặc định `/a
 | Danh mục dữ liệu | `GET` | `/api/v1/governance/catalog` |
 | NLQ mô phỏng | `POST` | `/api/v1/nlq/ask` |
 
-Tạo tác vụ ingestion nguồn có sẵn, chạy cleaning và chạy lại job yêu cầu vai trò `ADMIN` hoặc `DATA_ADMIN`. Tải file cho phép `ADMIN`, `DATA_ADMIN`, `HR_STAFF`, `ACADEMIC_STAFF` và `ADMISSIONS_STAFF`; STAFF chỉ tải, xem job và thống kê trong miền phòng ban tương ứng. `VIEWER` không xem được dữ liệu ingestion. Thu thập nguồn có sẵn cần nguồn và bộ dữ liệu hợp lệ trong danh mục. Tải file chỉ cần chọn bộ dữ liệu Bronze hợp lệ; backend tự tạo nguồn tải lên.
+Tạo tác vụ ingestion nguồn có sẵn, chạy cleaning và chạy lại job yêu cầu vai trò `ADMIN` hoặc `DATA_ADMIN`. Tải file cho phép `ADMIN`, `DATA_ADMIN`, `HR_STAFF`, `ACADEMIC_STAFF` và `ADMISSIONS_STAFF`; STAFF chỉ tải, xem job và thống kê trong lĩnh vực được cấp. `VIEWER` không xem được dữ liệu ingestion. Thu thập nguồn có sẵn cần nguồn và bộ dữ liệu hợp lệ trong danh mục. Khi upload, người dùng chọn bộ Bronze đã có hoặc đặt tên bộ mới; backend tự cấp mã và tạo nguồn tải lên. STAFF một lĩnh vực chỉ cần gửi tên và file, không cần nhập ID kỹ thuật.
 
 Hướng dẫn [tải file qua API](docs/ingestion-uploads.md) mô tả cách tiếp nhận trực tiếp từ máy người dùng. Tham khảo [đặc tả ingestion](docs/ingestion-execution.md) để tra cứu payload, vòng đời tác vụ và mã lỗi. Quy trình và cấu hình Bronze → Silver nằm trong [hướng dẫn nguồn thật](docs/standardization/source-silver-flow.md).
 
@@ -339,6 +339,7 @@ Schema và profile trong `docs/` và `data/standardization/` là tài nguyên c�
 
 | Chủ đề | Tài liệu |
 | --- | --- |
+| Luồng và hợp đồng API | [Toàn bộ luồng hiện tại, API và phương án cần thống nhất](docs/system-flow-and-api-contract.md) |
 | Kiến trúc | [Kiến trúc xử lý dữ liệu](docs/architecture/data-processing-architecture.md) |
 | Cơ sở dữ liệu | [Database và schema](docs/database.md) · [Đồng bộ môi trường local](docs/db-local-sync.md) |
 | Ingestion | [Luồng thực thi](docs/ingestion-execution.md) · [Reader dữ liệu nguồn](docs/ingestion-source-readers.md) |

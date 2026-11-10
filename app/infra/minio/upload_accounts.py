@@ -63,7 +63,8 @@ def write_private(path: Path, content: str) -> None:
 def prepare(path: Path) -> None:
     content = "# Thông tin xác thực cục bộ, không đưa vào kho mã nguồn.\n"
     for role in ("WRITER", "READER", "CLEANUP"):
-        content += f"UPLOAD_{role}_ACCESS_KEY=upload-{role.lower()}\nUPLOAD_{role}_SECRET_KEY={secrets.token_hex(24)}\n"
+        # Dùng 32 ký tự để tài khoản được MinIO chấp nhận, kể cả bản giới hạn tối đa 40 ký tự.
+        content += f"UPLOAD_{role}_ACCESS_KEY=upload-{role.lower()}\nUPLOAD_{role}_SECRET_KEY={secrets.token_hex(16)}\n"
     write_private(path, content)
 
 

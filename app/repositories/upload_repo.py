@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 
 from app.core.exceptions import AppException
 from app.modules.datasources.models import DataLayer, Dataset, DataSource, SourceSystem
@@ -84,6 +87,76 @@ async def upload_target(
         raise AppException(
             "Nguồn tải lên đã bị tắt hoặc thay đổi", code="UPLOAD_SOURCE_INACTIVE", status_code=422
         )
-    # Chưa tạo job và chưa công bố Bronze; kết thúc khóa trước khi lưu file có thể mất nhiều thời gian.
-    await db.commit()
+    # Chỉ lưu chính thức khi file đã được tiếp nhận và job đã tạo thành công.
+    # Nếu bước sau gặp lỗi, bộ dữ liệu và nguồn vừa tạo cũng được hủy cùng yêu cầu.
     return source, dataset
+
+
+async def create_upload_target(
+    db: AsyncSession,
+    dataset_name: str,
+    source_type: str,
+    actor: str,
+    *,
+    domain: str,
+    description: str | None = None,
+) -> tuple[DataSource, Dataset]:
+    """Đăng ký bộ dữ liệu mới trong lần tải đầu, không yêu cầu người dùng biết mã nguồn."""
+    layer = await db.scalar(select(DataLayer).where(DataLayer.layer_code == "BRONZE"))
+    if layer is None:
+        raise AppException(
+            "Tầng Bronze chưa được thiết lập", code="UPLOAD_BRONZE_NOT_READY", status_code=422
+        )
+
+    # Lĩnh vực đã được kiểm tra theo quyền trước khi đến đây; không đoán từ tên file.
+    # Nguồn này do hệ thống quản lý, người tải không cần khai báo kết nối hay đường dẫn.
+    code = f"UPLOAD_{domain.upper()}"
+    await db.execute(
+        insert(SourceSystem)
+        .values(
+            source_code=code,
+            source_name=f"File tải lên — {domain}",
+            source_type="UPLOAD",
+            is_active=True,
+        )
+        .on_conflict_do_nothing(index_elements=["source_code"])
+    )
+    system = await db.scalar(
+        select(SourceSystem).where(SourceSystem.source_code == code).with_for_update()
+    )
+    if system is None or not system.is_active or system.source_type != "UPLOAD":
+        raise AppException(
+            "Nguồn tiếp nhận của lĩnh vực này chưa sẵn sàng",
+            code="UPLOAD_SYSTEM_UNAVAILABLE",
+            status_code=422,
+        )
+
+    # Hai yêu cầu tạo mới cùng lĩnh vực phải kiểm tra lần lượt để không tạo hai bộ trùng tên.
+    # Chỉ chọn lại bộ cũ khi người dùng chủ động chọn; không tự gộp dữ liệu theo tên.
+    name = unicodedata.normalize("NFC", " ".join(dataset_name.split()))
+    duplicate = await db.scalar(
+        select(Dataset.dataset_id).where(
+            Dataset.source_system_id == system.source_system_id,
+            Dataset.domain == domain,
+            func.lower(Dataset.dataset_name) == name.lower(),
+        )
+    )
+    if duplicate is not None:
+        raise AppException(
+            "Tên bộ dữ liệu đã có. Hãy chọn bộ dữ liệu đó hoặc đặt tên khác",
+            code="UPLOAD_DATASET_NAME_CONFLICT",
+            status_code=409,
+        )
+    dataset = Dataset(
+        dataset_code=f"UPLOAD_{uuid4().hex}",
+        dataset_name=name,
+        domain=domain,
+        source_system_id=system.source_system_id,
+        data_layer_id=layer.data_layer_id,
+        owner_department_id=system.owner_department_id,
+        description=description,
+        status="ACTIVE",
+    )
+    db.add(dataset)
+    await db.flush()
+    return await upload_target(db, dataset.dataset_id, source_type, actor)

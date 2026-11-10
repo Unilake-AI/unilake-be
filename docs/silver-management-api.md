@@ -25,9 +25,9 @@ API quản lý profile, preview và snapshot dành cho ADMIN/DATA_ADMIN. STAFF c
 
 ## Thử theo thứ tự
 
-1. `GET /source-systems`, chọn mã hệ thống nguồn có sẵn.
-2. `POST /datasets`, gửi `dataset_code`, `dataset_name`, `domain`, `source_system_id`. Hệ thống chọn tầng Bronze; không nhận đường dẫn ghi tùy ý.
-3. `POST /ingestion/uploads`, chọn `dataset_id`, tải file và chờ job `SUCCESS`.
+1. `GET /datasets` để chọn bộ cũ nếu đã có. Tạo mới qua upload không cần đăng ký hệ thống nguồn trước.
+2. `POST /ingestion/uploads`, gửi `file` và `dataset_name` cho bộ mới; STAFF một lĩnh vực không cần `domain`, quản trị/nhiều lĩnh vực phải chọn rõ. Hoặc gửi `file` và `dataset_id` cho bộ cũ, không gửi thông tin tạo mới cùng lúc. Xem [hướng dẫn upload](ingestion-uploads.md).
+3. Đợi job `SUCCESS`. Nếu quản trị cần đăng ký bộ dữ liệu thủ công cho nguồn khác, vẫn dùng `GET /source-systems` và `POST /datasets` với nguồn đã có.
 4. `POST /pipeline/profiles`, gửi `profile_id` và `definition`. Swagger hiển thị toàn bộ cấu trúc `SourceProfile` trong phần Schemas. Điền mã nguồn do upload tạo, mã dataset, tên file, cấu trúc nguồn/đích, ánh xạ cột, quy tắc giá trị và phiên bản đối chiếu mã đã đăng ký. Xem thêm [cấu hình nguồn thật](standardization/source-silver-flow.md).
 5. Gọi preview với body `{"profile_id":"ma-profile-cua-ban"}`. API kiểm tra toàn bộ file nhưng trả tối đa 100 dòng mẫu. Không ghi lịch sử cleaning, không lưu quarantine và không đổi dữ liệu Silver. Phần `publication_checked=false` nhắc rằng liên kết với toàn bộ snapshot còn được kiểm tra khi công bố.
 6. Gọi API Cleaning với `{"profile_id":"ma-profile-cua-ban","base_snapshot":"active"}`.
