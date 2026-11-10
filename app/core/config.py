@@ -35,6 +35,7 @@ class Settings(BaseSettings):
         ),
         alias="CORS_ORIGINS",
     )  # MỚI
+    cors_origin_regex: str = Field(default="", alias="CORS_ORIGIN_REGEX")
 
     db_host: str = Field(default="localhost", alias="DB_HOST")
     db_port: int = Field(default=5432, alias="DB_PORT")
@@ -170,6 +171,12 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:  # MỚI
         """Tách CORS_ORIGINS được phân cách bằng dấu phẩy thành danh sách."""
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def cors_origin_regex_pattern(self) -> str | None:
+        """Trả về regex CORS origin nếu được cấu hình, bỏ qua chuỗi rỗng."""
+        pattern = self.cors_origin_regex.strip()
+        return pattern or None
 
 
 settings = Settings()

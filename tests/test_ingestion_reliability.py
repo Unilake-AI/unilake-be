@@ -7,11 +7,24 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from sqlalchemy.exc import ProgrammingError
 
 from app.core.exceptions import AppException
 from app.modules.ingestion import router
-from app.modules.ingestion.execution import ingestion_read_domains
+from app.modules.ingestion.execution import classify_failure, ingestion_read_domains
 from app.repositories.ingestion_repo import IngestionRepository
+
+
+@pytest.mark.parametrize("state", ["42P01", "42703"])
+def test_missing_database_schema_does_not_trigger_automatic_retry(state):
+    class MissingSchemaError(Exception):
+        sqlstate = state
+
+    error = ProgrammingError("Không in câu lệnh", {}, MissingSchemaError())
+    assert classify_failure("COMMITTING", error) == (
+        "INGESTION_COMMITTING_SCHEMA_NOT_READY",
+        False,
+    )
 
 
 @pytest.mark.asyncio

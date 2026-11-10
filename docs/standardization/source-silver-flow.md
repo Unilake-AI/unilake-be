@@ -18,7 +18,7 @@ API Silver vẫn được gọi riêng sau ingestion; chưa có worker tự đ�
 
 ## Khai báo cấu hình nguồn
 
-Cấu hình được quản lý trên máy chủ trong `config/silver/profiles.json`, hoặc tệp được chỉ định bằng biến `SILVER_PROFILES_PATH`. Không chứa mật khẩu hay thông tin kết nối. Cấu trúc tệp được mô tả trong `config/silver/profiles.schema.json`. Tệp mặc định là `{}`: không có nguồn hoặc mã đối chiếu được tạo sẵn.
+Cấu hình có thể được tạo/sửa qua API `/api/v1/pipeline/profiles` và lưu bền vững trong PostgreSQL, theo [hướng dẫn quản lý Silver](../silver-management-api.md). Cấu hình khai báo sẵn trên máy chủ trong `config/silver/profiles.json`, hoặc tệp được chỉ định bằng biến `SILVER_PROFILES_PATH`, vẫn được hỗ trợ; bản PostgreSQL được ưu tiên khi trùng mã. Cấu hình không chứa mật khẩu hay thông tin kết nối. Cấu trúc tệp được mô tả trong `config/silver/profiles.schema.json`. Tệp mặc định là `{}`: không có nguồn hoặc mã đối chiếu được tạo sẵn.
 
 Nội dung là một đối tượng JSON: mỗi khóa là tên cấu hình để truyền qua `profile_id`; mỗi giá trị gồm:
 

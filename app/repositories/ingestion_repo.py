@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -457,25 +456,25 @@ class IngestionRepository:
                 last_ingested_at=job.finished_at, ingestion_count=DataSource.ingestion_count + 1
             )
             if output and output.get("uri"):
-                with suppress(Exception):
-                    await self.record_lineage(
-                        source_layer="SOURCE",
-                        source_name=job.source_table or f"source:{job.data_source_id}",
-                        target_layer="BRONZE",
-                        target_name=str(output["uri"]),
-                        metadata={
-                            "ingestion_job_id": job.ingestion_job_id,
-                            "data_source_id": job.data_source_id,
-                            "dataset_id": job.dataset_id,
-                            "domain": output.get("domain"),
-                            "records_read": job.rows_read,
-                            "records_passed": job.rows_written,
-                            "records_rejected": job.rows_rejected,
-                            "size_bytes": output.get("size_bytes"),
-                            "sha256": output.get("sha256"),
-                            "version_id": output.get("version_id"),
-                        },
-                    )
+                # Lưu nguồn gốc cùng kết quả; nếu chưa lưu được thì chưa báo nạp thành công.
+                await self.record_lineage(
+                    source_layer="SOURCE",
+                    source_name=job.source_table or f"source:{job.data_source_id}",
+                    target_layer="BRONZE",
+                    target_name=str(output["uri"]),
+                    metadata={
+                        "ingestion_job_id": job.ingestion_job_id,
+                        "data_source_id": job.data_source_id,
+                        "dataset_id": job.dataset_id,
+                        "domain": output.get("domain"),
+                        "records_read": job.rows_read,
+                        "records_passed": job.rows_written,
+                        "records_rejected": job.rows_rejected,
+                        "size_bytes": output.get("size_bytes"),
+                        "sha256": output.get("sha256"),
+                        "version_id": output.get("version_id"),
+                    },
+                )
         await self.db.execute(
             update(DataSource)
             .where(DataSource.data_source_id == job.data_source_id)

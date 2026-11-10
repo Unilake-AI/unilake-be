@@ -24,7 +24,7 @@ Ví dụ: job 105 thất bại, chạy lại tạo job 106. Cả hai có `root_j
 
 MVP chỉ cho chạy lại job `UPLOAD_V1`, vì file này có sẵn phiên bản MinIO và mã kiểm tra nội dung đã ghim. Job đọc nguồn đã đăng ký chưa có cơ chế giữ cố định đầu vào đầy đủ nên phải tạo job mới thay vì chạy lại.
 
-Chỉ job `FAILED` mới được chạy lại. Hệ thống cũng từ chối nếu chuỗi đang có job `QUEUED`/`RUNNING` hoặc đã phát hiện Bronze có object cần đối soát. Điều này tránh tạo thêm dữ liệu Bronze trùng khi worker dừng sau lúc ghi object nhưng trước lúc cập nhật trạng thái cuối cùng.
+Chỉ job `FAILED` mới được chạy lại. Hệ thống từ chối nếu chuỗi đang có job `QUEUED`/`RUNNING`. Nếu đã có thông tin Bronze được xác minh, job mới nhận lại tham chiếu đó để đối soát, không ghi thêm bản Bronze của cùng file.
 
 ## Worker heartbeat và Docker healthcheck
 
@@ -42,10 +42,16 @@ Docker healthcheck kiểm tra file dấu hiệu được worker cập nhật sau
 
 Worker tự tạo một job mới ở trạng thái `RETRY_WAIT` cho lỗi hạ tầng tạm thời như MinIO, mạng, timeout hoặc PostgreSQL. Lần đầu chờ 10 giây, lần tiếp theo chờ 30 giây; mặc định tối đa ba lần chạy tính cả lần đầu. Lỗi file, validation, checksum và cấu hình không tự chạy lại.
 
+Thiếu bảng/cột hoặc kiểu dữ liệu cần thiết trả mã `INGESTION_<bước>_SCHEMA_NOT_READY`, không tự chạy lại. Cần áp dụng migration còn thiếu trước. Chờ thêm không tự sửa được cấu trúc database.
+
 `GET /api/v1/ingestion/jobs/metrics` trả thời gian chờ trung bình, thời gian xử lý trung bình, tỷ lệ thất bại và tuổi của job chờ lâu nhất. `GET /api/v1/ingestion/workers` dành cho ADMIN và DATA_ADMIN, hiển thị worker còn hoạt động, lần heartbeat gần nhất và job đang chạy.
 
-Nếu một worker đã ghi và xác minh Bronze nhưng bị dừng trước khi chốt `SUCCESS`, bản ghi checkpoint `bronze_output` được giữ lại. Lần retry đọc lại đúng object/version/checksum đó và chốt thành công, thay vì ghi thêm object Bronze.
+Nếu worker đã ghi và xác minh Bronze nhưng chưa chốt được `SUCCESS`, checkpoint `bronze_output` được giữ lại. Lần retry kiểm tra lại đúng file tiếp nhận đã ghim, xác minh Bronze cũ và dùng lại phiên bản đó. Bước kiểm tra lại giữ đúng số dòng, báo cáo validation và cách đọc CSV/Excel để đi tiếp Silver; vẫn cần phiên bản file trong kho tiếp nhận còn tồn tại.
+
+Silver chỉ chấp nhận file Bronze của lần trước khi đối chiếu được cả chuỗi retry, dataset, nguồn, file tiếp nhận, phiên bản và mã kiểm tra nội dung. Không nới kiểm tra để nhận object tùy ý từ job khác. Job cũ giữ trạng thái thất bại; UI dùng ID job retry thành công khi chạy Silver.
 
 Worker dọn file ở kho tiếp nhận sau khi toàn bộ chuỗi retry đã kết thúc và quá thời hạn giữ mặc định 168 giờ. Tác vụ dọn dùng tài khoản MinIO `UPLOAD_CLEANUP` riêng, chỉ có quyền xóa object trong `incoming/*`; sau khi cập nhật phải chạy lại `upload_accounts export-runtime` và `apply` để tạo tài khoản này.
 
 Trước khi chạy API/worker mới trên database có sẵn, áp dụng migration `infra/postgres/migrations/20261110_ingestion_reliability_mvp.sql`.
+
+Để chốt ingestion thành công cần có cả bảng truy vết từ `infra/postgres/migrations/20261106_pipeline_lineage.sql`; upload cần cột từ `infra/postgres/migrations/20261109_ingestion_uploads.sql`. Kết quả job và thông tin truy vết phải được lưu cùng nhau, không bỏ qua lỗi lưu truy vết rồi báo thành công.

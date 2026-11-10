@@ -42,3 +42,14 @@ def test_module_model_imports_register_with_base() -> None:
     for module_path in module_paths:
         module = importlib.import_module(module_path)
         assert module.Base is Base
+
+
+def test_settings_cors_origin_regex_pattern() -> None:
+    empty_settings = Settings(CORS_ORIGIN_REGEX="   ", JWT_SECRET_KEY="test-secret")
+    assert empty_settings.cors_origin_regex_pattern is None
+
+    regex_settings = Settings(
+        CORS_ORIGIN_REGEX=r"^https?://10\.36\.120\.223(:\d+)?$",
+        JWT_SECRET_KEY="test-secret",
+    )
+    assert regex_settings.cors_origin_regex_pattern == r"^https?://10\.36\.120\.223(:\d+)?$"

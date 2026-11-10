@@ -29,7 +29,7 @@ Repository này bao gồm API FastAPI, ingestion worker và pipeline chuẩn hó
 | Truy vấn ngôn ngữ tự nhiên (NLQ) | Tiếp nhận câu hỏi và xử lý luồng truy vấn | Đang sử dụng LLM mô phỏng và bộ thực thi trả kết quả rỗng |
 | Dashboard, lịch sử truy vấn, quản lý người dùng | Cấu trúc module | Chưa có endpoint nghiệp vụ |
 
-Silver được cấu hình theo từng nguồn trong `config/silver/profiles.json` (mặc định trống). Các phép tính nghiệp vụ và bộ 39 quy định trong tài liệu cũ không còn là điều kiện bắt buộc để công bố Silver. Cấu trúc, kiểu dữ liệu, khóa và nguồn gốc vẫn được kiểm tra. NLQ hiện được cấu hình cố định với `MockLLMClient` và `EmptyGoldQueryExecutor` trong `app/providers.py`; thay đổi `LLM_PROVIDER` chưa kích hoạt kết nối LLM thực tế.
+Silver được cấu hình theo từng nguồn qua API `/pipeline/profiles`, lưu trong PostgreSQL. Cấu hình có sẵn trong `config/silver/profiles.json` (mặc định trống) vẫn được hỗ trợ. Các phép tính nghiệp vụ và bộ 39 quy định trong tài liệu cũ không còn là điều kiện bắt buộc để công bố Silver. Cấu trúc, kiểu dữ liệu, khóa và nguồn gốc vẫn được kiểm tra. NLQ hiện được cấu hình cố định với `MockLLMClient` và `EmptyGoldQueryExecutor` trong `app/providers.py`; thay đổi `LLM_PROVIDER` chưa kích hoạt kết nối LLM thực tế.
 
 ## Kiến trúc và công nghệ
 
@@ -223,11 +223,13 @@ Các endpoint thường dùng dưới đây sử dụng prefix mặc định `/a
 | Danh mục dữ liệu | `GET` | `/api/v1/governance/catalog` |
 | NLQ mô phỏng | `POST` | `/api/v1/nlq/ask` |
 
-Tạo tác vụ ingestion nguồn có sẵn, chạy cleaning và chạy lại job yêu cầu vai trò `ADMIN` hoặc `DATA_ADMIN`. Tải file cho phép `ADMIN`, `DATA_ADMIN`, `HR_STAFF`, `ACADEMIC_STAFF` và `ADMISSIONS_STAFF`; STAFF chỉ tải, xem job và thống kê trong miền phòng ban tương ứng. `VIEWER` không xem được dữ liệu ingestion. Thu thập nguồn có sẵn cần nguồn và bộ dữ liệu hợp lệ trong danh mục. Tải file chỉ cần chọn bộ dữ liệu Bronze hợp lệ; backend tự tạo nguồn tải lên.
+Tạo tác vụ ingestion nguồn có sẵn, chạy cleaning và chạy lại job yêu cầu vai trò `ADMIN` hoặc `DATA_ADMIN`. Tải file cho phép `ADMIN`, `DATA_ADMIN`, `HR_STAFF`, `ACADEMIC_STAFF` và `ADMISSIONS_STAFF`; STAFF chỉ tải, xem job và thống kê trong lĩnh vực được cấp. `VIEWER` không xem được dữ liệu ingestion. Thu thập nguồn có sẵn cần nguồn và bộ dữ liệu hợp lệ trong danh mục. Khi upload, người dùng chọn bộ Bronze đã có hoặc đặt tên bộ mới; backend tự cấp mã và tạo nguồn tải lên. STAFF một lĩnh vực chỉ cần gửi tên và file, không cần nhập ID kỹ thuật.
 
 Hướng dẫn [tải file qua API](docs/ingestion-uploads.md) mô tả cách tiếp nhận trực tiếp từ máy người dùng. Tham khảo [đặc tả ingestion](docs/ingestion-execution.md) để tra cứu payload, vòng đời tác vụ và mã lỗi. Quy trình và cấu hình Bronze → Silver nằm trong [hướng dẫn nguồn thật](docs/standardization/source-silver-flow.md).
 
 Theo dõi worker, thống kê và chạy lại thủ công được mô tả trong [hướng dẫn độ tin cậy ingestion](docs/ingestion-reliability.md).
+
+Các API chọn bộ dữ liệu Bronze, quản lý profile, xem trước và lựa chọn phiên bản Silver nằm trong [hướng dẫn quản lý Silver trên Swagger](docs/silver-management-api.md). Profile tạo qua API được lưu trong PostgreSQL; cần áp dụng migration `20261110_silver_management.sql` trên database đích trước khi sử dụng.
 
 ## Quản lý cơ sở dữ liệu
 
@@ -337,6 +339,7 @@ Schema và profile trong `docs/` và `data/standardization/` là tài nguyên c�
 
 | Chủ đề | Tài liệu |
 | --- | --- |
+| Luồng và hợp đồng API | [Toàn bộ luồng hiện tại, API và phương án cần thống nhất](docs/system-flow-and-api-contract.md) |
 | Kiến trúc | [Kiến trúc xử lý dữ liệu](docs/architecture/data-processing-architecture.md) |
 | Cơ sở dữ liệu | [Database và schema](docs/database.md) · [Đồng bộ môi trường local](docs/db-local-sync.md) |
 | Ingestion | [Luồng thực thi](docs/ingestion-execution.md) · [Reader dữ liệu nguồn](docs/ingestion-source-readers.md) |

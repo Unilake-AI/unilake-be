@@ -9,6 +9,7 @@ from app.core.logging import request_id_middleware
 from app.domains.registry import get_domain_registry
 from app.modules.auth.router import router as auth_router
 from app.modules.dashboard.router import router as dashboard_router
+from app.modules.datasources.datasets_router import router as datasets_router
 from app.modules.datasources.router import router as datasources_router
 from app.modules.governance.router import router as governance_router
 from app.modules.ingestion.router import router as ingestion_router
@@ -16,8 +17,10 @@ from app.modules.nlq.dependencies import get_nlq_service
 from app.modules.nlq.router import router as nlq_router
 from app.modules.pipeline.cleaning_runs_router import router as cleaning_runs_router
 from app.modules.pipeline.data_quality_issues_router import router as data_quality_issues_router
+from app.modules.pipeline.profiles_router import router as profiles_router
 from app.modules.pipeline.quarantine_records_router import router as quarantine_records_router
 from app.modules.pipeline.router import router as pipeline_router
+from app.modules.pipeline.snapshots_router import router as snapshots_router
 from app.modules.query_history.router import router as query_history_router
 from app.modules.users.router import router as users_router
 from app.providers import provide_nlq_service
@@ -40,8 +43,11 @@ def create_app() -> FastAPI:
     application.include_router(auth_router, prefix=api_prefix)
     application.include_router(users_router, prefix=api_prefix)
     application.include_router(datasources_router, prefix=api_prefix)
+    application.include_router(datasets_router, prefix=api_prefix)
     application.include_router(ingestion_router, prefix=api_prefix)
     application.include_router(pipeline_router, prefix=api_prefix)
+    application.include_router(profiles_router, prefix=api_prefix)
+    application.include_router(snapshots_router, prefix=api_prefix)
     application.include_router(cleaning_runs_router, prefix=api_prefix)
     application.include_router(quarantine_records_router, prefix=api_prefix)
     application.include_router(data_quality_issues_router, prefix=api_prefix)
@@ -52,6 +58,7 @@ def create_app() -> FastAPI:
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
+        allow_origin_regex=settings.cors_origin_regex_pattern,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -209,6 +209,11 @@ class SilverPublicationService:
         _, tables = self._read_manifest(ObjectRef(**json.loads(row["manifest_ref"])), snapshot_id)
         return tables
 
+    def describe_snapshot(self, snapshot_id: str) -> dict[str, Any]:
+        """Đọc bản kê đã xác minh để quản trị viên xem cấu trúc và nguồn gốc dữ liệu."""
+        row = self.repository.snapshot(snapshot_id, self.scope)
+        return self._read_manifest_header(ObjectRef(**json.loads(row["manifest_ref"])), snapshot_id)
+
     def read_active(self) -> dict[str, list[dict[str, object]]]:
         head = self.repository.head(self.scope)
         return self.read_snapshot(head) if head else {}

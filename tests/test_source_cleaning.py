@@ -68,6 +68,68 @@ def definition():
     }
 
 
+@pytest.mark.parametrize(
+    "changed",
+    [
+        None,
+        "root_job_id",
+        "data_source_id",
+        "dataset_id",
+        "source_table",
+        "upload_input",
+        "version_id",
+    ],
+)
+def test_reused_bronze_must_belong_to_same_retry_chain_and_pinned_input(changed):
+    output = {
+        "uri": "s3://bronze/hr/2026/11/10/job-12/people.csv",
+        "version_id": "pinned-bronze",
+        "sha256": "a" * 64,
+        "size_bytes": 100,
+        "source_version_id": "pinned-upload",
+        "reused_bronze": True,
+    }
+    context = {
+        "ingestion_job_id": 15,
+        "root_job_id": 12,
+        "job_type": "UPLOAD_V1",
+        "data_source_id": 9,
+        "dataset_id": 9,
+        "source_table": "people.csv",
+        "upload_input": {"version_id": "pinned-upload"},
+        "output": output,
+    }
+    original = {
+        **context,
+        "ingestion_job_id": 12,
+        "bronze_output": dict(output),
+    }
+    if changed == "version_id":
+        original["bronze_output"][changed] = "other-version"
+    elif changed is not None:
+        original[changed] = "other"
+    if changed is None:
+        assert runner._validate_reused_bronze(context, original) == 12
+        context.update(
+            status="SUCCESS",
+            source_type="CSV",
+            domain="hr",
+            layer_code="BRONZE",
+            dataset_source_id=17,
+            source_system_id=17,
+            rows_read=1,
+            bronze_ingestion_job_id=12,
+        )
+        runner._validate_job_context(context)
+        assert context["object_key"].endswith("job-12/people.csv")
+        context.pop("bronze_ingestion_job_id")
+        with pytest.raises(ValueError, match="BRONZE_JOB_OUTPUT_INVALID"):
+            runner._validate_job_context(context)
+    else:
+        with pytest.raises(ValueError, match="BRONZE_REUSE_ORIGIN_MISMATCH"):
+            runner._validate_reused_bronze(context, original)
+
+
 def test_profile_fails_closed_and_fingerprints_changes(tmp_path):
     path = tmp_path / "profiles.json"
     path.write_text(json.dumps({"positions": definition()}))
@@ -174,7 +236,7 @@ def test_file_to_cleaning_to_production_parquet(
     )
     storage = LocalSilverStore(tmp_path / "silver")
     monkeypatch.setattr(runner, "create_engine", lambda *_args, **_kwargs: engine)
-    monkeypatch.setattr(runner, "load_profile", lambda *_: profile)
+    monkeypatch.setattr(runner, "load_source_profile", lambda *_: profile)
     monkeypatch.setattr(runner, "_job_context", lambda *_: context)
     monkeypatch.setattr(runner, "_identity_service", lambda *_: profile.services(crosswalk))
 
@@ -189,6 +251,15 @@ def test_file_to_cleaning_to_production_parquet(
     monkeypatch.setattr(runner, "source_reader_client", lambda *_: client)
     monkeypatch.setattr(runner, "silver_writer_client", lambda: None)
     monkeypatch.setattr(runner, "MinioSilverStore", lambda *_: storage)
+    preview = runner.preview_cleaning(engine, 42, "positions", 1)
+    assert preview["preview"] is True
+    assert preview["publication_checked"] is False
+    assert preview["records_read"] == len(rows)
+    assert preview["records_quarantined"] == (1 if invalid else 0)
+    assert len(preview["normalized_sample"]) == 1
+    with engine.connect() as connection:
+        assert connection.execute(select(CLEANING_RUNS)).first() is None
+    assert SilverRepository(engine).head("production:institution") is None
     result = runner.run_manual_cleaning(
         42, requested_by="1", profile_id="positions", base_snapshot=None
     )

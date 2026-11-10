@@ -41,8 +41,9 @@ from app.modules.pipeline.silver_pipeline import NormalizationTask, SilverPipeli
 from app.modules.pipeline.silver_publication import SilverPublicationService
 from app.modules.pipeline.silver_repository import SilverRepository
 from app.modules.pipeline.silver_storage import MinioSilverStore, SilverError, checksum
-from app.modules.pipeline.source_profiles import SourceProfile, _tuples, load_profile
+from app.modules.pipeline.source_profiles import SourceProfile, _tuples
 from app.providers import silver_writer_client, source_reader_client
+from app.repositories.silver_profile_repo import load_source_profile
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
@@ -59,7 +60,8 @@ def _job_context(engine: Any, ingestion_job_id: int) -> dict[str, Any]:
             connection.execute(
                 text("""
                 SELECT j.ingestion_job_id,j.status,j.job_type,j.output,j.source_table,
-                       j.rows_read,j.data_source_id,j.dataset_id,ds.source_type,
+                       j.rows_read,j.data_source_id,j.dataset_id,j.root_job_id,j.upload_input,
+                       ds.source_type,
                        ds.configuration,ds.location,s.source_system_id,s.source_code,
                        d.domain,d.dataset_code,d.source_system_id AS dataset_source_id,
                        l.layer_code, ds.is_active AS source_active,
@@ -85,8 +87,53 @@ def _job_context(engine: Any, ingestion_job_id: int) -> dict[str, Any]:
         or context["dataset_status"] != "ACTIVE"
     ):
         raise ValueError("SOURCE_OR_DATASET_INACTIVE")
+    output = context["output"]
+    if isinstance(output, dict) and output.get("reused_bronze"):
+        parts = urlsplit(output.get("uri", "")).path.lstrip("/").split("/")
+        match = re.fullmatch(r"job-([1-9][0-9]*)", parts[4]) if len(parts) == 6 else None
+        if match is None:
+            raise ValueError("BRONZE_REUSE_ORIGIN_REQUIRED")
+        with engine.begin() as connection:
+            original = (
+                connection.execute(
+                    text("""
+                    SELECT ingestion_job_id,root_job_id,job_type,data_source_id,dataset_id,
+                           source_table,upload_input,bronze_output
+                    FROM app.ingestion_job WHERE ingestion_job_id=:job_id
+                    """),
+                    {"job_id": int(match.group(1))},
+                )
+                .mappings()
+                .first()
+            )
+        context["bronze_ingestion_job_id"] = _validate_reused_bronze(
+            context, dict(original) if original is not None else None
+        )
     _validate_job_context(context)
     return context
+
+
+def _validate_reused_bronze(context: dict[str, Any], original: dict[str, Any] | None) -> int:
+    """Chỉ nhận lại file từ một lần chạy cùng chuỗi, cùng bộ dữ liệu và cùng file đầu vào."""
+    if (
+        original is None
+        or context["job_type"] != "UPLOAD_V1"
+        or original["job_type"] != "UPLOAD_V1"
+        or (original["root_job_id"] or original["ingestion_job_id"])
+        != (context["root_job_id"] or context["ingestion_job_id"])
+        or any(
+            original[field] != context[field]
+            for field in ("data_source_id", "dataset_id", "source_table", "upload_input")
+        )
+        or not isinstance(original["upload_input"], dict)
+        or not isinstance(original["bronze_output"], dict)
+        or any(
+            original["bronze_output"].get(field) != context["output"].get(field)
+            for field in ("uri", "version_id", "sha256", "size_bytes", "source_version_id")
+        )
+    ):
+        raise ValueError("BRONZE_REUSE_ORIGIN_MISMATCH")
+    return int(original["ingestion_job_id"])
 
 
 def _validate_job_context(context: dict[str, Any]) -> None:
@@ -104,7 +151,7 @@ def _validate_job_context(context: dict[str, Any]) -> None:
     extensions = (".xlsx", ".xlsm") if context["source_type"] == "EXCEL" else (".csv",)
     if not isinstance(source_table, str) or not source_table.lower().endswith(extensions):
         raise ValueError("BRONZE_SOURCE_FILE_TYPE_MISMATCH")
-    # Tệp phải có phiên bản và được lưu trong Bronze đúng vị trí của lần thu thập này.
+    # File thuộc lần nạp này hoặc lần trước đã được đối chiếu trong cùng chuỗi chạy lại.
     output = context["output"]
     if not isinstance(output, dict):
         raise ValueError("BRONZE_JOB_OUTPUT_REQUIRED")
@@ -117,7 +164,8 @@ def _validate_job_context(context: dict[str, Any]) -> None:
         or uri.fragment
         or len(object_parts) != 6
         or object_parts[0] != domain
-        or object_parts[4] != f"job-{context['ingestion_job_id']}"
+        or object_parts[4]
+        != f"job-{context.get('bronze_ingestion_job_id', context['ingestion_job_id'])}"
         or object_parts[-1] != source_table
     ):
         raise ValueError("BRONZE_JOB_OUTPUT_INVALID_OR_UNSUPPORTED")
@@ -300,7 +348,7 @@ def run_manual_cleaning(
     cleaning_completed = False
     publication_committed = False
     try:
-        profile = load_profile(settings.silver_profiles_path, profile_id)
+        profile = load_source_profile(engine, settings.silver_profiles_path, profile_id)
         context = _job_context(engine, ingestion_job_id)
         _bind_profile(context, profile)
         mapping, identity = _identity_service(engine, profile)
@@ -491,3 +539,39 @@ def _log_report(requested_by: str, report: dict[str, Any]) -> None:
         issue_codes,
         (report["publication"] or {}).get("snapshot_id"),
     )
+
+
+def preview_cleaning(
+    engine: Any, ingestion_job_id: int, profile_id: str, limit: int
+) -> dict[str, Any]:
+    """Đọc và kiểm tra đầy đủ, chỉ trả một số dòng xem trước và không công bố dữ liệu."""
+    profile = load_source_profile(engine, settings.silver_profiles_path, profile_id)
+    context = _job_context(engine, ingestion_job_id)
+    _bind_profile(context, profile)
+    mapping, identity = _identity_service(engine, profile)
+    cleaned = CleaningPipeline().clean(_read_bronze(context, profile))
+    mapped = mapping.map_batch(cleaned.batch)
+    typed = identity.types.standardize(mapped)
+    normalized = identity.standardize(typed)
+    report = cleaned.report
+    return {
+        "preview": True,
+        "ingestion_job_id": ingestion_job_id,
+        "profile_id": profile_id,
+        "profile_fingerprint": profile.fingerprint,
+        "records_read": report.records_read,
+        "records_passed_cleaning": report.records_passed,
+        "records_quarantined": report.records_quarantined,
+        "records_collapsed": report.records_collapsed,
+        "records_normalized": len(normalized.accepted),
+        "cleaning_issues": [asdict(issue) for issue in report.issues],
+        "normalization_issues": [
+            *[asdict(issue) for issue in normalized.mapping_issues],
+            *[asdict(issue) for issue in normalized.type_issues],
+            *[asdict(issue) for issue in normalized.issues],
+        ],
+        "cleaned_sample": list(cleaned.batch.records[:limit]),
+        "normalized_sample": [row.values for row in normalized.accepted[:limit]],
+        "publication_checked": False,
+        "note": "Bản xem trước chưa kiểm tra liên kết với toàn bộ phiên bản Silver; bước công bố sẽ kiểm tra tiếp.",
+    }

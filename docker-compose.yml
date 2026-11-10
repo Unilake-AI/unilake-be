@@ -127,6 +127,7 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DEBUG=${DEBUG:-true}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001}
+      - CORS_ORIGIN_REGEX=${CORS_ORIGIN_REGEX:-}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=${DB_USER:-unilake}

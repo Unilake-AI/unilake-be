@@ -94,6 +94,16 @@ def ingestion_read_domains(user: dict[str, Any]) -> frozenset[str] | None:
 
 def classify_failure(stage: str, exc: Exception) -> tuple[str, bool]:
     """Đổi lỗi kỹ thuật thành mã an toàn và cho biết có thể thử lại hay không."""
+    if isinstance(exc, SQLAlchemyError) and getattr(
+        getattr(exc, "orig", None), "sqlstate", None
+    ) in {
+        "42P01",
+        "42703",
+        "42804",
+        "42883",
+    }:
+        # Thiếu bảng hoặc cột cần cập nhật cơ sở dữ liệu; chờ rồi chạy lại không tự sửa được.
+        return f"INGESTION_{stage}_SCHEMA_NOT_READY", False
     if isinstance(exc, (MinioException, HTTPError, ConnectionError, TimeoutError, SQLAlchemyError)):
         return f"INGESTION_{stage}_TRANSIENT", True
     if isinstance(exc, ValidationBlockedError):
@@ -202,21 +212,6 @@ class IngestionExecutionService:
                 raise ValueError("INGESTION_JOB_CONTEXT_REQUIRED")
             context = await repo.context(job.data_source_id, job.dataset_id)
             is_upload = job.job_type == "UPLOAD_V1"
-            if job.bronze_output is not None:
-                from app.bronze_capture import verify_bronze_output
-
-                stage = "RECONCILING"
-                await repo.stage(job_id, stage, 0)
-                await run_io(verify_bronze_output, job.bronze_output)
-                await repo.finish(
-                    job_id,
-                    output={
-                        **job.bronze_output,
-                        "domain": context[1].domain,
-                        "reused_bronze": True,
-                    },
-                )
-                return
             if is_upload:
                 from app.modules.ingestion.upload_capture import upload_request
 
@@ -265,15 +260,30 @@ class IngestionExecutionService:
                         or artifact.path.stat().st_size != evidence.get("size_bytes")
                     ):
                         raise ValueError("UPLOAD_CAPTURE_MISMATCH")
-                stage = "WRITING"
-                await repo.stage(job_id, stage, artifact.rows)
-                output = await run_io(store, artifact, domain, write_context)
-                stage = "COMMITTING"
-                # Nếu tiến trình dừng trước khi chốt SUCCESS, retry sẽ biết Bronze đã có object.
-                await repo.checkpoint_bronze(job_id, output)
+                if job.bronze_output is not None:
+                    from app.bronze_capture import verify_bronze_output
+
+                    stage = "RECONCILING"
+                    await repo.stage(job_id, stage, artifact.rows)
+                    # Đọc lại đúng file đã tiếp nhận để giữ đủ số dòng và cách đọc cho Silver.
+                    # Chỉ dùng lại Bronze khi nội dung khớp; không ghi thêm bản sao của file đó.
+                    output = dict(job.bronze_output)
+                    if (
+                        output.get("sha256") != artifact.sha256
+                        or output.get("source_version_id") != artifact.source_version_id
+                        or output.get("size_bytes") != artifact.path.stat().st_size
+                    ):
+                        raise ValueError("BRONZE_RECONCILIATION_INPUT_MISMATCH")
+                    await run_io(verify_bronze_output, output)
+                    output["reused_bronze"] = True
+                else:
+                    stage = "WRITING"
+                    await repo.stage(job_id, stage, artifact.rows)
+                    output = await run_io(store, artifact, domain, write_context)
                 output = {
                     **output,
                     "domain": domain,
+                    "records_read": artifact.rows,
                     "source_type": request.source_type,
                     "parser_options": artifact.parser_options
                     if is_upload
@@ -324,6 +334,9 @@ class IngestionExecutionService:
                         ),
                     ).model_dump(mode="json"),
                 }
+                stage = "COMMITTING"
+                # Giữ cả thông tin đọc file để lần phục hồi sau vẫn xử lý tiếp được ở Silver.
+                await repo.checkpoint_bronze(job_id, output)
                 await repo.finish(job_id, output=output)
         except asyncio.CancelledError:
             # Để thời hạn giữ job tự hết hạn: I/O trên luồng có thể vẫn đang chạy.

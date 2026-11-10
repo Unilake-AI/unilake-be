@@ -25,7 +25,7 @@ from app.modules.ingestion.schemas import (
     IngestionStart,
     IngestionWorkerRead,
 )
-from app.modules.ingestion.uploads import receive_upload
+from app.modules.ingestion.uploads import UploadDomain, receive_upload
 from app.repositories.ingestion_repo import IngestionRepository
 
 if TYPE_CHECKING:
@@ -116,16 +116,46 @@ async def get_job(job_id: int, db: DB, user: User) -> IngestionJob:
     response_model=IngestionJobRead,
     status_code=202,
     summary="Tải file lên để kiểm tra và lưu vào Bronze",
+    description=(
+        "Chọn bộ dữ liệu đã có bằng dataset_id, hoặc tạo bộ mới bằng dataset_name. "
+        "Với bộ mới, nhân viên có một lĩnh vực không cần nhập domain; hệ thống lấy từ quyền. "
+        "Quản trị hoặc tài khoản nhiều lĩnh vực cần chọn domain hợp lệ. "
+        "Không gửi thông tin tạo bộ mới khi đã chọn dataset_id."
+    ),
 )
 async def upload_ingestion(
     db: DB,
     user: User,
     file: Annotated[UploadFile, File(description="File CSV, XLSX hoặc XLSM")],
-    dataset_id: Annotated[int, Form(gt=0)],
+    dataset_id: Annotated[
+        int | None,
+        Form(gt=0, description="Bộ dữ liệu đã chọn trên giao diện; bỏ trống khi tạo mới"),
+    ] = None,
     parser_options: Annotated[str, Form(description="Tùy chọn đọc file dưới dạng JSON")] = "{}",
+    dataset_name: Annotated[
+        str | None, Form(min_length=1, max_length=200, description="Tên bộ dữ liệu mới")
+    ] = None,
+    description: Annotated[
+        str | None, Form(max_length=4000, description="Mô tả bộ dữ liệu mới")
+    ] = None,
+    domain: Annotated[
+        UploadDomain | None,
+        Form(
+            description="Chỉ cần chọn khi tạo mới và tài khoản có nhiều lĩnh vực hoặc là quản trị"
+        ),
+    ] = None,
 ) -> IngestionJob:
     try:
-        return await receive_upload(db, file, dataset_id, parser_options, user)
+        return await receive_upload(
+            db,
+            file,
+            dataset_id,
+            parser_options,
+            user,
+            dataset_name=dataset_name,
+            description=description,
+            domain=domain,
+        )
     except SQLAlchemyError:
         await db.rollback()
         raise AppException(

@@ -53,5 +53,11 @@ def test_export_upload_credentials_keeps_roles_separate(tmp_path: Path):
         "UPLOAD_CLEANUP_SECRET_KEY",
     }
     assert path.stat().st_mode & 0o777 == 0o600
+    credentials = dotenv_values(path)
+    # MinIO từ chối mật khẩu vượt 40 ký tự; kiểm tra để tránh tạo file cấu hình không dùng được.
+    for role in ("WRITER", "READER", "CLEANUP"):
+        secret = credentials[f"UPLOAD_{role}_SECRET_KEY"]
+        assert secret is not None
+        assert 8 <= len(secret) <= 40
     with pytest.raises(FileExistsError):
         prepare(path)

@@ -176,6 +176,52 @@ async def test_http_upload_through_worker_preserves_original_bronze_bytes(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("filename", ["people.csv", "people.xlsx"])
+async def test_retry_reuses_bronze_but_keeps_rows_parser_and_validation(harness, filename):
+    content = b"id,name\n1,Nguyen An\n" if filename.endswith("csv") else excel_bytes()
+    response = TestClient(harness.app).post(
+        "/ingestion/uploads", files={"file": (filename, content)}, data={"dataset_id": "7"}
+    )
+    assert response.status_code == 202
+    original = IngestionJob(
+        ingestion_job_id=42, created_at=datetime(2026, 11, 9), **harness.calls[0]
+    )
+    repository = AsyncMock()
+    repository.context.return_value = harness.context
+    await IngestionExecutionService(repository).execute(
+        original, lambda: UploadCapture(original), store_bronze
+    )
+    checkpoint = repository.checkpoint_bronze.call_args.args[1]
+    writes_before_retry = len(harness.storage.writes)
+    retried = IngestionJob(
+        ingestion_job_id=43,
+        created_at=datetime(2026, 11, 9),
+        bronze_output=checkpoint,
+        **harness.calls[0],
+    )
+    # Bao phủ cả bằng chứng cũ chỉ lưu thông tin file, chưa có cách đọc hay số dòng.
+    assert retried.bronze_output is not None
+    for key in ("records_read", "parser_options", "source_type", "lineage"):
+        retried.bronze_output.pop(key, None)
+    repository = AsyncMock()
+    repository.context.return_value = harness.context
+    store = Mock(side_effect=AssertionError("Không được ghi thêm Bronze khi dùng lại file"))
+    await IngestionExecutionService(repository).execute(
+        retried, lambda: UploadCapture(retried), store
+    )
+    output = repository.finish.call_args.kwargs["output"]
+    assert output["reused_bronze"] is True
+    assert output["records_read"] == 1
+    assert output["source_type"] == harness.context[0].source_type
+    assert output["parser_options"]
+    assert output["uri"] == checkpoint["uri"]
+    assert repository.save_validation.call_args.args[1].ingestion_job_id == 43
+    repository.stage.assert_any_await(43, "RECONCILING", 1)
+    store.assert_not_called()
+    assert len(harness.storage.writes) == writes_before_retry
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("content", "code"),
     [
