@@ -72,3 +72,30 @@ def source_reader_client(bucket: str) -> Minio:
     return _scoped_client(
         settings.source_minio_access_key, settings.source_minio_secret_key, "SOURCE_READER"
     )
+
+
+def upload_writer_client() -> Minio:
+    return _scoped_client(
+        settings.upload_writer_access_key,
+        settings.upload_writer_secret_key,
+        "UPLOAD_WRITER",
+        timeout=settings.upload_timeout_seconds,
+    )
+
+
+def upload_reader_client() -> Minio:
+    return _scoped_client(
+        settings.upload_reader_access_key,
+        settings.upload_reader_secret_key,
+        "UPLOAD_READER",
+        timeout=settings.upload_timeout_seconds,
+    )
+
+
+def upload_cleanup_client() -> Minio:
+    return _scoped_client(
+        settings.upload_cleanup_access_key,
+        settings.upload_cleanup_secret_key,
+        "UPLOAD_CLEANUP",
+        timeout=settings.upload_timeout_seconds,
+    )

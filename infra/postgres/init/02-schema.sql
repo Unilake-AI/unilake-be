@@ -381,7 +381,13 @@ CREATE TABLE IF NOT EXISTS ingestion_job (
     lease_expires_at TIMESTAMP,
     output JSONB,
     validation_input JSONB,
-    validation_report JSONB
+    validation_report JSONB,
+    upload_input JSONB,
+    bronze_output JSONB,
+    root_job_id BIGINT REFERENCES ingestion_job(ingestion_job_id),
+    attempt_number INTEGER NOT NULL DEFAULT 1,
+    next_attempt_at TIMESTAMP,
+    retryable BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ingestion_execution_active_source
@@ -389,6 +395,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_ingestion_execution_active_source
     WHERE job_type = 'EXECUTION_V1' AND status IN ('QUEUED', 'RUNNING');
 CREATE INDEX IF NOT EXISTS ix_ingestion_execution_queue
     ON ingestion_job(status, ingestion_job_id) WHERE job_type = 'EXECUTION_V1';
+CREATE INDEX IF NOT EXISTS ix_ingestion_job_root_attempt
+    ON ingestion_job(root_job_id, attempt_number);
+
+CREATE TABLE IF NOT EXISTS ingestion_worker_heartbeat (
+    worker_id VARCHAR(100) PRIMARY KEY,
+    current_job_id BIGINT REFERENCES ingestion_job(ingestion_job_id),
+    last_heartbeat_at TIMESTAMP NOT NULL
+);
 
 -- Mỗi lần chạy cleaning có ID riêng, kể cả khi dùng lại cùng job Bronze.
 CREATE TABLE IF NOT EXISTS cleaning_run (
@@ -704,3 +718,5 @@ CREATE TABLE IF NOT EXISTS app.catalog_metadata (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (domain_id, dataset)
 );
+
+CREATE INDEX IF NOT EXISTS ix_ingestion_upload_queue ON ingestion_job(status, ingestion_job_id) WHERE job_type = 'UPLOAD_V1';

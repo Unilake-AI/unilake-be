@@ -1,4 +1,4 @@
-"""Versioned dataset lineage DTOs; no ORM, storage or domain dependency."""
+"""Quy định thông tin nguồn gốc dữ liệu được trao đổi giữa các bước xử lý."""
 
 from __future__ import annotations
 
@@ -46,13 +46,14 @@ class DatasetDerivation(BaseModel):
 
 
 class LineageEvidence(BaseModel):
-    """Candidate evidence. Owning job/snapshot decides whether it is published."""
+    """Thông tin nguồn gốc chỉ được công nhận khi lần xử lý tương ứng đã công bố thành công."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     contract_version: Literal["dataset-lineage-v1"] = "dataset-lineage-v1"
     run_ref: str = Field(min_length=1)
-    mode: Literal["ingestion", "rehearsal", "production"]
+    # Giữ giá trị cũ để đọc lịch sử; các lần xử lý mới không dùng giá trị này.
+    mode: Literal["ingestion", "test", "production", "rehearsal"]
     parent_snapshot: str | None = None
     derivations: tuple[DatasetDerivation, ...] = Field(min_length=1)
 
@@ -73,7 +74,7 @@ class LineageEvidence(BaseModel):
 
 
 class SnapshotLineage(BaseModel):
-    """Published evidence only; missing legacy entities are explicit, never inferred."""
+    """Chỉ trả nguồn gốc đã công bố; thông tin còn thiếu được ghi rõ thay vì tự suy đoán."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 

@@ -148,6 +148,12 @@ async def test_execution_stages_and_sanitized_failures(failure):
         repo.stage.assert_awaited_once_with(10, "WRITING", 3)
         saved = repo.finish.call_args.kwargs["output"]
         assert saved["uri"] == store.return_value["uri"]
+        assert saved["source_type"] == "CSV"
+        assert saved["parser_options"] == {
+            "delimiter": ",",
+            "encoding": "utf-8",
+            "has_header": True,
+        }
         evidence = saved["lineage"]
         assert evidence["run_ref"] == "ingestion:10"
         assert evidence["derivations"][0]["output"]["version"] == "v1"

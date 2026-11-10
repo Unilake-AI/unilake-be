@@ -22,5 +22,3 @@ Khi xác nhận đã sửa, lượt mới phải đã xuất bản Silver và Da
 Mỗi lần đổi trạng thái khóa dòng yêu cầu trong PostgreSQL và ghi sự kiện trong cùng giao dịch. Yêu cầu đang chờ xác minh hoặc đã xác minh sẽ từ chối thao tác chuyển trạng thái không hợp lệ với `409`. Hồ sơ cách ly cũ vẫn được giữ làm bằng chứng. PATCH đổi người phụ trách trong phòng đã giao và ghi ID cũ/mới vào lịch sử. Người cùng phòng vẫn có thể xem yêu cầu trong phạm vi quyền. Họ không thể báo thay, kể cả khi có quyền quản trị. Lượt chưa có người phụ trách cần được giao trước khi báo đã sửa. Chuyển phòng và xuất CSV/Excel được hoãn.
 
 Database mới dùng DDL khởi tạo. Database hiện có cần migration Nhóm A, B rồi `infra/postgres/migrations/20261106_data_quality_issues.sql`. Áp dụng tiếp `infra/postgres/migrations/20261106_issue_assignees.sql` để thêm người phụ trách. Các yêu cầu cũ giữ `assignee_user_id = null` và giữ lịch sử đã có. Cả hai migration Nhóm C đã áp dụng trên Docker dev.
-
-[Báo cáo cho team](data-quality-issues-report.md)

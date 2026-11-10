@@ -1,4 +1,4 @@
--- Tài khoản DEMO/LOCAL: mật khẩu khởi tạo Password@123.
+-- Tài khoản phát triển cục bộ: mật khẩu khởi tạo Password@123.
 -- Giữ nguyên mật khẩu và trạng thái của tài khoản đã tồn tại.
 -- Chạy trong một transaction sau 02-role-permissions.sql.
 

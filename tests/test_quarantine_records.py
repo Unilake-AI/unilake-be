@@ -12,7 +12,7 @@ from app.modules.ingestion.readers.csv_reader import CSVReader
 from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
 from app.modules.pipeline import quarantine_records as quarantine
 from app.modules.pipeline.cleaning_pipeline import CleaningPipeline
-from tests.test_manual_cleaning_api import _demo_cleaning_task
+from tests.fixtures.cleaning import _demo_cleaning_task
 
 
 def test_records_keep_original_position_and_group_rules_for_same_row():

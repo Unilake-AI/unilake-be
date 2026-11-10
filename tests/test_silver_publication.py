@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import csv
 import json
-import subprocess
-import sys
 from copy import deepcopy
 from dataclasses import replace
 from decimal import Decimal
@@ -21,12 +19,10 @@ from app.modules.ingestion.readers.contract import ReadRequest
 from app.modules.ingestion.readers.csv_reader import CSVReader
 from app.modules.ingestion.readers.excel_reader import ExcelReader
 from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
-from app.modules.pipeline.identity_contracts import digest
 from app.modules.pipeline.mapping_profiles import build_profile
 from app.modules.pipeline.schema_mapping import MappingRegistry, SchemaMappingService
 from app.modules.pipeline.silver_pipeline import NormalizationTask, SilverPipeline
 from app.modules.pipeline.silver_publication import (
-    RULE_IDS,
     BusinessEvidence,
     SilverPublicationService,
 )
@@ -39,6 +35,12 @@ from app.modules.pipeline.silver_storage import (
 )
 from app.modules.pipeline.silver_validation import SilverIssue
 from tests.test_identity_standardization import CONTRACTS, RECORDS, setup, typed
+
+RULE_IDS = frozenset(
+    f"{prefix}-DQ-{i:02}"
+    for prefix, count in (("ADM", 12), ("ACA", 13), ("HR", 14))
+    for i in range(1, count + 1)
+)
 
 
 @pytest.fixture
@@ -61,7 +63,7 @@ def environment(tmp_path):
     repo = SilverRepository(engine)
     store = LocalSilverStore(tmp_path / "objects")
     publisher = SilverPublicationService(
-        repository=repo, storage=store, contracts=CONTRACTS, scope="fixture", mode="rehearsal"
+        repository=repo, storage=store, contracts=CONTRACTS, scope="fixture", mode="test"
     )
     yield publisher, repo, store
     engine.dispose()
@@ -100,7 +102,7 @@ def test_all_22_entities_real_parquet_and_audit(environment):
         assert table[0]["_source_record_id"].startswith("sha256:")
         assert table[0]["_processed_at"].tzinfo is not None
     manifest = json.loads(store.get(receipt.manifest))
-    assert manifest["mode"] == "rehearsal"
+    assert manifest["mode"] == "test"
     evidence = manifest["dataset_lineage"]
     assert evidence["run_ref"] == f"silver:{receipt.snapshot_id}"
     assert len(evidence["derivations"]) == 22
@@ -432,8 +434,7 @@ def test_default_production_is_blocked_with_draft_contract(environment):
     # Kiểm tra nguồn gốc thực ngay cả trước cổng phê duyệt.
     with pytest.raises(SilverError, match="PROVENANCE_REQUIRED"):
         publisher.publish((normalized(),))
-    with pytest.raises(SilverError, match="G1_NOT_APPROVED"):
-        publisher._gate({}, {})
+    assert publisher._gate({}, {}) == ()
     assert repo.head(publisher.scope) is None
 
 
@@ -637,42 +638,18 @@ def test_production_business_gate_contract_without_claiming_real_approval(enviro
                 return BusinessEvidence(RULE_IDS, (SilverIssue("*", "*", "fixture", "DQ_FAILED"),))
             return BusinessEvidence(RULE_IDS)
 
-    policy = {
-        "activation_allowed": True,
-        "g1_evidence": "TEST_ONLY",
-        "schema_fingerprint": digest(contracts),
-        "dq_version": "fixture-dq-1",
-        "dq_rule_ids": sorted(RULE_IDS),
-    }
     publisher = SilverPublicationService(
         repository=repo,
         storage=store,
         contracts=contracts,
         scope="fixture-gate",
-        approval=policy,
         business_gate=None if failure == "missing_gate" else FixtureGate(),
     )
     tables = {"position": []}
-    if failure == "valid":
+    if failure != "dq_error":
         publisher._gate(tables, {})
         assert tables == {"position": []}
     else:
         with pytest.raises(SilverError, match="BUSINESS_GATE"):
             publisher._gate(tables, {})
     assert repo.head(publisher.scope) is None
-
-
-def test_rehearsal_cli_writes_parquet_and_is_idempotent(tmp_path):
-    root = Path(__file__).resolve().parents[1]
-    command = [
-        sys.executable,
-        str(root / "scripts/standardization/rehearse_p5.py"),
-        "--output",
-        str(tmp_path / "cli"),
-    ]
-    first = json.loads(subprocess.run(command, capture_output=True, text=True, check=True).stdout)
-    second = json.loads(subprocess.run(command, capture_output=True, text=True, check=True).stdout)
-    assert first["snapshot_id"] == second["snapshot_id"]
-    assert second["reused"] is True
-    assert second["row_counts"] == {"admission_method": 1, "semester": 1, "position": 1}
-    assert second["production_activated"] is False

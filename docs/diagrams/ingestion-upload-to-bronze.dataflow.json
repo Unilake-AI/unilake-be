@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "UniLake AI · Luồng tải file đến Bronze",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 640],
+    "views": [
+      {"id": "receive", "label": "Tiếp nhận", "focus": ["staff", "api", "catalog", "staging"], "note": "File chỉ được nhận sau khi kiểm tra quyền và bộ dữ liệu Bronze."},
+      {"id": "queue", "label": "Hàng đợi", "focus": ["staging", "queue", "worker"], "note": "Job chỉ được tạo khi file staging có version và checksum khớp."},
+      {"id": "bronze", "label": "Xác minh Bronze", "focus": ["worker", "validation", "bronze", "jobState"], "note": "Worker xác minh toàn bộ file trước khi ghi raw file vào Bronze."}
+    ]
+  },
+  "stages": [
+    {"label": "Người dùng"},
+    {"label": "Tiếp nhận API"},
+    {"label": "Lưu tạm & hàng đợi"},
+    {"label": "Worker kiểm tra"},
+    {"label": "Bronze"}
+  ],
+  "nodes": [
+    {"id": "staff", "type": "external", "label": "Nhân viên phòng ban", "sublabel": "chọn CSV / XLSX / XLSM", "stage": 0, "row": 1, "tag": "upload"},
+    {"id": "api", "type": "backend", "label": "Upload API", "sublabel": "POST /ingestion/uploads", "stage": 1, "row": 1, "tag": "FastAPI"},
+    {"id": "catalog", "type": "database", "label": "Danh mục dữ liệu", "sublabel": "dataset, domain, quyền", "stage": 1, "row": 0, "tag": "PostgreSQL"},
+    {"id": "staging", "type": "cloud", "label": "Kho tiếp nhận", "sublabel": "file gốc + version + SHA-256", "stage": 2, "row": 0, "tag": "MinIO", "width": 160},
+    {"id": "queue", "type": "database", "label": "Ingestion Job", "sublabel": "QUEUED · metadata ghim", "stage": 2, "row": 1, "tag": "PostgreSQL", "width": 145},
+    {"id": "worker", "type": "backend", "label": "Ingestion Worker", "sublabel": "lease, heartbeat, retry", "stage": 3, "row": 1, "tag": "async", "width": 140},
+    {"id": "validation", "type": "security", "label": "Kiểm tra file", "sublabel": "cột, cấu trúc, checksum", "stage": 3, "row": 0, "tag": "validation", "width": 140},
+    {"id": "bronze", "type": "cloud", "label": "Bronze", "sublabel": "raw file, metadata, version", "stage": 4, "row": 1, "tag": "MinIO", "width": 140},
+    {"id": "jobState", "type": "database", "label": "Kết quả job", "sublabel": "SUCCESS / FAILED · Bronze URI", "stage": 4, "row": 2, "tag": "PostgreSQL", "width": 150}
+  ],
+  "flows": [
+    {"id": "fileUpload", "from": "staff", "to": "api", "label": "file + dataset_id", "classification": "đầu vào", "variant": "emphasis", "labelAt": [208, 314]},
+    {"id": "permissionCheck", "from": "api", "to": "catalog", "label": "role + domain", "classification": "phân quyền", "variant": "security", "labelAt": [315, 314]},
+    {"id": "stageOriginal", "from": "api", "to": "staging", "label": "lưu file gốc", "classification": "phiên bản riêng", "variant": "emphasis"},
+    {"id": "createJob", "from": "staging", "to": "queue", "label": "version + SHA-256", "classification": "HTTP 202", "variant": "default", "labelAt": [530, 200]},
+    {"id": "claimJob", "from": "queue", "to": "worker", "label": "claim lease", "classification": "QUEUED → RUNNING", "variant": "emphasis", "route": "straight", "labelAt": [640, 330]},
+    {"id": "scanFile", "from": "worker", "to": "validation", "label": "quét file", "classification": "CSV / Excel", "variant": "security", "labelAt": [745, 314]},
+    {"id": "writeBronze", "from": "validation", "to": "bronze", "label": "ghi raw file", "classification": "checksum + metadata", "variant": "emphasis", "labelAt": [920, 120]},
+    {"id": "failureState", "from": "worker", "to": "jobState", "label": "FAILED / RETRY_WAIT", "classification": "không ghi Bronze", "variant": "dashed", "labelAt": [850, 470]},
+    {"id": "successState", "from": "bronze", "to": "jobState", "label": "SUCCESS + lineage", "classification": "URI + lineage", "variant": "emphasis", "labelAt": [1035, 314]}
+  ],
+  "cards": [
+    {"dot": "emerald", "title": "Điều kiện vào Bronze", "items": ["File staging phải có version và SHA-256 khớp", "Worker phải kiểm tra cấu trúc trước khi ghi", "Bronze được đọc lại để xác minh object và metadata"]},
+    {"dot": "amber", "title": "Khi có lỗi", "items": ["Lỗi dữ liệu dừng ở FAILED", "Lỗi hạ tầng tạm thời đi vào RETRY_WAIT", "Không có trạng thái SUCCESS nếu chưa xác minh Bronze"]}
+  ]
+}

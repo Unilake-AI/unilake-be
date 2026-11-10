@@ -9,6 +9,9 @@ from app.infra.llm import MockLLMClient
 from app.infra.minio.client import bronze_reader_client as bronze_reader_client
 from app.infra.minio.client import silver_writer_client as silver_writer_client
 from app.infra.minio.client import source_reader_client as source_reader_client
+from app.infra.minio.client import upload_cleanup_client as upload_cleanup_client
+from app.infra.minio.client import upload_reader_client as upload_reader_client
+from app.infra.minio.client import upload_writer_client as upload_writer_client
 from app.modules.nlq.service import NLQService
 
 

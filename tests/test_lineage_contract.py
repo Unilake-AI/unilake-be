@@ -39,7 +39,7 @@ def build(batch):
     return silver_lineage(
         run_id="snapshot-1",
         scope="demo",
-        mode="rehearsal",
+        mode="test",
         parent="snapshot-0",
         updated={"employee": [batch]},
         entities={

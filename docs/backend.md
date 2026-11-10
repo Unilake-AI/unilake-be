@@ -102,8 +102,6 @@ Hướng dependency và ma trận import được phép được chốt tại
 [`docs/backend-dependency-direction.md`](backend-dependency-direction.md).
 Các câu hỏi, quyết định và trạng thái hoàn thành của task Module Boundary được tổng hợp tại
 [`docs/module-boundary-questions-and-decisions.md`](module-boundary-questions-and-decisions.md).
-Báo cáo hoàn thành và evidence theo Acceptance Criteria nằm tại
-[`docs/module-boundary-task-summary.md`](module-boundary-task-summary.md).
 
 ---
 

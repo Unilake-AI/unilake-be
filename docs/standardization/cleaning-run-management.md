@@ -14,5 +14,3 @@ Cả ba API yêu cầu `ADMIN` hoặc `DATA_ADMIN`. API danh sách và chi tiế
 4. Lỗi trong bước cleaning ghi `FAILED` ở cleaning. Lỗi sau khi cleaning hoàn tất ghi `FAILED` ở publication nếu PostgreSQL vẫn ghi được. Nếu tiến trình bị dừng đột ngột, lịch sử có thể còn ở trạng thái đang xử lý. Chưa có tác vụ đối soát tự động cho trường hợp này.
 
 Database mới có bảng trong DDL khởi tạo. Database hiện có cần áp dụng `infra/postgres/migrations/20261106_cleaning_runs.sql` trước khi dùng API. Migration đã chạy trên Docker dev. Lịch sử bắt đầu từ những lượt chạy với code mới, chưa nhập lại các báo cáo cũ.
-
-[Báo cáo cho team](cleaning-run-management-report.md)

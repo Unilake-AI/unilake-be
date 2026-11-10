@@ -1,4 +1,4 @@
-"""Giao dịch metadata quyết định dữ liệu nào được nhìn thấy. Kho đối tượng không thuộc giao dịch này."""
+"""Quản lý trạng thái công bố dữ liệu riêng với việc lưu tệp."""
 
 from __future__ import annotations
 
@@ -108,8 +108,8 @@ class SilverRepository:
             return dict(row)
 
     def publish(self, run_id: str) -> dict[str, Any]:
-        # PostgreSQL quyết định snapshot nào được nhìn thấy qua active head.
-        # File trên MinIO có thể đã tồn tại, nhưng chưa được xem là công bố thành công.
+        # Thông tin trong PostgreSQL quyết định bộ dữ liệu nào đang được sử dụng.
+        # Tệp có trên MinIO chưa có nghĩa là dữ liệu đã được công bố thành công.
         try:
             with self.engine.begin() as conn:
                 run = conn.execute(select(RUNS).where(RUNS.c.run_id == run_id)).mappings().one()
@@ -151,9 +151,8 @@ class SilverRepository:
                     .where(HEADS.c.scope == run["scope"], condition)
                     .values(snapshot_id=run_id)
                 )
-                # Chỉ đổi head khi snapshot cha vẫn đúng như lúc bắt đầu (CAS).
-                # Nếu lần chạy khác đã đổi head, rollback cả transaction để tránh
-                # công bố đè lên dữ liệu mới từ một snapshot cha đã lỗi thời.
+                # Chỉ công bố khi bộ dữ liệu hiện hành chưa thay đổi kể từ lúc bắt đầu.
+                # Nếu lần chạy khác đã công bố dữ liệu mới, hủy toàn bộ thay đổi của lượt này.
                 if changed.rowcount != 1:
                     raise SilverError("ACTIVE_SNAPSHOT_CHANGED")
                 conn.execute(
@@ -161,7 +160,7 @@ class SilverRepository:
                     .where(RUNS.c.run_id == run_id)
                     .values(status="PUBLISHED", issues="[]")
                 )
-                # Lưu kết quả của lượt cleaning trong cùng giao dịch đổi snapshot.
+                # Lưu kết quả làm sạch cùng lúc với việc công bố bộ dữ liệu mới.
                 if self.on_published is not None:
                     self.on_published(conn, run_id)
                 return {

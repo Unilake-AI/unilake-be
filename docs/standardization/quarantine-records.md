@@ -24,5 +24,3 @@ Backend giới hạn xem dòng Bronze ở các dataset demo đang hoạt động
 Bản đầu đọc toàn file với giới hạn 8 MiB và giới hạn 32 MiB cho Excel sau giải nén. Timeout kết nối/đọc và mốc thời gian xử lý đặt 15 giây. Reader chạy trong luồng nền và mốc này được kiểm tra trước/sau parser, chưa ngắt cưỡng bức parser. File vượt giới hạn trả `413`. Bronze bị thiếu, sai phiên bản hoặc không xác minh được trả `503`.
 
 Database hiện có áp dụng migration `20261106_cleaning_runs.sql` trước `20261106_quarantine_records.sql`. Database mới tạo bảng từ DDL khởi tạo. Hồ sơ bắt đầu từ lượt chạy với code mới. Có thể chạy lại Cleaning trên phiên bản Bronze còn lưu để tạo lượt và hồ sơ mới.
-
-[Báo cáo cho team](quarantine-records-report.md)

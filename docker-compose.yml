@@ -73,8 +73,9 @@ services:
       BRONZE: ${MINIO_BUCKET_BRONZE:-bronze}
       SILVER: ${MINIO_BUCKET_SILVER:-silver}
       GOLD: ${MINIO_BUCKET_GOLD:-gold}
+      UPLOADS: ${MINIO_BUCKET_UPLOADS:-ingestion-uploads}
     entrypoint: >
-      /bin/sh -c "mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD && mc mb --ignore-existing local/$$BRONZE local/$$SILVER local/$$GOLD && mc version enable local/$$BRONZE && mc ls local"
+      /bin/sh -c "mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD && mc mb --ignore-existing local/$$BRONZE local/$$SILVER local/$$GOLD local/$$UPLOADS && mc version enable local/$$UPLOADS && mc version enable local/$$BRONZE && mc ls local"
     restart: "no"
     networks:
       - unilake-network
@@ -119,6 +120,8 @@ services:
         required: false
       - path: .env.silver-backend.local
         required: false
+      - path: .env.upload-backend.local
+        required: false
 
     environment: &backend-environment
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -136,6 +139,20 @@ services:
       - MINIO_BUCKET_BRONZE=${MINIO_BUCKET_BRONZE:-bronze}
       - MINIO_BUCKET_SILVER=${MINIO_BUCKET_SILVER:-silver}
       - MINIO_BUCKET_GOLD=${MINIO_BUCKET_GOLD:-gold}
+      - MINIO_BUCKET_UPLOADS=${MINIO_BUCKET_UPLOADS:-ingestion-uploads}
+      - UPLOAD_MAX_BYTES=${UPLOAD_MAX_BYTES:-52428800}
+      - UPLOAD_MAX_RECORDS=${UPLOAD_MAX_RECORDS:-1000000}
+      - UPLOAD_MAX_COLUMNS=${UPLOAD_MAX_COLUMNS:-500}
+      - UPLOAD_MAX_CELL_CHARS=${UPLOAD_MAX_CELL_CHARS:-1000000}
+      - UPLOAD_TIMEOUT_SECONDS=${UPLOAD_TIMEOUT_SECONDS:-60}
+      - UPLOAD_MAX_EXPANDED_BYTES=${UPLOAD_MAX_EXPANDED_BYTES:-209715200}
+      - INGESTION_WORKER_ID=${INGESTION_WORKER_ID:-ingestion-worker}
+      - WORKER_HEARTBEAT_SECONDS=${WORKER_HEARTBEAT_SECONDS:-10}
+      - WORKER_HEALTH_STALE_SECONDS=${WORKER_HEALTH_STALE_SECONDS:-45}
+      - INGESTION_RETRY_MAX_ATTEMPTS=${INGESTION_RETRY_MAX_ATTEMPTS:-3}
+      - INGESTION_RETRY_FIRST_DELAY_SECONDS=${INGESTION_RETRY_FIRST_DELAY_SECONDS:-10}
+      - INGESTION_RETRY_SECOND_DELAY_SECONDS=${INGESTION_RETRY_SECOND_DELAY_SECONDS:-30}
+      - UPLOAD_STAGING_RETENTION_HOURS=${UPLOAD_STAGING_RETENTION_HOURS:-168}
       - DUCKDB_PATH=${DUCKDB_PATH:-:memory:}
       - DUCKDB_THREADS=${DUCKDB_THREADS:-4}
       - DUCKDB_MEMORY_LIMIT=${DUCKDB_MEMORY_LIMIT:-2GB}
@@ -168,6 +185,8 @@ services:
     env_file:
       - path: .env.bronze-worker.local
         required: false
+      - path: .env.upload-worker.local
+        required: false
     volumes:
       - .:/app
       - ./data:/data:ro
@@ -179,7 +198,12 @@ services:
       minio-init:
         condition: service_completed_successfully
     healthcheck:
-      disable: true
+      test:
+        ["CMD-SHELL", "python -c \"import os,time; raise SystemExit(0 if time.time()-os.path.getmtime('/tmp/unilake_ingestion_worker_heartbeat') < int(os.getenv('WORKER_HEALTH_STALE_SECONDS', '45')) else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 # ============================================================================
 # Mạng và volume lưu trữ bền vững

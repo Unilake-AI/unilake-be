@@ -1,4 +1,4 @@
-"""Build dataset evidence from the exact batches being published, never from fixtures."""
+"""Ghi nhận nguồn gốc dựa trên chính dữ liệu được công bố."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def silver_lineage(
     updated: dict[str, list[dict[str, Any]]],
     entities: dict[str, Any],
 ) -> dict[str, Any]:
-    if mode not in {"rehearsal", "production"}:
+    if mode not in {"test", "production"}:
         raise ValueError("INVALID_LINEAGE_MODE")
     derivations = []
     for entity, batches in updated.items():
@@ -97,7 +97,7 @@ def silver_lineage(
             )
     return LineageEvidence(
         run_ref=f"silver:{run_id}",
-        mode="production" if mode == "production" else "rehearsal",
+        mode="production" if mode == "production" else "test",
         parent_snapshot=parent,
         derivations=tuple(derivations),
     ).model_dump(mode="json")
@@ -112,7 +112,7 @@ def record_pipeline_lineage_sync(
     target_name: str,
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Ghi sổ quan hệ nguồn gốc vào bảng app.pipeline_lineage (chế độ đồng bộ)."""
+    """Lưu mối liên hệ giữa dữ liệu nguồn và dữ liệu đầu ra để tra cứu nguồn gốc."""
     from datetime import UTC, datetime
 
     from sqlalchemy import insert

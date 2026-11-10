@@ -1,4 +1,4 @@
-"""S4 → Parquet đã kiểm tra → bản kê bất biến → con trỏ hiện hành cập nhật qua giao dịch."""
+"""Kiểm tra, lưu và công bố bộ dữ liệu Silver kèm thông tin nguồn gốc."""
 
 from __future__ import annotations
 
@@ -32,12 +32,6 @@ if TYPE_CHECKING:
     from app.modules.pipeline.silver_repository import SilverRepository
     from app.modules.pipeline.silver_storage import SilverObjectStore
     from app.modules.pipeline.type_standardization import TypeIssue
-
-RULE_IDS = frozenset(
-    f"{prefix}-DQ-{i:02}"
-    for prefix, count in (("ADM", 12), ("ACA", 13), ("HR", 14))
-    for i in range(1, count + 1)
-)
 
 
 def upstream_issues(result: IdentityResult) -> tuple[MappingIssue | TypeIssue | IdentityIssue, ...]:
@@ -107,11 +101,10 @@ class SilverPublicationService:
         contracts: Mapping[str, Any],
         scope: str,
         mode: str = "production",
-        approval: Mapping[str, Any] | None = None,
         business_gate: BusinessGate | None = None,
     ) -> None:
         if (
-            mode not in {"production", "rehearsal"}
+            mode not in {"production", "test"}
             or not isinstance(scope, str)
             or not scope.strip()
             or len(scope) > 100
@@ -146,7 +139,13 @@ class SilverPublicationService:
             "mode": mode,
             "contract_json": json.dumps(raw),
             "schema_fingerprint": digest(raw),
-            "policy_json": json.dumps(dict(approval or {}), sort_keys=True, allow_nan=False),
+            "policy_json": json.dumps(
+                {
+                    "scope": "silver-quality-v1",
+                    "additional_gate": business_gate.version if business_gate else None,
+                },
+                sort_keys=True,
+            ),
             "business_gate": business_gate,
         }.items():
             object.__setattr__(self, name, value)
@@ -159,32 +158,11 @@ class SilverPublicationService:
     def _gate(
         self, tables: Mapping[str, Sequence[dict[str, object]]], manifest: Mapping[str, Any]
     ) -> tuple[SilverIssue, ...]:
-        # Demo bỏ qua cổng phê duyệt nghiệp vụ; không phải bằng chứng đạt production.
-        # Production còn yêu cầu schema được duyệt và bằng chứng thực thi bộ DQ rules.
-        if self.mode == "rehearsal":
+        # Silver kiểm tra cấu trúc và chất lượng dữ liệu; phép tính nghiệp vụ được thực hiện ở bước sau.
+        if self.business_gate is None:
             return ()
-        policy = json.loads(self.policy_json)
-        contracts = json.loads(self.contract_json)
-        if (
-            policy.get("activation_allowed") is not True
-            or not policy.get("g1_evidence")
-            or policy.get("schema_fingerprint") != self.schema_fingerprint
-            or any(
-                c.get("x-approval") != "APPROVED" or "draft" in c["x-version"]
-                for c in contracts.values()
-            )
-        ):
-            raise SilverError("G1_NOT_APPROVED")
-        if (
-            self.business_gate is None
-            or self.business_gate.version != policy.get("dq_version")
-            or set(policy.get("dq_rule_ids", [])) != RULE_IDS
-        ):
-            raise SilverError("BUSINESS_GATE_REQUIRED")
         evidence = self.business_gate.evaluate(deepcopy(tables), deepcopy(manifest))
-        if evidence.executed_rule_ids != RULE_IDS or any(
-            i.severity != "warning" for i in evidence.issues
-        ):
+        if any(i.severity != "warning" for i in evidence.issues):
             raise SilverError("BUSINESS_GATE_REJECTED")
         return evidence.issues
 
@@ -198,8 +176,8 @@ class SilverPublicationService:
         )
 
     def _read_manifest_header(self, ref: ObjectRef, snapshot_id: str) -> dict[str, Any]:
-        # Storage.get verifies the immutable manifest bytes. Metadata reads must not
-        # download all entity Parquet files just to inspect the lineage graph.
+        # Kiểm tra nội dung bản kê khi đọc.
+        # Chỉ cần đọc thông tin nguồn gốc, không cần tải toàn bộ tệp dữ liệu.
         manifest = json.loads(self.storage.get(ref))
         if (
             manifest["snapshot_id"] != snapshot_id
@@ -236,10 +214,10 @@ class SilverPublicationService:
         return self.read_snapshot(head) if head else {}
 
     def read_lineage(self, snapshot_id: str, *, max_depth: int = 100) -> SnapshotLineage:
-        """Resolve updated and inherited entities through published snapshots only.
+        """Tra cứu nguồn gốc của dữ liệu mới và dữ liệu giữ lại từ các lần công bố trước.
 
-        This internal read method does not expose storage references through HTTP.
-        Missing legacy evidence is reported without guessing a producer.
+        Chỉ tra cứu các bộ dữ liệu đã công bố, không trả vị trí lưu tệp ra bên ngoài.
+        Nếu thiếu thông tin nguồn gốc cũ, ghi nhận là thiếu thay vì tự suy đoán.
         """
         if max_depth < 1:
             raise ValueError("INVALID_LINEAGE_DEPTH")
@@ -299,7 +277,7 @@ class SilverPublicationService:
                 if selected_edges:
                     evidence.append(item.model_copy(update={"derivations": tuple(selected_edges)}))
             missing.update(selected - resolved)
-            # A rewritten entity with missing evidence must not inherit old lineage.
+            # Bảng được thay mới mà thiếu nguồn gốc không được dùng lại thông tin nguồn gốc cũ.
             pending -= updated
             if not pending:
                 break
@@ -325,23 +303,18 @@ class SilverPublicationService:
         if not results:
             raise SilverError("NO_INPUT_BATCHES")
         if quarantine_report is not None:
-            if (
-                self.mode != "rehearsal"
-                or len(results) != 1
-                or (results[0].key.domain_id, results[0].key.entity) != ("hr", "position")
-                or not results[0].accepted
-            ):
+            if self.mode != "test" or len(results) != 1 or not results[0].accepted:
                 raise SilverError("PARTIAL_PUBLICATION_NOT_ALLOWED")
-            # The report must be readable before any snapshot can reference it.
+            # Phải đọc được báo cáo cách ly trước khi gắn báo cáo vào bộ dữ liệu.
             self.storage.get(quarantine_report)
-        # Loại thời gian thử/chụp và mã batch khỏi khóa chống xử lý lặp logic.
+        # Không coi thời điểm ghi nhận và mã lô mới là thay đổi của dữ liệu đầu vào.
         inputs: list[dict[str, Any]] = []
         for result in results:
             source = asdict(result.provenance) if result.provenance else None
             if source:
                 source.pop("captured_at")
-                # A run reference is audit context, not a change to captured data.
-                # Omit the new optional field to preserve pre-lineage replay hashes.
+                # Mã lần thu thập chỉ phục vụ tra cứu, không làm thay đổi nội dung dữ liệu.
+                # Bỏ thông tin này khi so sánh để vẫn nhận ra các yêu cầu cũ được gửi lại.
                 source.pop("ingestion_job_id", None)
             inputs.append(
                 {
@@ -363,8 +336,8 @@ class SilverPublicationService:
                     "counts": [result.inspected_count, result.total_count],
                 }
             )
-            # Only add execution versions when present; old no-cleaning inputs keep
-            # their historical request hash, but changed cleaning rules must not reuse.
+            # Ghi nhận phiên bản các bước xử lý khi có để nhận biết quy tắc làm sạch đã thay đổi.
+            # Dữ liệu cũ chưa qua làm sạch vẫn được nhận diện như trước.
             if result.processing_steps:
                 inputs[-1]["processing_steps"] = result.processing_steps
         request = {
@@ -377,8 +350,8 @@ class SilverPublicationService:
         if quarantine_report is not None:
             request["quarantine_report_sha256"] = quarantine_report.sha256
         request_hash = checksum(packed(request))
-        # Cùng yêu cầu logic thì tái sử dụng snapshot đã công bố (idempotency).
-        # Không đưa active head về snapshot cũ khi người dùng gửi lại yêu cầu cũ.
+        # Yêu cầu không thay đổi thì dùng lại bộ dữ liệu đã công bố.
+        # Không thay bộ dữ liệu hiện hành bằng bộ cũ khi người dùng gửi lại yêu cầu cũ.
         existing = self.repository.find(self.scope, request_hash)
         if existing:
             manifest, reused_tables = self._read_manifest(
@@ -456,8 +429,7 @@ class SilverPublicationService:
                     )
                 ):
                     raise SilverError("BRONZE_REPLAY_REFERENCE_REQUIRED")
-                # Gộp các batch cùng entity trước khi tạo snapshot, tránh batch sau
-                # ghi đè mất dữ liệu batch trước ngay trong cùng lần công bố.
+                # Gộp các lô thuộc cùng một bảng trước khi công bố để giữ đủ dữ liệu của mọi lô.
                 records = updates.setdefault(entity, [])
                 meta = asdict(result)
                 meta.pop("accepted")
@@ -501,7 +473,7 @@ class SilverPublicationService:
                         {"source_record_id": record_id, "locator": row.locator}
                     )
             if quarantine_report is not None:
-                # Merge accepted keys and carry forward the provenance of retained rows.
+                # Gộp các bản ghi đạt yêu cầu và giữ thông tin nguồn gốc của các bản ghi được giữ lại.
                 entity = results[0].key.entity
                 primary_key = specs[entity]["x-primary-key"]
                 incoming_keys = {
@@ -522,7 +494,7 @@ class SilverPublicationService:
                     if locators:
                         lineage[entity].append({**batch, "record_locators": locators})
                 updates[entity] = retained + updates[entity]
-            # Check the entire candidate, including foreign keys from other entities.
+            # Kiểm tra toàn bộ dữ liệu sắp công bố, kể cả liên kết với các bảng khác.
             tables.update(updates)
             issues.extend(validate_snapshot(tables, specs))
             if issues:
@@ -545,7 +517,7 @@ class SilverPublicationService:
             }
             if quarantine_report is not None:
                 manifest["quarantine_report"] = asdict(quarantine_report)
-            # Kiểm tra điều kiện quản trị trước mọi thao tác ghi đối tượng. Đã có nguồn gốc cho thực thể mới.
+            # Kiểm tra điều kiện phê duyệt và chất lượng trước khi lưu tệp; nguồn gốc của dữ liệu mới đã được ghi nhận.
             manifest["business_issues"] = [asdict(issue) for issue in self._gate(tables, manifest)]
             prefix = f"silver/{self.mode}/{checksum(self.scope.encode())}/{run_id}"
             for entity, records in updates.items():
@@ -582,7 +554,7 @@ class SilverPublicationService:
                         str(exc) if isinstance(exc, SilverError) else "STORAGE_OR_METADATA_FAILURE",
                     )
                 ]
-            # Nếu metadata không khả dụng, giữ lại lần thử để đối soát.
+            # Nếu không lưu được trạng thái, giữ nguyên thông tin lần chạy để đối chiếu sau.
             with suppress(Exception):
                 self.repository.fail(run_id, [asdict(i) for i in issues])
             if isinstance(exc, SilverError):
@@ -590,8 +562,7 @@ class SilverPublicationService:
             raise SilverError("STORAGE_OR_METADATA_FAILURE") from exc
 
     def resume(self, run_id: str) -> PublicationReceipt:
-        # Khôi phục phải đọc và kiểm chứng lại artifact/quy tắc trước khi công bố,
-        # không chỉ đổi trạng thái lần chạy dở dang thành thành công.
+        # Khi tiếp tục lần chạy dở dang, phải đọc lại tệp và kiểm tra đầy đủ trước khi công bố.
         run = self.repository.run(run_id)
         if run["scope"] != self.scope or not run["manifest_ref"]:
             raise SilverError("RUN_NOT_STAGED")

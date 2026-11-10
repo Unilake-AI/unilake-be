@@ -1,3 +1,5 @@
+> Cập nhật 09/11/2026: các mô tả luồng mẫu bên dưới là lịch sử và đã được thay thế. Xem [luồng nguồn thật → Silver](standardization/source-silver-flow.md) để sử dụng cấu hình và API hiện hành.
+
 # Domain Extension Guide
 
 UniLake domains are business-specific implementations loaded by generic ingestion, pipeline,
@@ -55,4 +57,4 @@ metrics that do not reference a Gold dataset. Pipeline quality failures stop pub
 the next layer. Governance exposes static quality-rule metadata and records runtime lineage only
 after Silver and Gold outputs have been published successfully.
 
-`app/domains/demo` is the reference implementation and end-to-end proof of concept.
+Reference data for automated tests lives under `tests/fixtures/sample_domain`; the application does not register a sample domain. Real domains must export their own `DOMAIN_DEFINITION`.
