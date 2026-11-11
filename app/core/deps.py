@@ -23,31 +23,31 @@ __all__ = ["get_current_user", "require_role"]
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def _parse_user_id(subject: Any) -> int:
-    if isinstance(subject, bool) or not isinstance(subject, str | int):
+def _parse_positive_int(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, str | int):
         raise AppException(
             "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
             code="INVALID_TOKEN",
             status_code=401,
         )
-    if isinstance(subject, str):
-        stripped = subject.strip()
+    if isinstance(value, str):
+        stripped = value.strip()
         if not stripped.isdigit():
             raise AppException(
                 "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
                 code="INVALID_TOKEN",
                 status_code=401,
             )
-        user_id = int(stripped)
+        parsed = int(stripped)
     else:
-        user_id = subject
-    if user_id <= 0:
+        parsed = value
+    if parsed <= 0:
         raise AppException(
             "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
             code="INVALID_TOKEN",
             status_code=401,
         )
-    return user_id
+    return parsed
 
 
 async def get_current_user(
@@ -82,7 +82,8 @@ async def get_current_user(
             status_code=401,
         )
 
-    user_id = _parse_user_id(payload.get("sub"))
+    user_id = _parse_positive_int(payload.get("sub"))
+    session_id = _parse_positive_int(payload.get("sid"))
 
     raw_roles = payload.get("roles")
     if raw_roles is not None and (
@@ -103,7 +104,7 @@ async def get_current_user(
         )
 
     try:
-        auth_state = await user_auth_state(db, user_id)
+        auth_state = await user_auth_state(db, user_id, session_id)
     except SQLAlchemyError:
         raise AppException(
             "Không thể xác thực quyền truy cập",
@@ -118,12 +119,18 @@ async def get_current_user(
             status_code=401,
         )
 
-    is_active, raw_db_roles = auth_state
+    is_active, session_status, raw_db_roles = auth_state
     if not is_active:
         raise AppException(
             "Tài khoản của bạn đang bị khóa, vui lòng liên hệ quản trị viên",
             code="USER_INACTIVE",
             status_code=403,
+        )
+    if session_status != "ACTIVE":
+        raise AppException(
+            "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại",
+            code="SESSION_EXPIRED",
+            status_code=401,
         )
 
     # Chỉ giữ các vai trò được hệ thống hỗ trợ và đối chiếu chính xác với DB.

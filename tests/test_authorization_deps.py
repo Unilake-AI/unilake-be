@@ -111,13 +111,15 @@ async def test_get_current_user_valid_token_active_user_unchanged_roles(role_cod
                 )
             )
             session.add(UserRole(app_user_id=10, role_id=role_ids[role_code]))
+            session.add(LoginSession(login_session_id=10, app_user_id=10, session_status="ACTIVE"))
 
-        token = create_access_token("10", claims={"roles": [role_code]})
+        token = create_access_token("10", claims={"roles": [role_code], "sid": 10})
         with Session(engine) as session:
             db = _async_db_adapter(session)
             current_user = await get_current_user(f"Bearer {token}", db=db)
 
         assert current_user["sub"] == "10"
+        assert current_user["sid"] == 10
         assert current_user["roles"] == [role_code]
     finally:
         engine.dispose()
@@ -138,8 +140,9 @@ async def test_get_current_user_rejects_deactivated_user() -> None:
                 )
             )
             session.add(UserRole(app_user_id=11, role_id=role_ids[RoleCode.HR_STAFF.value]))
+            session.add(LoginSession(login_session_id=11, app_user_id=11, session_status="ACTIVE"))
 
-        token = create_access_token("11", claims={"roles": [RoleCode.HR_STAFF.value]})
+        token = create_access_token("11", claims={"roles": [RoleCode.HR_STAFF.value], "sid": 11})
         with Session(engine) as session:
             db = _async_db_adapter(session)
             with pytest.raises(AppException) as exc:
@@ -184,8 +187,9 @@ async def test_get_current_user_role_mismatch_and_revocation(
             )
             for role in db_roles:
                 session.add(UserRole(app_user_id=12, role_id=role_ids[role]))
+            session.add(LoginSession(login_session_id=12, app_user_id=12, session_status="ACTIVE"))
 
-        token = create_access_token("12", claims={"roles": token_roles})
+        token = create_access_token("12", claims={"roles": token_roles, "sid": 12})
         with Session(engine) as session:
             db = _async_db_adapter(session)
             with pytest.raises(AppException) as exc:
@@ -229,19 +233,31 @@ async def test_get_current_user_rejects_expired_invalid_and_missing_tokens() -> 
             assert refresh_exc.value.code == "INVALID_TOKEN"
 
             for bad_sub in ("user-1", "0", "-3", ""):
-                bad_sub_token = create_access_token(bad_sub, claims={"roles": ["ADMIN"]})
+                bad_sub_token = create_access_token(bad_sub, claims={"roles": ["ADMIN"], "sid": 1})
                 with pytest.raises(AppException) as sub_exc:
                     await get_current_user(f"Bearer {bad_sub_token}", db=db)
                 assert sub_exc.value.status_code == 401
                 assert sub_exc.value.code == "INVALID_TOKEN"
 
-            missing_user_token = create_access_token("999", claims={"roles": ["ADMIN"]})
+            for bad_claims in (
+                {"roles": ["ADMIN"]},
+                {"roles": ["ADMIN"], "sid": 0},
+                {"roles": ["ADMIN"], "sid": "abc"},
+                {"roles": ["ADMIN"], "sid": True},
+            ):
+                bad_sid_token = create_access_token("1", claims=bad_claims)
+                with pytest.raises(AppException) as sid_exc:
+                    await get_current_user(f"Bearer {bad_sid_token}", db=db)
+                assert sid_exc.value.status_code == 401
+                assert sid_exc.value.code == "INVALID_TOKEN"
+
+            missing_user_token = create_access_token("999", claims={"roles": ["ADMIN"], "sid": 1})
             with pytest.raises(AppException) as missing_user_exc:
                 await get_current_user(f"Bearer {missing_user_token}", db=db)
             assert missing_user_exc.value.status_code == 401
             assert missing_user_exc.value.code == "INVALID_TOKEN"
 
-        valid_token = create_access_token("1", claims={"roles": ["ADMIN"]})
+        valid_token = create_access_token("1", claims={"roles": ["ADMIN"], "sid": 1})
         with pytest.raises(AppException) as no_db_exc:
             await get_current_user(f"Bearer {valid_token}")
         assert no_db_exc.value.status_code == 503
@@ -359,6 +375,7 @@ def test_rbac_staff_domain_isolation_and_immediate_revocation_via_http() -> None
                 )
             )
             session.add(UserRole(app_user_id=1, role_id=role_ids[RoleCode.HR_STAFF.value]))
+            session.add(LoginSession(login_session_id=1, app_user_id=1, session_status="ACTIVE"))
             session.add(
                 User(
                     app_user_id=2,
@@ -368,6 +385,7 @@ def test_rbac_staff_domain_isolation_and_immediate_revocation_via_http() -> None
                 )
             )
             session.add(UserRole(app_user_id=2, role_id=role_ids[RoleCode.ADMIN.value]))
+            session.add(LoginSession(login_session_id=2, app_user_id=2, session_status="ACTIVE"))
             session.add(
                 User(
                     app_user_id=3,
@@ -377,6 +395,7 @@ def test_rbac_staff_domain_isolation_and_immediate_revocation_via_http() -> None
                 )
             )
             session.add(UserRole(app_user_id=3, role_id=role_ids[RoleCode.DATA_ADMIN.value]))
+            session.add(LoginSession(login_session_id=3, app_user_id=3, session_status="ACTIVE"))
 
             session.add(DataLayer(data_layer_id=1, layer_code="BRONZE", layer_name="Bronze"))
             session.add(
@@ -428,9 +447,9 @@ def test_rbac_staff_domain_isolation_and_immediate_revocation_via_http() -> None
 
         application.dependency_overrides[get_db] = override_db
 
-        hr_token = create_access_token("1", claims={"roles": ["HR_STAFF"]})
-        admin_token = create_access_token("2", claims={"roles": ["ADMIN"]})
-        data_admin_token = create_access_token("3", claims={"roles": ["DATA_ADMIN"]})
+        hr_token = create_access_token("1", claims={"roles": ["HR_STAFF"], "sid": 1})
+        admin_token = create_access_token("2", claims={"roles": ["ADMIN"], "sid": 2})
+        data_admin_token = create_access_token("3", claims={"roles": ["DATA_ADMIN"], "sid": 3})
 
         with TestClient(application) as client:
             # 1. STAFF chỉ thấy dataset đúng domain của mình; bị ẩn domain khác.
@@ -522,6 +541,117 @@ def test_rbac_staff_domain_isolation_and_immediate_revocation_via_http() -> None
             )
             assert locked_resp.status_code == 403
             assert locked_resp.json()["error"]["code"] == "USER_INACTIVE"
+    finally:
+        engine.dispose()
+
+
+def test_logout_and_revoke_session_immediately_invalidate_access_token_via_http() -> None:
+    engine = _sqlite_auth_engine()
+    try:
+        with Session(engine) as session, session.begin():
+            role_ids = _seed_roles(session)
+            session.add(
+                User(
+                    app_user_id=50,
+                    username="multi_device_user",
+                    password_hash=hash_password("Secret@123"),
+                    is_active=True,
+                )
+            )
+            session.add(UserRole(app_user_id=50, role_id=role_ids[RoleCode.DATA_ADMIN.value]))
+            session.add(
+                User(
+                    app_user_id=51,
+                    username="other_user",
+                    password_hash=hash_password("Secret@123"),
+                    is_active=True,
+                )
+            )
+            session.add(UserRole(app_user_id=51, role_id=role_ids[RoleCode.VIEWER.value]))
+
+        application = create_app()
+
+        def override_db() -> Iterator[MagicMock]:
+            with Session(engine) as session, session.begin():
+                yield _async_db_adapter(session)
+
+        application.dependency_overrides[get_db] = override_db
+
+        with TestClient(application) as client:
+            login_a = client.post(
+                "/api/v1/auth/login",
+                json={"username": "multi_device_user", "password": "Secret@123"},
+            )
+            login_b = client.post(
+                "/api/v1/auth/login",
+                json={"username": "multi_device_user", "password": "Secret@123"},
+            )
+            login_other = client.post(
+                "/api/v1/auth/login",
+                json={"username": "other_user", "password": "Secret@123"},
+            )
+            assert login_a.status_code == 200
+            assert login_b.status_code == 200
+            assert login_other.status_code == 200
+
+            token_a = login_a.json()["access_token"]
+            refresh_a = login_a.json()["refresh_token"]
+            token_b = login_b.json()["access_token"]
+            refresh_b = login_b.json()["refresh_token"]
+            token_other = login_other.json()["access_token"]
+
+            sid_a = decode_access_token(token_a)["sid"]
+            sid_b = decode_access_token(token_b)["sid"]
+            sid_other = decode_access_token(token_other)["sid"]
+            assert isinstance(sid_a, int)
+            assert isinstance(sid_b, int)
+            assert sid_a != sid_b
+
+            # Cả 2 thiết bị đều dùng được access token ngay sau khi đăng nhập.
+            headers_a = {"Authorization": f"Bearer {token_a}"}
+            headers_b = {"Authorization": f"Bearer {token_b}"}
+            assert client.get("/api/v1/auth/sessions", headers=headers_a).status_code == 200
+            assert client.get("/api/v1/auth/sessions", headers=headers_b).status_code == 200
+
+            # Dùng sid của người dùng khác -> bị từ chối ngay 401 SESSION_EXPIRED.
+            forged_sid_token = create_access_token(
+                "50", claims={"roles": ["DATA_ADMIN"], "sid": sid_other}
+            )
+            forged_resp = client.get(
+                "/api/v1/auth/sessions",
+                headers={"Authorization": f"Bearer {forged_sid_token}"},
+            )
+            assert forged_resp.status_code == 401
+            assert forged_resp.json()["error"]["code"] == "SESSION_EXPIRED"
+
+            # Đăng xuất thiết bị A qua /auth/logout -> access token A chết ngay lập tức.
+            logout_resp = client.post("/api/v1/auth/logout", json={"refresh_token": refresh_a})
+            assert logout_resp.status_code == 200
+
+            after_logout_a = client.get("/api/v1/auth/sessions", headers=headers_a)
+            assert after_logout_a.status_code == 401
+            assert after_logout_a.json()["error"]["code"] == "SESSION_EXPIRED"
+
+            # Refresh bằng refresh_token của thiết bị A cũng bị chặn.
+            assert (
+                client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_a}).status_code
+                == 401
+            )
+
+            # Thiết bị B vẫn hoạt động bình thường.
+            assert client.get("/api/v1/auth/sessions", headers=headers_b).status_code == 200
+
+            # Thu hồi từ xa thiết bị B qua /auth/revoke-session/{sid_b} -> access token B chết ngay.
+            revoke_resp = client.post(f"/api/v1/auth/revoke-session/{sid_b}", headers=headers_b)
+            assert revoke_resp.status_code == 200
+
+            after_revoke_b = client.get("/api/v1/auth/sessions", headers=headers_b)
+            assert after_revoke_b.status_code == 401
+            assert after_revoke_b.json()["error"]["code"] == "SESSION_EXPIRED"
+            assert (
+                client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_b}).status_code
+                == 401
+            )
     finally:
         engine.dispose()
 

@@ -51,9 +51,9 @@ def test_security_password_and_token_helpers() -> None:
 
 @pytest.mark.asyncio
 async def test_auth_dependencies_resolve_user_and_roles() -> None:
-    token = create_access_token("1", claims={"roles": ["ADMIN"]})
+    token = create_access_token("1", claims={"roles": ["ADMIN"], "sid": 1})
     mock_result = MagicMock()
-    mock_result.all.return_value = [(True, "ADMIN")]
+    mock_result.all.return_value = [(True, "ACTIVE", "ADMIN")]
     mock_db = MagicMock()
     mock_db.execute = AsyncMock(return_value=mock_result)
 
@@ -61,6 +61,7 @@ async def test_auth_dependencies_resolve_user_and_roles() -> None:
     role_dependency = require_role("ADMIN")
 
     assert user["sub"] == "1"
+    assert user["sid"] == 1
     assert role_dependency(user)["roles"] == ["ADMIN"]
 
 

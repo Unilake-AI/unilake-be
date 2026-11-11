@@ -15,7 +15,7 @@ from app.core.roles import RoleCode
 from app.core.security import create_access_token
 from app.dependencies import get_db
 from app.main import create_app
-from app.modules.auth.models import Role, UserRole
+from app.modules.auth.models import LoginSession, Role, UserRole
 from app.modules.governance.models import PipelineLineage
 from app.modules.pipeline.lineage import record_pipeline_lineage_sync
 from app.modules.users.models import User
@@ -35,6 +35,7 @@ def engine():
     cast("Table", Role.__table__).create(eng)
     cast("Table", User.__table__).create(eng)
     cast("Table", UserRole.__table__).create(eng)
+    cast("Table", LoginSession.__table__).create(eng)
     with Session(eng) as session, session.begin():
         for idx, role_code in enumerate(RoleCode, start=1):
             session.add(Role(role_id=idx, role_code=role_code.value, role_name=role_code.value))
@@ -47,6 +48,9 @@ def engine():
                 )
             )
             session.add(UserRole(app_user_id=idx, role_id=idx))
+            session.add(
+                LoginSession(login_session_id=idx, app_user_id=idx, session_status="ACTIVE")
+            )
     yield eng
     eng.dispose()
 
@@ -72,7 +76,9 @@ _ROLE_USER_IDS = {role.value: str(idx) for idx, role in enumerate(RoleCode, star
 
 def headers(role: str = "DATA_ADMIN") -> dict[str, str]:
     user_id = _ROLE_USER_IDS.get(role, "1")
-    token = create_access_token(user_id, claims={"roles": [role] if role else []})
+    token = create_access_token(
+        user_id, claims={"roles": [role] if role else [], "sid": int(user_id)}
+    )
     return {"Authorization": f"Bearer {token}"}
 
 

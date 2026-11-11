@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, or_, select
 
-from app.modules.auth.models import Role, UserRole
+from app.modules.auth.models import LoginSession, Role, UserRole
 from app.modules.users.models import Assignment, Department, Employee, User
 
 if TYPE_CHECKING:
@@ -28,11 +28,18 @@ def current_assignment_conditions() -> tuple[ColumnElement[bool], ...]:
     )
 
 
-async def user_auth_state(db: AsyncSession, user_id: int) -> tuple[bool, set[str]] | None:
-    """Trả về trạng thái hoạt động và tập vai trò hiện hành của người dùng trong DB."""
+async def user_auth_state(
+    db: AsyncSession, user_id: int, session_id: int
+) -> tuple[bool, str | None, set[str]] | None:
+    """Trả về (is_active, session_status, role_codes) hiện hành trong DB, hoặc None nếu user không tồn tại."""
     rows = (
         await db.execute(
-            select(User.is_active, Role.role_code)
+            select(User.is_active, LoginSession.session_status, Role.role_code)
+            .outerjoin(
+                LoginSession,
+                (LoginSession.app_user_id == User.app_user_id)
+                & (LoginSession.login_session_id == session_id),
+            )
             .outerjoin(UserRole, UserRole.app_user_id == User.app_user_id)
             .outerjoin(Role, Role.role_id == UserRole.role_id)
             .where(User.app_user_id == user_id)
@@ -41,8 +48,9 @@ async def user_auth_state(db: AsyncSession, user_id: int) -> tuple[bool, set[str
     if not rows:
         return None
     is_active = bool(rows[0][0])
-    roles = {role_code for _, role_code in rows if isinstance(role_code, str)}
-    return is_active, roles
+    session_status = rows[0][1] if isinstance(rows[0][1], str) else None
+    roles = {role_code for _, _, role_code in rows if isinstance(role_code, str)}
+    return is_active, session_status, roles
 
 
 async def active_roles(db: AsyncSession, user_id: int) -> set[str]:

@@ -153,6 +153,7 @@ async def test_refresh_token_success() -> None:
     service = AuthService(db=mock_db)
     old_refresh_token = create_refresh_token("1")
     session = MagicMock()
+    session.login_session_id = 1
 
     with (
         patch.object(service, "_get_active_session", new_callable=AsyncMock) as get_session,
