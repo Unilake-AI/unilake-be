@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
@@ -75,6 +75,27 @@ async def issue_assignees(
 @router.get("/{issue_id}", response_model=schemas.IssueDetail)
 async def get_issue(issue_id: UUID, db: DB, actor: Actor) -> schemas.IssueDetail:
     return await service.get_issue(issue_id, db, actor)
+
+
+@router.get(
+    "/{issue_id}/comparison",
+    response_model=schemas.IssueComparisonResponse,
+    summary="Đối chiếu dữ liệu trước và sau khi sửa theo khóa nghiệp vụ cho quản trị dữ liệu",
+)
+async def compare_issue(
+    issue_id: UUID,
+    db: DB,
+    actor: Actor,
+    response: Response,
+    cleaning_run_id: Annotated[
+        UUID | None,
+        Query(
+            description="Mã lượt Cleaning cần đối chiếu; bỏ trống để chọn lượt mới nhất của bản sửa"
+        ),
+    ] = None,
+) -> schemas.IssueComparisonResponse:
+    response.headers["Cache-Control"] = "no-store"
+    return await service.compare_issue(issue_id, db, actor, cleaning_run_id=cleaning_run_id)
 
 
 @router.patch("/{issue_id}/assignment", response_model=schemas.IssueDetail)

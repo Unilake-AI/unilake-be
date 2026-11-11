@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 IssueStatus = Literal["ASSIGNED", "PENDING_VERIFICATION", "VERIFIED"]
+ComparisonStatus = Literal["RESOLVED", "STILL_INVALID", "UNMATCHED", "MANUAL_REVIEW_REQUIRED"]
 
 
 class DomainChoice(BaseModel):
@@ -137,3 +138,66 @@ class IssueDetail(IssueRead):
     quarantine_record_ids: list[UUID]
     quarantine_records: list[IssueQuarantineRecord]
     history: list[IssueEventRead]
+
+
+class ComparisonCleaningRunInfo(BaseModel):
+    cleaning_run_id: UUID
+    ingestion_job_id: int
+    dataset_id: int
+    domain: str
+    entity: str
+    bronze_version: str
+    cleaning_status: str
+    publication_status: str
+    records_read: int | None
+    records_passed: int | None
+    records_quarantined: int | None
+    records_collapsed: int | None
+    records_published: int
+    silver_snapshot_id: str | None
+    started_at: AwareDatetime
+    finished_at: AwareDatetime | None
+
+
+class ComparisonRecordItem(BaseModel):
+    record_id: UUID
+    status: ComparisonStatus
+    reason: str | None = None
+    business_key_fields: list[str]
+    business_key: dict[str, Any] | None = None
+    old_locator: str
+    old_record_position: int
+    old_bronze_version: str
+    new_locator: str | None = None
+    new_record_position: int | None = None
+    new_bronze_version: str | None = None
+    original_error_codes: list[str]
+    original_issues: list[dict[str, Any]]
+    remaining_error_codes: list[str]
+    remaining_issues: list[dict[str, Any]]
+    old_values: dict[str, Any] | None = None
+    new_values: dict[str, Any] | None = None
+    changed_fields: list[str]
+
+
+class ComparisonSummary(BaseModel):
+    total: int
+    resolved: int
+    still_invalid: int
+    unmatched: int
+    manual_review_required: int
+
+
+class IssueComparisonResponse(BaseModel):
+    issue_id: UUID
+    dataset_id: int
+    domain: str
+    entity: str
+    issue_status: IssueStatus
+    resolution_job_id: int | None
+    cleaning_run: ComparisonCleaningRunInfo
+    business_key_fields: list[str]
+    summary: ComparisonSummary
+    records: list[ComparisonRecordItem]
+    manual_verification_required: bool = True
+    note: str

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import false, func, insert, select, text, update
 
-from app.modules.datasources.models import DataLayer
+from app.modules.datasources.models import DataLayer, DataSource
 from app.modules.ingestion.models import IngestionJob
 from app.modules.pipeline.models import (
     CLEANING_RUNS,
@@ -284,3 +284,102 @@ async def verification_run(
     )
     row = (await db.execute(query)).mappings().one_or_none()
     return dict(row) if row is not None else None
+
+
+async def issue_records_with_sources(db: AsyncSession, issue_id: str) -> list[dict[str, Any]]:
+    query = (
+        _linked_jobs(issue_id)
+        .with_only_columns(
+            Q.record_id,
+            Q.cleaning_run_id,
+            Q.locator,
+            Q.record_position,
+            Q.error_codes,
+            Q.issues,
+            R.ingestion_job_id,
+            R.bronze_version,
+            R.entity,
+            R.domain,
+            R.dataset_id,
+            R.quarantine_source,
+            IngestionJob.data_source_id,
+            IngestionJob.source_table,
+            IngestionJob.output.label("job_output"),
+            IngestionJob.upload_input.label("job_upload_input"),
+        )
+        .order_by(R.started_at, Q.record_position, Q.record_id)
+    )
+    return [dict(row) for row in (await db.execute(query)).mappings()]
+
+
+async def comparison_cleaning_run(
+    db: AsyncSession,
+    *,
+    run_id: str | None = None,
+    resolution_job_id: int | None = None,
+    dataset_id: int | None = None,
+    entity: str | None = None,
+) -> dict[str, Any] | None:
+    query = select(
+        R.run_id,
+        R.ingestion_job_id,
+        R.dataset_id,
+        R.domain,
+        R.entity,
+        R.bronze_version,
+        R.cleaning_status,
+        R.publication_status,
+        R.records_read,
+        R.records_passed,
+        R.records_quarantined,
+        R.records_collapsed,
+        R.records_published,
+        R.silver_snapshot_id,
+        R.quarantine_source,
+        R.started_at,
+        R.finished_at,
+        IngestionJob.data_source_id,
+        IngestionJob.source_table,
+        IngestionJob.output.label("job_output"),
+        IngestionJob.upload_input.label("job_upload_input"),
+    ).select_from(
+        CLEANING_RUNS.join(IngestionJob, IngestionJob.ingestion_job_id == R.ingestion_job_id)
+    )
+    if run_id is not None:
+        query = query.where(R.run_id == run_id)
+    else:
+        query = query.where(R.ingestion_job_id == resolution_job_id)
+        if dataset_id is not None:
+            query = query.where(R.dataset_id == dataset_id)
+        if entity is not None:
+            query = query.where(R.entity == entity)
+        query = query.order_by(R.started_at.desc(), R.run_id.desc()).limit(1)
+    row = (await db.execute(query)).mappings().one_or_none()
+    return dict(row) if row is not None else None
+
+
+async def run_quarantine_records(db: AsyncSession, cleaning_run_id: str) -> list[dict[str, Any]]:
+    query = (
+        select(Q.record_id, Q.locator, Q.record_position, Q.error_codes, Q.issues)
+        .where(Q.cleaning_run_id == cleaning_run_id)
+        .order_by(Q.record_position, Q.record_id)
+    )
+    return [dict(row) for row in (await db.execute(query)).mappings()]
+
+
+async def source_metadata_map(
+    db: AsyncSession, data_source_ids: set[int]
+) -> dict[int, dict[str, Any]]:
+    if not data_source_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(
+                DataSource.data_source_id,
+                DataSource.source_system_id,
+                DataSource.source_type,
+                DataSource.configuration,
+            ).where(DataSource.data_source_id.in_(data_source_ids))
+        )
+    ).mappings()
+    return {int(row["data_source_id"]): dict(row) for row in rows}
