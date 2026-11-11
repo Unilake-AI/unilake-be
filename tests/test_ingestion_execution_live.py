@@ -21,7 +21,6 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app import ingestion_worker
 from app.core.config import settings
 from app.core.deps import get_current_user
 from app.core.exceptions import AppException, app_exception_handler
@@ -31,6 +30,7 @@ from app.infra.minio.client import bronze_reader_client, bronze_verifier_client
 from app.modules.datasources.models import DataSource
 from app.modules.ingestion.models import IngestionJob
 from app.modules.ingestion.router import router
+from app.modules.ingestion.services import worker as ingestion_worker
 from app.repositories.ingestion_repo import IngestionRepository, utcnow
 
 pytestmark = pytest.mark.skipif(
@@ -133,7 +133,6 @@ async def test_api_queue_worker_storage_failures_and_recovery(tmp_path, monkeypa
         execution_options={"schema_translate_map": {"app": schema}},
     )
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    monkeypatch.setattr(ingestion_worker, "async_session_factory", factory)
     path = tmp_path / "input.csv"
     path.write_bytes(b"id,name\r\n001,Example\r\n")
     conn = await asyncpg.connect(
@@ -194,8 +193,8 @@ async def test_api_queue_worker_storage_failures_and_recovery(tmp_path, monkeypa
             # Worker thật, phiên riêng biệt, thực sự chụp/đọc/ghi/kiểm tra checksum.
             assert sorted(
                 await asyncio.gather(
-                    ingestion_worker.run_once(ingestion_worker.WorkerState()),
-                    ingestion_worker.run_once(ingestion_worker.WorkerState()),
+                    ingestion_worker.run_once(ingestion_worker.WorkerState(), factory),
+                    ingestion_worker.run_once(ingestion_worker.WorkerState(), factory),
                 )
             ) == [False, True]
             result = (await api.get(f"/ingestion/jobs/{job_id}")).json()
@@ -244,7 +243,7 @@ async def test_api_queue_worker_storage_failures_and_recovery(tmp_path, monkeypa
             blocked_id = (await api.post("/ingestion/jobs", json=payload)).json()[
                 "ingestion_job_id"
             ]
-            assert await ingestion_worker.run_once(ingestion_worker.WorkerState())
+            assert await ingestion_worker.run_once(ingestion_worker.WorkerState(), factory)
             blocked = (await api.get(f"/ingestion/jobs/{blocked_id}")).json()
             assert blocked["status"] == "FAILED"
             assert blocked["error_message"] == "BRONZE_INPUT_VALIDATION_BLOCKED"
@@ -261,7 +260,7 @@ async def test_api_queue_worker_storage_failures_and_recovery(tmp_path, monkeypa
             # Worker kiểm tra lại sự tồn tại/cấu hình nguồn; đầu vào thiếu được ghi nhận lỗi bền vững.
             path.unlink()
             failed_id = (await api.post("/ingestion/jobs", json=payload)).json()["ingestion_job_id"]
-            assert await ingestion_worker.run_once(ingestion_worker.WorkerState())
+            assert await ingestion_worker.run_once(ingestion_worker.WorkerState(), factory)
             failed = (await api.get(f"/ingestion/jobs/{failed_id}")).json()
             assert failed["error_message"] == "INGESTION_READING_FAILED"
             # Giả lập worker dừng đột ngột; job hết hạn không thể công bố thành công hay gửi heartbeat.
@@ -295,7 +294,7 @@ async def test_api_queue_worker_storage_failures_and_recovery(tmp_path, monkeypa
 
             monkeypatch.setattr(ingestion_worker, "store_bronze", fail_store)
             write_id = (await api.post("/ingestion/jobs", json=payload)).json()["ingestion_job_id"]
-            assert await ingestion_worker.run_once(ingestion_worker.WorkerState())
+            assert await ingestion_worker.run_once(ingestion_worker.WorkerState(), factory)
             write_failed = (await api.get(f"/ingestion/jobs/{write_id}")).json()
             assert write_failed["error_message"] == "INGESTION_WRITING_FAILED"
             assert write_failed["rows_read"] == 1
@@ -342,7 +341,6 @@ async def test_validated_excel_and_postgresql_are_written_to_bronze(
         execution_options={"schema_translate_map": {"app": schema}},
     )
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    monkeypatch.setattr(ingestion_worker, "async_session_factory", factory)
     conn = await asyncpg.connect(
         host=settings.db_host,
         port=settings.db_port,
@@ -444,7 +442,7 @@ async def test_validated_excel_and_postgresql_are_written_to_bronze(
             queued = await api.post("/ingestion/jobs", json=payload)
             assert queued.status_code == 202, queued.text
             job_id = queued.json()["ingestion_job_id"]
-            assert await ingestion_worker.run_once(ingestion_worker.WorkerState())
+            assert await ingestion_worker.run_once(ingestion_worker.WorkerState(), factory)
             result = (await api.get(f"/ingestion/jobs/{job_id}")).json()
         assert result["status"] == "SUCCESS", result
         assert result["validation_report"]["result"] == "PASS"

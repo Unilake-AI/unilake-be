@@ -1,4 +1,4 @@
-"""Điều phối nguồn → Bronze. Metadata hàng đợi được lưu trong PostgreSQL."""
+"""Điều phối nguồn → Bronze và lưu thông tin lần nạp trong PostgreSQL."""
 
 from __future__ import annotations
 
@@ -23,9 +23,9 @@ from app.modules.governance.contracts import (
     TransformationEvidence,
 )
 from app.modules.ingestion.contracts import BronzeWriteContext
-from app.modules.ingestion.input_validator import ValidationBlockedError, required_rule_ids
 from app.modules.ingestion.readers.request_builder import build_read_request
-from app.modules.ingestion.validation_binding import bind_policy, pin_policy
+from app.modules.ingestion.services.input_validator import ValidationBlockedError, required_rule_ids
+from app.modules.ingestion.services.validation_binding import bind_policy, pin_policy
 from app.repositories.ingestion_repo import IngestionRepository, utcnow
 from app.shared.async_io import run_io
 
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 
 class CaptureReader(Protocol):
-    """Cổng đọc cho dịch vụ thực thi; các DTO lưu trữ vẫn độc lập."""
+    """Cách đọc đầu vào dùng chung cho các nguồn dữ liệu."""
 
     def read(self, request: ReadRequest) -> CapturedArtifact: ...
 
@@ -127,7 +127,7 @@ class IngestionExecutionService:
                             request.validation_policy, context, read_request
                         )
                     except (ValueError, TypeError, LookupError):
-                        # Pydantic/codec errors có thể chứa đầu vào: chỉ đưa mã an toàn ra API.
+                        # Lỗi đọc cấu hình có thể kèm nội dung đã nhập; chỉ trả mã lỗi rút gọn.
                         error = "VALIDATION_POLICY_INVALID"
         job = await repo.create(
             data_source_id=request.data_source_id,
@@ -156,7 +156,7 @@ class IngestionExecutionService:
         capture: Callable[[], AbstractContextManager[CaptureReader]],
         store: Callable[[CapturedArtifact, str, BronzeWriteContext], dict[str, Any]],
     ) -> None:
-        """Chỉ gọi cho job đã được nhận xử lý; các bộ điều hợp chạy ngoài vòng lặp sự kiện."""
+        """Chỉ xử lý lần nạp đã được nhận; việc đọc và lưu chạy riêng để các tác vụ khác tiếp tục."""
         repo = self.repository
         stage = "READING"
         job_id = job.ingestion_job_id
@@ -166,7 +166,7 @@ class IngestionExecutionService:
             context = await repo.context(job.data_source_id, job.dataset_id)
             is_upload = job.job_type == "UPLOAD_V1"
             if is_upload:
-                from app.modules.ingestion.upload_capture import upload_request
+                from app.modules.ingestion.services.upload_capture import upload_request
 
                 request = upload_request(job, context)
             else:
@@ -174,15 +174,14 @@ class IngestionExecutionService:
             if job.validation_input is not None:
                 request = bind_policy(job.validation_input, context, request, job_id)
             domain = context[1].domain
-            # Thời điểm lấy dữ liệu khác thời điểm enqueue; không dùng created_at làm giả
-            # thời gian capture khi job phải chờ lâu trong hàng đợi.
+            # Ghi thời điểm lấy dữ liệu thực tế, kể cả khi phải chờ lâu trong hàng đợi.
             write_context = BronzeWriteContext(
                 ingestion_job_id=job_id,
                 created_at=job.created_at,
                 source_system_id=context[0].source_system_id,
                 ingestion_timestamp=utcnow(),
             )
-            # Kết thúc giao dịch đọc trước khi thực hiện I/O nguồn có thể kéo dài.
+            # Kết thúc phiên tra cứu trước khi bắt đầu đọc nguồn, vì bước đọc có thể kéo dài.
             await repo.db.commit()
             if request.validation_policy is not None or is_upload:
                 stage = "VALIDATING"
@@ -203,7 +202,7 @@ class IngestionExecutionService:
                         != set(required_rule_ids(request.source_type))
                     ):
                         raise ValueError("VALIDATION_REPORT_REQUIRED")
-                    # Nếu PostgreSQL không lưu được báo cáo, không gọi upload.
+                    # Chỉ tiếp tục lưu file khi đã ghi nhận được báo cáo kiểm tra.
                     await repo.save_validation(job_id, report)
                 if is_upload:
                     evidence = job.upload_input or {}
@@ -292,7 +291,7 @@ class IngestionExecutionService:
                 await repo.checkpoint_bronze(job_id, output)
                 await repo.finish(job_id, output=output)
         except asyncio.CancelledError:
-            # Để thời hạn giữ job tự hết hạn: I/O trên luồng có thể vẫn đang chạy.
+            # Để quyền giữ tác vụ tự hết hạn vì việc đọc hoặc lưu có thể chưa dừng ngay.
             raise
         except ValidationBlockedError as exc:
             await repo.db.rollback()

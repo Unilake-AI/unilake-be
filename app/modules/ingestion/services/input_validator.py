@@ -1,4 +1,4 @@
-"""Validation trên bản capture: một lần parse, không cleaning hay đổi giá trị nghiệp vụ."""
+"""Kiểm tra bản dữ liệu đã lấy và giữ nguyên giá trị của nguồn."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 
 class InputValidationError(Exception):
-    """Mã lỗi đã kiểm soát; không chứa exception/giá trị thô của connector."""
+    """Lỗi đã được rút gọn, không chứa dữ liệu nguồn hay thông tin kết nối."""
 
     def __init__(self, rule: str, code: ErrorCode, *, infrastructure: bool = False) -> None:
         super().__init__(code)
@@ -59,7 +59,7 @@ def required_rule_ids(source_type: str) -> tuple[str, ...]:
 
 
 class InputValidator:
-    """Giới hạn theo scan/buffer, không phải sandbox giới hạn RSS toàn tiến trình."""
+    """Giới hạn phần dữ liệu đang đọc, chưa giới hạn bộ nhớ của toàn bộ chương trình."""
 
     def __init__(self, policy: ValidationPolicy, job_id: int) -> None:
         self.policy, self.job_id = policy, job_id
@@ -68,7 +68,7 @@ class InputValidator:
             rule: RuleCheck(rule_id=rule, status="NOT_RUN")
             for rule in required_rule_ids(policy.parser.kind)
         }
-        # Binding và policy đã được execution kiểm tra trước khi gọi capture.
+        # Nguồn và quy định kiểm tra đã được đối chiếu trước khi đọc dữ liệu.
         self.pass_rules("IN-COM-001", "IN-COM-002")
         self.issues: list[ValidationIssue] = []
         self.rows = 0
@@ -236,8 +236,8 @@ class InputValidator:
         self.finish_scan()
 
     def csv(self, path: Path, parser: CSVOptions) -> None:
-        # Không để DuckDB tự đổi header trùng hoặc tự đệm cột thiếu.
-        # newline='' giữ escaped newline; csv.reader đếm bản ghi logic.
+        # Báo lỗi khi tên cột trùng hoặc thiếu ô; không tự đổi tên hay bổ sung ô còn thiếu.
+        # Giữ dấu xuống dòng bên trong ô để đếm đúng số bản ghi.
         with path.open(encoding=parser.encoding, newline="") as stream:
             reader = csv.reader(
                 stream, delimiter=parser.delimiter, quotechar=parser.quote_char, strict=True
@@ -264,7 +264,7 @@ class InputValidator:
                 raise InputValidationError("IN-XLS-002", "SHEET_NOT_FOUND")
             self.pass_rules("IN-XLS-002")
             sheet = book[parser.sheet_name]
-            # Không tin dimension khai báo trong XML: có thể che mất dòng/cột thực tế.
+            # Đọc phạm vi dữ liệu thực tế vì file có thể khai báo thiếu số dòng hoặc cột.
             sheet.reset_dimensions()
             iterator = sheet.iter_rows()
             for _ in range(parser.skip_rows + parser.header_row - 1):
@@ -310,8 +310,8 @@ class InputValidator:
         parser = self.policy.parser
         assert isinstance(parser, PostgreSQLOptions)
         config = request.configuration
-        # Kết nối không được lưu trong report. Transaction read-only REPEATABLE READ
-        # giữ schema và các batch cùng snapshot; server cursor tránh fetchall.
+        # Không ghi thông tin kết nối vào báo cáo. Các phần được đọc từ cùng một phiên bản
+        # của bảng, không tải toàn bộ bảng vào bộ nhớ cùng lúc.
         with psycopg.connect(
             host=config["host"],
             port=config["port"],
@@ -326,7 +326,7 @@ class InputValidator:
             query = sql.SQL("SELECT * FROM {}.{}").format(
                 sql.Identifier(parser.schema_name), sql.Identifier(parser.table_name)
             )
-            # LIMIT 0 lấy kiểu kể cả bảng rỗng, cùng transaction với server cursor.
+            # Lấy kiểu dữ liệu ngay cả khi bảng rỗng, từ cùng phiên đọc dữ liệu.
             description = conn.execute(query + sql.SQL(" LIMIT 0")).description
             assert description is not None
             names = [c.name for c in description]
@@ -380,7 +380,7 @@ class InputValidator:
 
 
 def postgres_arrow_type(name: str, column: Any) -> Any:
-    """Tập kiểu được hỗ trợ tường minh; không suy kiểu bằng mẫu hoặc biến kiểu lạ thành text."""
+    """Chỉ nhận kiểu đã được hỗ trợ; kiểu chưa biết sẽ được báo lỗi."""
     types: dict[str, Any] = {
         "int2": pa.int16(),
         "int4": pa.int32(),

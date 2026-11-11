@@ -1,4 +1,4 @@
-"""Ranh giới ingestion dùng chung từ nguồn đến Bronze."""
+"""Nhận bản ghi dữ liệu và bàn giao cho bước lưu Bronze."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def ingest_records(
     metadata: Mapping[str, str] | None = None,
     registry: DomainRegistry | None = None,
 ) -> BronzeBatch:
-    """Kiểm tra metadata định tuyến và lưu bền vững các bản ghi thô vào Bronze."""
+    """Kiểm tra lĩnh vực và nguồn trước khi bàn giao bản ghi gốc cho bước lưu Bronze."""
     active_registry = registry or get_domain_registry()
     domain = active_registry.get(domain_id)
     domain.mapping_for(source_type)

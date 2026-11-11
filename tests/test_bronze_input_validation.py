@@ -12,11 +12,12 @@ from openpyxl import Workbook
 
 from app.bronze_capture import BronzeCapture
 from app.core.exceptions import AppException
-from app.modules.ingestion.execution import IngestionExecutionService
-from app.modules.ingestion.input_validator import ValidationBlockedError, required_rule_ids
 from app.modules.ingestion.models import IngestionJob
 from app.modules.ingestion.readers.contract import ReadRequest
 from app.modules.ingestion.schemas import IngestionStart
+from app.modules.ingestion.services.execution import IngestionExecutionService
+from app.modules.ingestion.services.input_validator import ValidationBlockedError, required_rule_ids
+from app.modules.ingestion.services.validation_binding import bind_policy, pin_policy
 from app.modules.ingestion.validation import (
     CSVOptions,
     ExcelOptions,
@@ -25,7 +26,6 @@ from app.modules.ingestion.validation import (
     SourceColumn,
     ValidationPolicy,
 )
-from app.modules.ingestion.validation_binding import bind_policy, pin_policy
 from tests.test_ingestion_execution import context, repository
 
 
@@ -201,7 +201,9 @@ def mock_postgres(monkeypatch, rows):
     ]
     cursor = conn.cursor.return_value.__enter__.return_value
     cursor.__iter__.return_value = iter(rows)
-    monkeypatch.setattr("app.modules.ingestion.input_validator.psycopg.connect", lambda **_: conn)
+    monkeypatch.setattr(
+        "app.modules.ingestion.services.input_validator.psycopg.connect", lambda **_: conn
+    )
     selected = policy(
         parser=PostgreSQLOptions(
             schema_name="public", table_name="demo", connection_config_version="v1"
@@ -268,7 +270,7 @@ async def test_worker_persists_before_upload_and_blocks_on_failure(tmp_path, mon
     async def inline(function, *args, **kwargs):
         return function(*args, **kwargs)
 
-    monkeypatch.setattr("app.modules.ingestion.execution.run_io", inline)
+    monkeypatch.setattr("app.modules.ingestion.services.execution.run_io", inline)
     path = tmp_path / "input.csv"
     path.write_text(
         "id,name\n1,Name\n" if failure != "validation" else "id,id\n1,2\n", encoding="utf-8"
@@ -334,8 +336,8 @@ async def test_enqueue_rejects_invalid_policy_without_leaking_input():
 
 @pytest.mark.parametrize("failure", [None, "size", "version"])
 def test_minio_validated_download_is_bounded_and_version_pinned(monkeypatch, failure):
-    from app.modules.ingestion.input_validator import InputValidationError
     from app.modules.ingestion.readers.minio_file_resolver import resolve_file_request
+    from app.modules.ingestion.services.input_validator import InputValidationError
 
     client = MagicMock()
     raw = b"id,name\n1,Name\n"
@@ -450,7 +452,7 @@ def test_pg_errors_are_sanitized(monkeypatch, exception_name, code, result):
     def fail(**_):
         raise getattr(psycopg.errors, exception_name)("password=secret")
 
-    monkeypatch.setattr("app.modules.ingestion.input_validator.psycopg.connect", fail)
+    monkeypatch.setattr("app.modules.ingestion.services.input_validator.psycopg.connect", fail)
     with BronzeCapture() as capture, pytest.raises(ValidationBlockedError) as exc:
         capture.read(req)
     assert exc.value.report.result == result

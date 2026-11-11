@@ -10,11 +10,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.modules.ingestion.contracts import MappingBinding
-from app.modules.ingestion.reader_batch import reader_to_batch
 from app.modules.ingestion.readers.contract import ReadRequest
 from app.modules.ingestion.readers.csv_reader import CSVReader
 from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
 from app.modules.ingestion.readers.source_loader import read_data_source_batch
+from app.modules.ingestion.services.reader_batch import reader_to_batch
 from app.modules.pipeline.mapping_profiles import build_profile
 from app.modules.pipeline.schema_mapping import (
     MappingConfigurationError,

@@ -836,9 +836,9 @@ Giữ manifest, request và evidence để so sánh. Fixture thủ công đượ
 ## 15. Các file để đối chiếu implementation
 
 - [Policy/report contract](../backend/app/modules/ingestion/validation.py)
-- [Pin policy và kiểm tra binding](../backend/app/modules/ingestion/validation_binding.py)
-- [Validator CSV/Excel/PostgreSQL](../backend/app/modules/ingestion/input_validator.py)
-- [Điều phối job](../backend/app/modules/ingestion/execution.py)
+- [Pin policy và kiểm tra binding](../backend/app/modules/ingestion/services/validation_binding.py)
+- [Validator CSV/Excel/PostgreSQL](../backend/app/modules/ingestion/services/input_validator.py)
+- [Điều phối job](../backend/app/modules/ingestion/services/execution.py)
 - [Capture và lưu Bronze](../backend/app/bronze_capture.py)
 - [Metadata/hàng đợi](../backend/app/repositories/ingestion_repo.py)
 - [Migration validation](../infra/postgres/migrations/20261022_bronze_validation.sql)

@@ -599,9 +599,9 @@ Các đường dẫn dưới đây tương đối với tài liệu trong reposi
 
 - [Đăng ký các router](../app/main.py), [mã role](../app/core/roles.py).
 - [API dataset và hệ thống nguồn](../app/modules/datasources/datasets_router.py), [kiểm tra đích upload](../app/repositories/upload_repo.py).
-- [API ingestion](../app/modules/ingestion/router.py), [tiếp nhận upload](../app/modules/staff/services/uploads.py), [kiểm tra file upload](../app/modules/ingestion/upload_capture.py).
-- [Kiểm tra đầu vào](../app/modules/ingestion/input_validator.py), [capture và ghi Bronze](../app/bronze_capture.py).
-- [Worker](../app/ingestion_worker.py), [thực thi ingestion](../app/modules/ingestion/execution.py), [hàng đợi và retry](../app/repositories/ingestion_repo.py).
+- [API ingestion](../app/modules/ingestion/router.py), [tiếp nhận upload](../app/modules/ingestion/services/uploads.py), [kiểm tra file upload](../app/modules/ingestion/services/upload_capture.py).
+- [Kiểm tra đầu vào](../app/modules/ingestion/services/input_validator.py), [capture và ghi Bronze](../app/bronze_capture.py).
+- [Worker](../app/ingestion_worker.py), [thực thi ingestion](../app/modules/ingestion/services/execution.py), [hàng đợi và retry](../app/repositories/ingestion_repo.py).
 - [Chạy Bronze → Silver](../app/modules/pipeline/source_cleaning.py), [cấu trúc profile](../app/modules/pipeline/source_profiles.py), [công bố Silver](../app/modules/pipeline/silver_publication.py).
 - [API yêu cầu sửa và xác minh](../app/modules/pipeline/data_quality_issues_router.py), [xử lý yêu cầu sửa](../app/modules/staff/services/quality_issues.py), [Catalog và lineage](../app/modules/governance/router.py), [dependency NLQ thực tế](../app/providers.py).
 - [Tải file](ingestion-uploads.md), [vận hành ingestion](ingestion-reliability.md), [quản lý Silver](silver-management-api.md), [cấu hình nguồn Silver](standardization/source-silver-flow.md), [triển khai Render](render.md).
