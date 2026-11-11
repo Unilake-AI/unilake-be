@@ -12,10 +12,13 @@ from sqlalchemy import Table, create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from app.core.roles import RoleCode
 from app.core.security import create_access_token
 from app.dependencies import get_db
 from app.main import create_app
+from app.modules.auth.models import Role, UserRole
 from app.modules.governance.models import CatalogMetadata
+from app.modules.users.models import User
 
 CATALOG = "/api/v1/governance/catalog"
 DETAIL = f"{CATALOG}/demo/test_students"
@@ -40,7 +43,30 @@ def client(monkeypatch) -> Iterator[TestClient]:
         execution_options={"schema_translate_map": {"app": None}},
     )
     cast("Table", CatalogMetadata.__table__).create(engine)
+    cast("Table", Role.__table__).create(engine)
+    cast("Table", User.__table__).create(engine)
+    cast("Table", UserRole.__table__).create(engine)
     with Session(engine) as session, session.begin():
+        for idx, role_code in enumerate(RoleCode, start=1):
+            session.add(Role(role_id=idx, role_code=role_code.value, role_name=role_code.value))
+            session.add(
+                User(
+                    app_user_id=idx,
+                    username=f"user_{role_code.value.lower()}",
+                    password_hash="hash",
+                    is_active=True,
+                )
+            )
+            session.add(UserRole(app_user_id=idx, role_id=idx))
+        no_role_id = len(RoleCode) + 1
+        session.add(
+            User(
+                app_user_id=no_role_id,
+                username="user_no_role",
+                password_hash="hash",
+                is_active=True,
+            )
+        )
         session.add(
             CatalogMetadata(
                 domain_id="demo",
@@ -68,8 +94,13 @@ def client(monkeypatch) -> Iterator[TestClient]:
     engine.dispose()
 
 
+_ROLE_USER_IDS = {role.value: str(idx) for idx, role in enumerate(RoleCode, start=1)}
+_NO_ROLE_USER_ID = str(len(RoleCode) + 1)
+
+
 def headers(role: str = "DATA_ADMIN") -> dict[str, str]:
-    token = create_access_token("1", claims={"roles": [role] if role else []})
+    user_id = _ROLE_USER_IDS.get(role, _NO_ROLE_USER_ID)
+    token = create_access_token(user_id, claims={"roles": [role] if role else []})
     return {"Authorization": f"Bearer {token}"}
 
 

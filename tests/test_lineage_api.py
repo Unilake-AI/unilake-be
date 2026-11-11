@@ -11,11 +11,14 @@ from sqlalchemy import Table, create_engine, insert
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from app.core.roles import RoleCode
 from app.core.security import create_access_token
 from app.dependencies import get_db
 from app.main import create_app
+from app.modules.auth.models import Role, UserRole
 from app.modules.governance.models import PipelineLineage
 from app.modules.pipeline.lineage import record_pipeline_lineage_sync
+from app.modules.users.models import User
 
 LINEAGE_ENDPOINT = "/api/v1/governance/lineage"
 
@@ -29,6 +32,21 @@ def engine():
         execution_options={"schema_translate_map": {"app": None}},
     )
     cast("Table", PipelineLineage.__table__).create(eng)
+    cast("Table", Role.__table__).create(eng)
+    cast("Table", User.__table__).create(eng)
+    cast("Table", UserRole.__table__).create(eng)
+    with Session(eng) as session, session.begin():
+        for idx, role_code in enumerate(RoleCode, start=1):
+            session.add(Role(role_id=idx, role_code=role_code.value, role_name=role_code.value))
+            session.add(
+                User(
+                    app_user_id=idx,
+                    username=f"user_{role_code.value.lower()}",
+                    password_hash="hash",
+                    is_active=True,
+                )
+            )
+            session.add(UserRole(app_user_id=idx, role_id=idx))
     yield eng
     eng.dispose()
 
@@ -49,8 +67,12 @@ def client(engine) -> Iterator[TestClient]:
         yield api
 
 
+_ROLE_USER_IDS = {role.value: str(idx) for idx, role in enumerate(RoleCode, start=1)}
+
+
 def headers(role: str = "DATA_ADMIN") -> dict[str, str]:
-    token = create_access_token("1", claims={"roles": [role] if role else []})
+    user_id = _ROLE_USER_IDS.get(role, "1")
+    token = create_access_token(user_id, claims={"roles": [role] if role else []})
     return {"Authorization": f"Bearer {token}"}
 
 

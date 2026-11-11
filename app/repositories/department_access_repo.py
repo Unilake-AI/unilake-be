@@ -28,6 +28,23 @@ def current_assignment_conditions() -> tuple[ColumnElement[bool], ...]:
     )
 
 
+async def user_auth_state(db: AsyncSession, user_id: int) -> tuple[bool, set[str]] | None:
+    """Trả về trạng thái hoạt động và tập vai trò hiện hành của người dùng trong DB."""
+    rows = (
+        await db.execute(
+            select(User.is_active, Role.role_code)
+            .outerjoin(UserRole, UserRole.app_user_id == User.app_user_id)
+            .outerjoin(Role, Role.role_id == UserRole.role_id)
+            .where(User.app_user_id == user_id)
+        )
+    ).all()
+    if not rows:
+        return None
+    is_active = bool(rows[0][0])
+    roles = {role_code for _, role_code in rows if isinstance(role_code, str)}
+    return is_active, roles
+
+
 async def active_roles(db: AsyncSession, user_id: int) -> set[str]:
     return set(
         await db.scalars(
