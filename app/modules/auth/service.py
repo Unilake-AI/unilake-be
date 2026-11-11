@@ -62,22 +62,25 @@ class AuthService:
                 code="USER_INACTIVE",
             )
 
-        # Lấy quyền, tạo cặp token và lưu phiên đăng nhập hiện tại.
+        # Lấy quyền, tạo phiên đăng nhập trước để gắn sid vào access token.
         role_codes = await self._get_role_codes(exist_user.app_user_id)
+        refresh_token = create_refresh_token(str(exist_user.app_user_id))
+        session = LoginSession(
+            app_user_id=exist_user.app_user_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            refresh_token_hash=self._hash_refresh_token(refresh_token),
+        )
+        self.db.add(session)
+        await self.db.flush()
         access_token = create_access_token(
             str(exist_user.app_user_id),
-            claims={"username": exist_user.username, "roles": role_codes},
+            claims={
+                "username": exist_user.username,
+                "roles": role_codes,
+                "sid": session.login_session_id,
+            },
         )
-        refresh_token = create_refresh_token(str(exist_user.app_user_id))
-        self.db.add(
-            LoginSession(
-                app_user_id=exist_user.app_user_id,
-                ip_address=ip_address,
-                user_agent=user_agent,
-                refresh_token_hash=self._hash_refresh_token(refresh_token),
-            )
-        )
-        await self.db.flush()
 
         return LoginResponse(
             access_token=access_token,
@@ -155,11 +158,15 @@ class AuthService:
                 code="USER_INACTIVE",
             )
 
-        # Cấp access token mới và rotate refresh token để phiên cũ không dùng lại.
+        # Cấp access token mới (kèm sid phiên hiện tại) và rotate refresh token.
         role_codes = await self._get_role_codes(user.app_user_id)
         access_token = create_access_token(
             str(user.app_user_id),
-            claims={"username": user.username, "roles": role_codes},
+            claims={
+                "username": user.username,
+                "roles": role_codes,
+                "sid": session.login_session_id,
+            },
         )
         refresh_token = create_refresh_token(str(user.app_user_id))
         session.refresh_token_hash = self._hash_refresh_token(refresh_token)
