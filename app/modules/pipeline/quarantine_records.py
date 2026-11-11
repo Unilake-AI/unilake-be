@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
 
     from app.modules.ingestion.contracts import BronzeBatch
+    from app.modules.ingestion.contracts.readers import ReadResult
     from app.modules.pipeline.cleaning_pipeline import CleaningResult
 
 MAX_SOURCE_BYTES = 8 * 1024 * 1024
@@ -97,22 +98,39 @@ class SourceReadLimitError(ValueError):
     """Vượt giới hạn đọc dòng nguồn tương tác."""
 
 
-def read_quarantine_source(record: dict[str, Any]) -> dict[str, Any]:
-    source = record["quarantine_source"]
-    uri = urlsplit(source["uri"])
-    filename = source["file_name"]
+def read_bronze_snapshot(
+    source: dict[str, Any], *, require_provenance_fingerprints: bool = True
+) -> ReadResult:
+    """Đọc lại đúng phiên bản file Bronze theo bằng chứng provenance đã lưu."""
+    uri = urlsplit(str(source.get("uri", "")))
+    filename = source.get("file_name")
+    version_id = source.get("version_id")
+    sha256 = source.get("sha256")
+    size_bytes = source.get("size_bytes")
+    source_type = source.get("source_type")
+    parser_options = source.get("parser_options")
     key = uri.path.lstrip("/")
     if (
-        uri.scheme != "s3"
+        not isinstance(filename, str)
+        or not filename
+        or uri.scheme != "s3"
         or uri.netloc != settings.minio_bucket_bronze
+        or uri.query
+        or uri.fragment
         or not key
         or Path(filename).name != filename
         or Path(key).name != filename
-        or not source["version_id"]
-        or source["version_id"] == "null"
+        or not isinstance(version_id, str)
+        or not version_id
+        or version_id == "null"
+        or not isinstance(sha256, str)
+        or type(size_bytes) is not int
+        or size_bytes < 0
+        or source_type not in {"CSV", "EXCEL"}
+        or not isinstance(parser_options, dict)
     ):
         raise ValueError("INVALID_QUARANTINE_SOURCE")
-    if source["size_bytes"] > MAX_SOURCE_BYTES:
+    if size_bytes > MAX_SOURCE_BYTES:
         raise SourceReadLimitError("QUARANTINE_SOURCE_TOO_LARGE")
     deadline = monotonic() + SOURCE_READ_SECONDS
 
@@ -123,9 +141,9 @@ def read_quarantine_source(record: dict[str, Any]) -> dict[str, Any]:
     with TemporaryDirectory(prefix="quarantine_source_") as directory:
         path = Path(directory) / filename
         client = bronze_reader_client(timeout=SOURCE_READ_SECONDS)
-        response = client.get_object(uri.netloc, key, version_id=source["version_id"])
+        response = client.get_object(uri.netloc, key, version_id=version_id)
         try:
-            if response.headers.get("x-amz-version-id") != source["version_id"]:
+            if response.headers.get("x-amz-version-id") != version_id:
                 raise ValueError("QUARANTINE_SOURCE_VERSION_MISMATCH")
             digest = hashlib.sha256()
             size = 0
@@ -140,9 +158,8 @@ def read_quarantine_source(record: dict[str, Any]) -> dict[str, Any]:
         finally:
             response.close()
             response.release_conn()
-        if size != source["size_bytes"] or digest.hexdigest() != source["sha256"].lower():
+        if size != size_bytes or digest.hexdigest() != sha256.lower():
             raise ValueError("QUARANTINE_SOURCE_CHECKSUM_MISMATCH")
-        source_type = source["source_type"]
         if source_type == "EXCEL":
             # Giới hạn kích thước sau giải nén vì XLSX là một gói ZIP.
             with ZipFile(path) as workbook:
@@ -150,21 +167,34 @@ def read_quarantine_source(record: dict[str, Any]) -> dict[str, Any]:
                     raise SourceReadLimitError("QUARANTINE_SOURCE_TOO_LARGE")
         check_deadline()
         parsed = read_file_snapshot(
-            ReadRequest(source_type, str(path), source["parser_options"], filename),
+            ReadRequest(source_type, str(path), parser_options, filename),
             SourceReaderFactory.get_reader(source_type),
-            source_system_id=source["source_system_id"],
-            data_source_id=source["data_source_id"],
-            dataset_id=source["dataset_id"],
+            source_system_id=str(source["source_system_id"]),
+            data_source_id=str(source["data_source_id"]),
+            dataset_id=str(source["dataset_id"]),
         )
         check_deadline()
-        position = record["record_position"]
         provenance = parsed.provenance
-        if (
-            provenance is None
-            or provenance.parser_fingerprint != source["parser_fingerprint"]
-            or provenance.columns_fingerprint != source["columns_fingerprint"]
-            or not 1 <= position <= parsed.rows_read
-            or parsed.record_locators[position - 1] != record["locator"]
+        if provenance is None:
+            raise ValueError("QUARANTINE_SOURCE_PROVENANCE_MISSING")
+        if (require_provenance_fingerprints or "parser_fingerprint" in source) and (
+            provenance.parser_fingerprint != source.get("parser_fingerprint")
         ):
             raise ValueError("QUARANTINE_SOURCE_LOCATOR_MISMATCH")
-        return dict(zip(parsed.columns, parsed.rows[position - 1], strict=True))
+        if (require_provenance_fingerprints or "columns_fingerprint" in source) and (
+            provenance.columns_fingerprint != source.get("columns_fingerprint")
+        ):
+            raise ValueError("QUARANTINE_SOURCE_LOCATOR_MISMATCH")
+        return parsed
+
+
+def read_quarantine_source(record: dict[str, Any]) -> dict[str, Any]:
+    source = record["quarantine_source"]
+    parsed = read_bronze_snapshot(source, require_provenance_fingerprints=True)
+    position = record["record_position"]
+    if (
+        not 1 <= position <= parsed.rows_read
+        or parsed.record_locators[position - 1] != record["locator"]
+    ):
+        raise ValueError("QUARANTINE_SOURCE_LOCATOR_MISMATCH")
+    return dict(zip(parsed.columns, parsed.rows[position - 1], strict=True))

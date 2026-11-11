@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
+from app.modules.pipeline.issue_comparison import (
+    build_issue_comparison as build_issue_comparison,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 

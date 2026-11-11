@@ -22,10 +22,12 @@ from app.modules.ingestion.contracts.uploads import (
     safe_upload_filename,
     supported_parser_options,
 )
+from app.modules.pipeline.contracts import build_issue_comparison
 from app.modules.staff.schemas import (
     AssigneeChoice,
     AssignIssue,
     CreateIssue,
+    IssueComparisonResponse,
     IssueDepartmentChoice,
     IssueDetail,
     IssueEventRead,
@@ -561,3 +563,71 @@ async def verify_issue(
         },
         verification_run_id=str(request.cleaning_run_id),
     )
+
+
+async def compare_issue(
+    issue_id: UUID,
+    db: AsyncSession,
+    actor: IssueActor,
+    *,
+    cleaning_run_id: UUID | None = None,
+) -> IssueComparisonResponse:
+    """So sánh dữ liệu trước và sau sửa cho Data Admin trước khi xác minh thủ công."""
+    _require_admin(actor)
+    issue = await _issue(db, actor, issue_id)
+    target = await _resolution_target(db, str(issue_id))
+    selected_run_id = (
+        str(cleaning_run_id)
+        if cleaning_run_id is not None
+        else (str(issue["verification_run_id"]) if issue.get("verification_run_id") else None)
+    )
+    if selected_run_id is None and issue.get("resolution_job_id") is None:
+        raise _error(
+            "RESOLUTION_NOT_SUBMITTED",
+            "Yêu cầu chưa có bản sửa được nộp để đối chiếu",
+            409,
+        )
+
+    new_run = await _read(
+        quality_issue_repo.comparison_cleaning_run(
+            db,
+            run_id=selected_run_id,
+            resolution_job_id=issue.get("resolution_job_id"),
+            dataset_id=issue["dataset_id"],
+            entity=target["entity"],
+        )
+    )
+    if new_run is None:
+        raise _error("CLEANING_RUN_NOT_FOUND", "Không tìm thấy lượt Cleaning để đối chiếu", 404)
+    if (
+        new_run["dataset_id"] != issue["dataset_id"]
+        or new_run["entity"] != target["entity"]
+        or (
+            issue.get("resolution_job_id") is not None
+            and new_run["ingestion_job_id"] != issue["resolution_job_id"]
+        )
+    ):
+        raise _error(
+            "INVALID_VERIFICATION_RUN",
+            "Lượt Cleaning không khớp bộ dữ liệu, thực thể hoặc bản sửa của yêu cầu",
+        )
+
+    old_records = await _read(quality_issue_repo.issue_records_with_sources(db, str(issue_id)))
+    new_quarantine = await _read(
+        quality_issue_repo.run_quarantine_records(db, str(new_run["run_id"]))
+    )
+    source_ids = {
+        int(row["data_source_id"])
+        for row in [*old_records, new_run]
+        if row.get("data_source_id") is not None
+    }
+    source_metadata = await _read(quality_issue_repo.source_metadata_map(db, source_ids))
+
+    payload = await build_issue_comparison(
+        issue=issue,
+        old_records=old_records,
+        new_run=new_run,
+        new_quarantine_records=new_quarantine,
+        source_metadata_by_id=source_metadata,
+    )
+    return IssueComparisonResponse.model_validate(payload)
