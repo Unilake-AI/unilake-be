@@ -14,11 +14,11 @@ from sqlalchemy import create_engine, event, select
 
 from app.infra.db.base import Base
 from app.modules.ingestion.contracts import FileProvenance, MappingBinding
-from app.modules.ingestion.reader_batch import reader_to_batch
 from app.modules.ingestion.readers.contract import ReadRequest
 from app.modules.ingestion.readers.csv_reader import CSVReader
 from app.modules.ingestion.readers.excel_reader import ExcelReader
 from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
+from app.modules.ingestion.services.reader_batch import reader_to_batch
 from app.modules.pipeline.mapping_profiles import build_profile
 from app.modules.pipeline.schema_mapping import MappingRegistry, SchemaMappingService
 from app.modules.pipeline.silver_pipeline import NormalizationTask, SilverPipeline

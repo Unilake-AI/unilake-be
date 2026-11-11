@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from app.modules.datasources.contracts import CatalogSource
 from app.modules.ingestion.contracts import MappingBinding
-from app.modules.ingestion.reader_batch import reader_to_batch
+from app.modules.ingestion.services.reader_batch import reader_to_batch
 
 from .factory import SourceReaderFactory
 from .file_snapshot import read_file_snapshot

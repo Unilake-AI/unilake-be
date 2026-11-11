@@ -16,12 +16,12 @@ from openpyxl import load_workbook
 from app.bronze_capture import BronzeCapture
 from app.core.config import settings
 from app.modules.ingestion.contracts import CapturedArtifact
-from app.modules.ingestion.input_validator import (
+from app.modules.ingestion.readers.contract import ReadRequest
+from app.modules.ingestion.services.input_validator import (
     InputValidationError,
     InputValidator,
     ValidationBlockedError,
 )
-from app.modules.ingestion.readers.contract import ReadRequest
 from app.modules.ingestion.validation import ValidationPolicy
 from app.providers import upload_reader_client
 

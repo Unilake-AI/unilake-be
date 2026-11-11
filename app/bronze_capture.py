@@ -19,13 +19,13 @@ from app.core.config import settings
 from app.infra.minio.bronze import object_key
 from app.infra.minio.client import bronze_verifier_client, bronze_writer_client
 from app.modules.ingestion.contracts import CapturedArtifact
-from app.modules.ingestion.input_validator import (
+from app.modules.ingestion.readers.factory import SourceReaderFactory
+from app.modules.ingestion.readers.minio_file_resolver import resolve_file_request
+from app.modules.ingestion.services.input_validator import (
     InputValidationError,
     InputValidator,
     ValidationBlockedError,
 )
-from app.modules.ingestion.readers.factory import SourceReaderFactory
-from app.modules.ingestion.readers.minio_file_resolver import resolve_file_request
 
 if TYPE_CHECKING:
     from types import TracebackType

@@ -152,20 +152,22 @@ Không commit `.env` lên Git.
 
 ## 5. Chạy backend
 
-Chạy từ root:
+Chạy tại thư mục gốc repository BE:
 
 ```bash
-source .venv/bin/activate
-uvicorn app.main:app --app-dir backend --reload --port 8000
+make dev
 ```
 
-Hoặc chạy từ thư mục `backend/`:
+BE chạy trong Terminal và tự tải lại khi sửa code. Lệnh dùng `.venv/bin/python`, giữ PostgreSQL, MinIO và ingestion worker trong Docker, chỉ dừng container `backend` để nhường cổng `8000`.
+
+Nếu hạ tầng Docker đã chạy và chỉ muốn khởi động API thủ công:
 
 ```bash
-cd backend
-source ../.venv/bin/activate
-uvicorn app.main:app --reload --port 8000
+docker compose stop backend
+.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --reload --port 8000
 ```
+
+Trong `.env`, dùng `DB_HOST=localhost`, `DB_PORT=5434` và `MINIO_ENDPOINT=localhost:9000` nếu giữ cổng Docker mặc định. API tự nạp thêm tài khoản từ `.env.upload-backend.local` để nhận file; không cần mở thêm worker Python. Nhấn `Ctrl + C` để dừng API, các container còn lại tiếp tục chạy.
 
 Các endpoint mặc định:
 

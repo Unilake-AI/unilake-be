@@ -34,11 +34,6 @@ from app.modules.staff.schemas import (
     SubmitResolution,
     SubmitVerification,
 )
-from app.modules.staff.services.uploads import (
-    receive_issue_upload,
-    safe_upload_filename,
-    supported_parser_options,
-)
 from app.repositories import quality_issue_repo
 from app.repositories.department_access_repo import (
     active_department_choices,

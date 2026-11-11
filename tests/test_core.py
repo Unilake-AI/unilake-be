@@ -53,3 +53,23 @@ def test_settings_cors_origin_regex_pattern() -> None:
         JWT_SECRET_KEY="test-secret",
     )
     assert regex_settings.cors_origin_regex_pattern == r"^https?://10\.36\.120\.223(:\d+)?$"
+
+
+def test_local_api_loads_upload_credentials_and_keeps_environment_priority(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("UPLOAD_WRITER_ACCESS_KEY", raising=False)
+    monkeypatch.delenv("UPLOAD_WRITER_SECRET_KEY", raising=False)
+    (tmp_path / ".env.upload-backend.local").write_text(
+        "UPLOAD_WRITER_ACCESS_KEY=test-upload-writer\n"
+        "UPLOAD_WRITER_SECRET_KEY=test-upload-secret\n",
+        encoding="utf-8",
+    )
+
+    local_settings = Settings(JWT_SECRET_KEY="test-secret")
+    assert local_settings.upload_writer_access_key == "test-upload-writer"
+    assert local_settings.upload_writer_secret_key == "test-upload-secret"
+
+    monkeypatch.setenv("UPLOAD_WRITER_SECRET_KEY", "environment-upload-secret")
+    assert Settings(JWT_SECRET_KEY="test-secret").upload_writer_secret_key == (
+        "environment-upload-secret"
+    )

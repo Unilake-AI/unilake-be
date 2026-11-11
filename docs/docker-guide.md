@@ -78,22 +78,21 @@ Khi phát triển tính năng Backend, bạn **không cần chạy container bac
 
 ### Quy trình đề xuất:
 
-1. **Bật 3 dịch vụ hạ tầng trong Docker (Postgres, MinIO, Redis)**:
+1. **Chuẩn bị `.venv`, thư viện và tài khoản MinIO theo README**. File `.env` dùng `DB_HOST=localhost`, `DB_PORT=5434` và `MINIO_ENDPOINT=localhost:9000` theo cổng Docker mặc định.
+
+2. **Chạy BE trong Terminal, giữ worker và hạ tầng trong Docker**:
    ```bash
-   docker compose up -d postgres minio redis
+   make dev
    ```
 
-2. **Kích hoạt Virtual Environment Python ở máy local**:
+   Lệnh này bật PostgreSQL, MinIO, bước khởi tạo bucket và ingestion worker; chỉ dừng container `backend`, rồi chạy FastAPI bằng `.venv/bin/python`. Log API xuất hiện ngay trong Terminal và được tải lại khi sửa code. Redis không tham gia hàng đợi ingestion hiện tại.
+
+3. **Xem log worker khi kiểm tra quá trình nạp file**:
    ```bash
-   source .venv/bin/activate
+   docker compose logs -f --tail 100 ingestion-worker
    ```
 
-3. **Chạy Backend FastAPI local ở chế độ `--reload`**:
-   ```bash
-   uvicorn app.main:app --app-dir backend --reload --port 8000
-   ```
-
-*(Khi Backend chạy local ngoài Docker, nó sẽ tự động truy cập vào PostgreSQL trong Docker thông qua port `5434` được khai báo trong file `.env`).*
+Nhấn `Ctrl + C` trong Terminal chạy `make dev` để dừng API. Các container worker, PostgreSQL và MinIO vẫn chạy. Không mở thêm worker Python khi worker Docker đang hoạt động. Sau khi sửa code worker, dùng `docker compose restart ingestion-worker` để nạp bản mới.
 
 ---
 

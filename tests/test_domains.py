@@ -7,7 +7,7 @@ import pytest
 from app.domains.base import DataLayer
 from app.domains.registry import DomainRegistry, DomainRegistryError
 from app.modules.governance.service import GovernanceService
-from app.modules.ingestion.service import InMemoryBronzeRepository, ingest_records
+from app.modules.ingestion.services.records import InMemoryBronzeRepository, ingest_records
 from app.modules.nlq.schema_retriever import retrieve_schema_context
 from app.modules.pipeline.contracts import InMemoryLayerPublisher
 from app.modules.pipeline.service import PipelineOrchestrator, PipelineQualityError

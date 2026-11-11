@@ -9,7 +9,7 @@ from app.core.roles import DATA_WRITE_ROLES, UPLOAD_STAFF_DOMAINS, UPLOAD_WRITE_
 
 
 def upload_domains(user: dict[str, Any]) -> frozenset[str] | None:
-    """Trả về miền được tải file; ``None`` nghĩa là được tải mọi miền."""
+    """Xác định lĩnh vực được tải file; quản trị có thể dùng mọi lĩnh vực."""
     roles = user.get("roles", [])
     roles = [roles] if isinstance(roles, str) else roles
     if not isinstance(roles, list | tuple | set):
@@ -25,7 +25,7 @@ def upload_domains(user: dict[str, Any]) -> frozenset[str] | None:
 
 
 def ingestion_read_domains(user: dict[str, Any]) -> frozenset[str] | None:
-    """Trả về miền job có thể xem; quản trị dữ liệu được xem toàn bộ."""
+    """Xác định lĩnh vực được xem lần nạp; quản trị dữ liệu được xem toàn bộ."""
     roles = user.get("roles", [])
     roles = [roles] if isinstance(roles, str) else roles
     if not isinstance(roles, list | tuple | set):

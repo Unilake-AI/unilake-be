@@ -215,8 +215,9 @@ Các đường dẫn tương đối tính từ repo root; phần thay đổi ch�
 | --- | --- |
 | [bronze_capture.py](../backend/app/bronze_capture.py) | Capture, Parquet export, upload metadata, xác minh bằng verifier |
 | [contracts.py](../backend/app/modules/ingestion/contracts.py) | CapturedArtifact, BronzeWriteContext, BronzeBatch và provenance |
-| [execution.py](../backend/app/modules/ingestion/execution.py) | Validate context, truyền nguồn/thời gian capture, stage và finish job |
-| [ingestion_worker.py](../backend/app/ingestion_worker.py) | Claim job, heartbeat và vòng lặp thực thi |
+| [execution.py](../backend/app/modules/ingestion/services/execution.py) | Validate context, truyền nguồn/thời gian capture, stage và finish job |
+| [ingestion_worker.py](../backend/app/ingestion_worker.py) | Khởi chạy worker |
+| [worker.py](../backend/app/modules/ingestion/services/worker.py) | Nhận tác vụ, theo dõi hoạt động và vòng lặp thực thi |
 | [ingestion_repo.py](../backend/app/repositories/ingestion_repo.py) | PostgreSQL queue, lease và cập nhật trạng thái |
 | [client.py](../backend/app/infra/minio/client.py) | Factory client writer/verifier/reader/source theo credentials riêng |
 | [service_accounts.py](../backend/app/infra/minio/service_accounts.py) | Sinh credentials, provisioning, update policy và export env runtime |

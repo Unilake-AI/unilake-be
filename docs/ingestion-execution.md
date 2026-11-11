@@ -1,5 +1,28 @@
 # Ingestion Execution Service
 
+## Vị trí xử lý trong code
+
+Các service ingestion được đặt tập trung tại `app/modules/ingestion/services/`:
+
+| File | Trách nhiệm |
+| --- | --- |
+| `jobs.py` | Tạo lần nạp, xem trạng thái, thống kê, lịch sử, chạy lại và theo dõi worker |
+| `access.py` | Xác định lĩnh vực được upload và xem kết quả nạp |
+| `uploads.py` | Tiếp nhận file, chọn hoặc tạo bộ dữ liệu, lưu file và tạo lần nạp |
+| `execution.py` | Điều phối việc đọc, kiểm tra, lưu Bronze và chốt kết quả |
+| `input_validator.py` | Kiểm tra nội dung đầu vào và lập báo cáo lỗi |
+| `validation_binding.py` | Giữ đúng nguồn và quy định kiểm tra đã chọn khi tạo lần nạp |
+| `upload_capture.py` | Lấy đúng phiên bản file tiếp nhận, kiểm tra rồi bàn giao để lưu Bronze |
+| `worker.py` | Nhận việc từ hàng đợi, báo hiệu hoạt động và dọn file hết hạn |
+| `reader_batch.py` | Bàn giao dữ liệu đã đọc cùng thông tin truy vết nguồn |
+| `records.py` | Tiếp nhận bản ghi qua cách bàn giao dùng trong kiểm thử |
+
+`router.py` giữ việc nhận tham số và xác thực quyền, rồi gọi service. Các mẫu yêu cầu/kết quả vẫn nằm trong `schemas.py` và `validation.py`; mô hình lưu trữ nằm trong `models.py`, bộ đọc nguồn trong `readers/`, truy vấn database trong `app/repositories/`.
+
+Chức năng nạp dữ liệu của STAFF dùng chung service ingestion. Riêng bước kiểm tra người phụ trách, trạng thái yêu cầu sửa và bằng chứng xác minh nằm trong `staff/services/quality_issues.py`; bước nhận file gọi qua `ingestion/contracts/uploads.py`.
+
+Lệnh khởi chạy vẫn là `python -m app.ingestion_worker`. File này chỉ thiết lập kết nối và gọi vòng chạy trong `services/worker.py`; service nhận nơi mở kết nối từ bên ngoài để dùng được cả khi vận hành và kiểm thử. Không đổi API, phân quyền hoặc cấu trúc database khi chuyển thư mục.
+
 ## Luồng thực thi
 
 ```text

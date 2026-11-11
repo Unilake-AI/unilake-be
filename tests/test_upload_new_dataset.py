@@ -19,8 +19,8 @@ from app.modules.datasources.datasets_router import router as datasets_router
 from app.modules.datasources.models import DataLayer, Dataset, DataSource, SourceSystem
 from app.modules.ingestion.models import IngestionJob
 from app.modules.ingestion.router import router
-from app.modules.ingestion.upload_capture import upload_request
-from app.modules.staff.services import uploads
+from app.modules.ingestion.services import uploads
+from app.modules.ingestion.services.upload_capture import upload_request
 from app.repositories.ingestion_repo import IngestionRepository
 from tests.test_ingestion_uploads import MemoryStore
 

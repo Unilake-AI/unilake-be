@@ -13,7 +13,7 @@ from urllib.parse import SplitResult, urlsplit
 
 from minio import Minio
 
-from app.modules.ingestion.input_validator import InputValidationError
+from app.modules.ingestion.services.input_validator import InputValidationError
 from app.providers import source_reader_client
 
 if TYPE_CHECKING:
