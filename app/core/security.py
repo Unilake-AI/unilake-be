@@ -99,15 +99,36 @@ def decode_access_token(token: str) -> dict[str, Any]:
 
     signing_input = f"{encoded_header}.{encoded_payload}".encode()
     expected = hmac.new(settings.jwt_secret_key.encode(), signing_input, hashlib.sha256).digest()
-    if not hmac.compare_digest(_b64url_decode(encoded_signature), expected):
+    try:
+        decoded_signature = _b64url_decode(encoded_signature)
+    except (ValueError, TypeError) as exc:
+        raise AppException(
+            "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+            code="INVALID_TOKEN",
+            status_code=401,
+        ) from exc
+
+    if not hmac.compare_digest(decoded_signature, expected):
         raise AppException(
             "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
             code="INVALID_TOKEN",
             status_code=401,
         )
 
-    payload = cast("dict[str, Any]", json.loads(_b64url_decode(encoded_payload)))
-    if int(payload.get("exp", 0)) < int(datetime.now(UTC).timestamp()):
+    try:
+        payload_obj = json.loads(_b64url_decode(encoded_payload))
+        if not isinstance(payload_obj, dict):
+            raise ValueError("Payload must be a JSON object")
+        payload = cast("dict[str, Any]", payload_obj)
+        exp = int(payload.get("exp", 0))
+    except (ValueError, TypeError) as exc:
+        raise AppException(
+            "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+            code="INVALID_TOKEN",
+            status_code=401,
+        ) from exc
+
+    if exp < int(datetime.now(UTC).timestamp()):
         raise AppException(
             "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
             code="TOKEN_EXPIRED",
