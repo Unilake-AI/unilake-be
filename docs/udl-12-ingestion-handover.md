@@ -363,9 +363,10 @@ transaction; có thể còn object mồ côi nếu upload xong nhưng commit met
 |---|---|
 | `backend/app/modules/ingestion/router.py` | API tạo, liệt kê và lấy job |
 | `backend/app/modules/ingestion/schemas.py` | Payload và response |
-| `backend/app/modules/ingestion/execution.py` | Validation, enqueue, điều phối đọc/ghi |
+| `backend/app/modules/ingestion/services/execution.py` | Validation, enqueue, điều phối đọc/ghi |
 | `backend/app/repositories/ingestion_repo.py` | Persistence, claim, heartbeat, finish, recovery |
-| `backend/app/ingestion_worker.py` | Vòng lặp worker và heartbeat task |
+| `backend/app/ingestion_worker.py` | Khởi chạy worker |
+| `backend/app/modules/ingestion/services/worker.py` | Vòng lặp worker và theo dõi hoạt động |
 | `backend/app/bronze_capture.py` | Capture bytes, export DB, ghi và xác minh Bronze |
 | `backend/app/modules/ingestion/readers/` | Contract, factory, request builder, CSV/Excel/PostgreSQL và S3 resolver |
 | `backend/app/modules/ingestion/readers/source_loader.py` | API đọc nguồn; read_data_source không tạo job hoặc ghi Bronze |

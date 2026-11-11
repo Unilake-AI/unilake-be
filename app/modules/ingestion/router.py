@@ -2,19 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.deps import get_current_user, require_role
-from app.core.exceptions import AppException
 from app.core.roles import RoleCode
 from app.dependencies import get_db
-from app.modules.ingestion.execution import IngestionExecutionService
 from app.modules.ingestion.schemas import (
     IngestionAttemptRead,
     IngestionJobMetrics,
@@ -24,9 +19,8 @@ from app.modules.ingestion.schemas import (
     IngestionStart,
     IngestionWorkerRead,
 )
-from app.modules.staff.contracts import ingestion as ingestion_service
-from app.modules.staff.contracts import uploads as uploads_service
-from app.repositories.ingestion_repo import IngestionRepository
+from app.modules.ingestion.services import jobs as ingestion_service
+from app.modules.ingestion.services import uploads as uploads_service
 
 if TYPE_CHECKING:
     from app.modules.ingestion.models import IngestionJob
@@ -42,13 +36,7 @@ Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.ADMIN, RoleCode.
 
 @router.post("/jobs", response_model=IngestionJobRead, status_code=202)
 async def start_ingestion(request: IngestionStart, db: DB, user: User) -> IngestionJob:
-    try:
-        return await IngestionExecutionService(IngestionRepository(db)).start(request, user)
-    except SQLAlchemyError:
-        await db.rollback()
-        raise AppException(
-            "Không thể lưu job ingestion", code="INGESTION_QUEUE_UNAVAILABLE", status_code=503
-        ) from None
+    return await ingestion_service.start_ingestion(request, db, user)
 
 
 @router.get("/jobs", response_model=list[IngestionJobRead])
@@ -79,31 +67,12 @@ async def job_metrics(db: DB, user: User) -> dict[str, float | None]:
 
 @router.get("/workers", response_model=list[IngestionWorkerRead])
 async def list_workers(db: DB, _user: Admin) -> list[dict[str, object]]:
-    now = datetime.now(UTC).replace(tzinfo=None)
-    workers = await IngestionRepository(db).workers()
-    return [
-        {
-            "worker_id": worker.worker_id,
-            "status": "HEALTHY"
-            if (now - worker.last_heartbeat_at).total_seconds()
-            <= settings.worker_health_stale_seconds
-            else "OFFLINE",
-            "current_job_id": worker.current_job_id,
-            "last_heartbeat_at": worker.last_heartbeat_at,
-        }
-        for worker in workers
-    ]
+    return await ingestion_service.list_workers(db)
 
 
 @router.post("/jobs/{job_id}/retry", response_model=IngestionJobRead, status_code=202)
 async def retry_job(job_id: int, db: DB, user: Admin) -> IngestionJob:
-    try:
-        return await IngestionRepository(db).retry(job_id, str(user.get("sub", "")))
-    except SQLAlchemyError:
-        await db.rollback()
-        raise AppException(
-            "Không thể tạo lần chạy lại", code="INGESTION_RETRY_UNAVAILABLE", status_code=503
-        ) from None
+    return await ingestion_service.retry_job(job_id, db, user)
 
 
 @router.get("/jobs/{job_id}/attempts", response_model=list[IngestionAttemptRead])

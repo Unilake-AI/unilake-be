@@ -156,7 +156,30 @@ docker compose logs -f backend ingestion-worker
 
 Compose tự nạp cấu hình tài khoản theo dịch vụ và kết nối hạ tầng qua hostname nội bộ `postgres`, `minio`. Cấu hình hiện tại phục vụ phát triển, có mount mã nguồn và bật tự động tải lại API bằng `--reload`.
 
-#### Sử dụng Python trên máy phát triển
+#### Phát triển BE ở Terminal, giữ worker và hạ tầng trong Docker
+
+Sau khi đã cài thư viện và cấp tài khoản MinIO, chạy tại thư mục gốc:
+
+```bash
+make dev
+```
+
+Lệnh này dùng `.venv/bin/python`, bật PostgreSQL, MinIO và ingestion worker trong Docker, chỉ dừng container `backend` để nhường cổng `8000`, rồi chạy API ngay trong Terminal. Log hiển thị tại đây; sửa code API sẽ tự tải lại. Không cần mở thêm worker Python bên ngoài Docker.
+
+Nhấn `Ctrl + C` sẽ dừng API trong Terminal; worker, PostgreSQL và MinIO vẫn tiếp tục chạy. Có thể dùng `make run` như tên gọi khác của `make dev`.
+
+Trong `.env`, dùng `DB_HOST=localhost`, `DB_PORT=5434` và `MINIO_ENDPOINT=localhost:9000` nếu giữ các cổng Docker mặc định. FE trên cùng máy gọi `http://localhost:8000`; Swagger nằm tại `http://localhost:8000/docs`.
+
+Xem log worker và khởi động lại sau khi sửa code worker:
+
+```bash
+docker compose logs -f --tail 100 ingestion-worker
+docker compose restart ingestion-worker
+```
+
+Để đổi cổng API, dùng `make dev PORT=8001` và cập nhật địa chỉ API bên FE tương ứng.
+
+#### Chạy cả API và worker bằng Python khi cần
 
 Thiết lập `DB_HOST=localhost`, `MINIO_ENDPOINT=localhost:9000` và `DB_PORT` khớp cổng PostgreSQL trên host. Kích hoạt `.venv` trong mỗi terminal trước khi chạy.
 
@@ -172,7 +195,7 @@ Terminal thứ hai — worker:
 python -m app.ingestion_worker
 ```
 
-Khi chạy từ thư mục gốc, ứng dụng tự đọc lần lượt `.env`, `.env.bronze-accounts.local`, `.env.silver-backend.local` và `.env.source-reader.local`. Biến môi trường của tiến trình có độ ưu tiên cao hơn cấu hình trong file. Môi trường Python local đọc file tài khoản tổng; Docker Compose nạp các file runtime theo dịch vụ.
+Khi chạy từ thư mục gốc, ứng dụng tự đọc lần lượt `.env`, `.env.bronze-accounts.local`, `.env.silver-backend.local`, `.env.source-reader.local` và `.env.upload-backend.local`. File upload bổ sung tài khoản lưu file tiếp nhận cho API chạy local. Biến môi trường của tiến trình có độ ưu tiên cao hơn cấu hình trong file. Docker Compose tiếp tục nạp các file runtime theo dịch vụ.
 
 Đường dẫn nguồn file phải tương ứng với môi trường worker: `/data/...` trong container ánh xạ tới thư mục `data/` trên host; worker Python local sử dụng đường dẫn thực trên máy.
 
@@ -200,6 +223,17 @@ Endpoint `/health` xác nhận tiến trình API đang phản hồi; endpoint n�
 | Redis | `localhost:6379` |
 
 Frontend sử dụng API base URL `http://localhost:8000/api/v1` với cấu hình mặc định.
+
+Khi kết nối từ máy FE qua cùng mạng ZeroTier, sử dụng:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://10.96.134.207:8000/api/v1
+```
+
+Swagger UI: `http://10.96.134.207:8000/docs`. Backend cần chạy trên
+`0.0.0.0:8000` (đã cấu hình trong `Makefile` và Docker Compose).
+Sau khi sửa `.env`, khởi động lại backend; nếu dùng Docker Compose, chạy
+`docker compose up -d --no-deps --force-recreate backend` để nạp lại cấu hình CORS.
 
 ## Giao diện API
 

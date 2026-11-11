@@ -15,11 +15,11 @@ from openpyxl import Workbook
 from openpyxl.utils.datetime import CALENDAR_MAC_1904
 
 from app.modules.ingestion.contracts import MappingBinding
-from app.modules.ingestion.reader_batch import reader_to_batch
 from app.modules.ingestion.readers.contract import ReadRequest, ReadResult
 from app.modules.ingestion.readers.csv_reader import CSVReader
 from app.modules.ingestion.readers.excel_reader import ExcelReader
 from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
+from app.modules.ingestion.services.reader_batch import reader_to_batch
 from app.modules.pipeline.identity_contracts import CrosswalkEntry, CrosswalkSnapshot
 from app.modules.pipeline.identity_standardization import (
     IdentityStandardizationService,

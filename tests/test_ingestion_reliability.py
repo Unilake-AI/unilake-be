@@ -11,9 +11,9 @@ from sqlalchemy.exc import ProgrammingError
 
 from app.core.exceptions import AppException
 from app.modules.ingestion import router
-from app.modules.ingestion.execution import classify_failure
-from app.modules.staff.services import ingestion as ingestion_service
-from app.modules.staff.services.access import ingestion_read_domains
+from app.modules.ingestion.services import jobs as ingestion_service
+from app.modules.ingestion.services.access import ingestion_read_domains
+from app.modules.ingestion.services.execution import classify_failure
 from app.repositories.ingestion_repo import IngestionRepository
 
 
@@ -47,7 +47,7 @@ async def test_stats_uses_staff_domain(monkeypatch):
 async def test_retry_is_limited_to_data_administrators(monkeypatch):
     repository = Mock()
     repository.retry = AsyncMock(return_value=SimpleNamespace(ingestion_job_id=106))
-    monkeypatch.setattr(router, "IngestionRepository", lambda _db: repository)
+    monkeypatch.setattr(ingestion_service, "IngestionRepository", lambda _db: repository)
 
     result = await router.retry_job(105, AsyncMock(), {"sub": "8", "roles": ["DATA_ADMIN"]})
 

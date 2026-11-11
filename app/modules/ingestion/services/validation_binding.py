@@ -1,4 +1,4 @@
-"""Cố định policy và vị trí nguồn khi enqueue; tuyệt đối không chụp mật khẩu vào job."""
+"""Giữ đúng nguồn và quy định kiểm tra đã chọn khi tạo lần nạp, không lưu mật khẩu."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ def bind_policy(
     snapshot: dict[str, Any], context: SourceContext, request: ReadRequest, job_id: int
 ) -> ReadRequest:
     policy = ValidationPolicy.model_validate_json(json.dumps(snapshot["policy"]))
-    # Kiểm tra lại binding/active qua context, nhưng không thay parser bằng cấu hình mới.
+    # Kiểm tra nguồn còn được phép dùng và còn khớp, nhưng giữ cách đọc đã chọn ban đầu.
     pinned = pin_policy(snapshot["policy"], context, request)
     if (
         policy.fingerprint != snapshot["fingerprint"]
@@ -66,7 +66,7 @@ def bind_policy(
     if isinstance(policy.parser, PostgreSQLOptions) and (
         pinned["source_updated_at"] != snapshot["source_updated_at"]
     ):
-        # Credentials vẫn lấy từ catalog hiện tại; đổi revision phải tạo job mới.
+        # Thông tin đăng nhập lấy từ nguồn đã đăng ký; thay đổi cấu hình thì phải tạo lần nạp mới.
         raise ValueError("SOURCE_CONFIGURATION_CHANGED")
     return replace(
         request, location=snapshot["location"], validation_policy=policy, ingestion_job_id=job_id

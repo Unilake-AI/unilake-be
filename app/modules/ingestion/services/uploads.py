@@ -19,7 +19,7 @@ from urllib3.exceptions import HTTPError
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.modules.ingestion.contracts.jobs import IngestionJobRead
-from app.modules.staff.services.access import upload_domains
+from app.modules.ingestion.services.access import upload_domains
 from app.providers import upload_writer_client
 from app.repositories.ingestion_repo import UPLOAD_JOB_TYPE, IngestionRepository
 from app.repositories.upload_repo import create_upload_target, upload_target

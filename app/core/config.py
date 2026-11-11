@@ -17,6 +17,7 @@ class Settings(BaseSettings):
             ".env.bronze-accounts.local",
             ".env.silver-backend.local",
             ".env.source-reader.local",
+            ".env.upload-backend.local",
         ),
         env_file_encoding="utf-8",
         case_sensitive=False,

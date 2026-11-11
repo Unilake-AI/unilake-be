@@ -191,18 +191,17 @@ CI bật `STAFF_API_INTEGRATION_TEST=1` để kiểm tra luồng upload → work
 
 ## 11. Vị trí xử lý trong code
 
-Toàn bộ phần điều phối chức năng STAFF nằm trong `app/modules/staff/services/`:
+Phần xử lý riêng của STAFF nằm trong `app/modules/staff/services/`:
 
 | File | Trách nhiệm |
 | --- | --- |
 | `context.py` | Lấy quyền, lĩnh vực, phòng ban và các lựa chọn cho giao diện |
-| `access.py` | Xác định lĩnh vực được upload và xem lần nạp |
 | `datasets.py` | Tìm và xem bộ dữ liệu trong phạm vi được cấp |
-| `uploads.py` | Kiểm tra thông tin tải file, chọn hoặc tạo bộ dữ liệu, lưu file tiếp nhận và tạo lần nạp |
-| `ingestion.py` | Tra cứu lần nạp, thống kê, số liệu theo dõi và lịch sử chạy lại |
 | `quality_issues.py` | Xem yêu cầu, tải bản sửa, báo đã sửa; kiểm tra quyền và trạng thái khi quản trị giao hoặc xác minh |
 
-Các router hiện có giữ nguyên đường dẫn, tham số và mẫu trả về. Router nhận yêu cầu, xác thực tài khoản rồi gọi service; không giữ thêm một bản quy tắc nghiệp vụ. Các module khác gọi qua `app/modules/staff/contracts.py`; mẫu dữ liệu STAFF nằm trong `app/modules/staff/schemas.py`.
+Phần tiếp nhận file và tra cứu lần nạp được dùng chung cho STAFF và quản trị, nằm tại `app/modules/ingestion/services/`: `uploads.py`, `jobs.py` và `access.py`. Yêu cầu sửa kiểm tra người phụ trách và trạng thái trong service STAFF trước, rồi gọi `app/modules/ingestion/contracts/uploads.py` để nhận file qua cùng luồng ingestion. Không giữ hai bản xử lý upload ở hai module.
+
+Các router hiện có giữ nguyên đường dẫn, tham số và mẫu trả về. Router nhận yêu cầu, xác thực tài khoản rồi gọi service; không giữ thêm một bản quy tắc nghiệp vụ. Các module khác gọi phần xử lý STAFF qua `app/modules/staff/contracts.py`; mẫu dữ liệu STAFF nằm trong `app/modules/staff/schemas.py`.
 
 Truy vấn và lưu database tiếp tục nằm trong `app/repositories/`, gồm `department_access_repo.py`, `staff_dataset_repo.py`, `upload_repo.py`, `ingestion_repo.py` và `quality_issue_repo.py`. Service dùng chung phiên làm việc của yêu cầu để giữ việc đổi trạng thái và ghi lịch sử trong cùng giao dịch.
 
