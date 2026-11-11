@@ -17,6 +17,11 @@ from urllib3.exceptions import HTTPError
 
 from app.core.exceptions import AppException
 from app.core.roles import DATA_WRITE_ROLES, RoleCode
+from app.modules.ingestion.contracts.uploads import (
+    receive_issue_upload,
+    safe_upload_filename,
+    supported_parser_options,
+)
 from app.modules.pipeline.contracts import build_issue_comparison
 from app.modules.staff.schemas import (
     AssigneeChoice,
