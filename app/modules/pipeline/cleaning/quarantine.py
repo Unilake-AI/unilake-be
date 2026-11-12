@@ -74,6 +74,7 @@ def _normalize_standardization_issue(
     *,
     stage: str,
     field_mapping: Mapping[str, str] | None = None,
+    fallback_rule_version: str | None = None,
 ) -> dict[str, Any]:
     """Chuẩn hóa lỗi từ S2/S3/S4 về cùng định dạng hồ sơ quarantine và ánh xạ lại tên cột nguồn."""
     target_field = getattr(issue, "field", None)
@@ -84,7 +85,7 @@ def _normalize_standardization_issue(
         "severity": issue.severity,
         "disposition": "QUARANTINED",
         "stage": stage,
-        "rule_version": getattr(issue, "rule_version", None),
+        "rule_version": getattr(issue, "rule_version", None) or fallback_rule_version,
     }
     if not target_field:
         return payload
@@ -123,7 +124,13 @@ def collect_standardization_issues(
             if issue.locator in rejected and issue.severity == "error":
                 by_locator[issue.locator].append(
                     _normalize_standardization_issue(
-                        issue, stage=stage, field_mapping=field_mapping
+                        issue,
+                        stage=stage,
+                        field_mapping=field_mapping,
+                        # MappingIssue keeps its version on the pinned MappingKey.
+                        fallback_rule_version=standardized.key.mapping_version
+                        if stage == "SCHEMA_MAPPING"
+                        else None,
                     )
                 )
     if set(by_locator) != rejected:

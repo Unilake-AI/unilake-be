@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.modules.pipeline.models.silver import SilverHead, SilverRun, SilverSnapshot
 from app.modules.pipeline.repositories.silver_storage import ObjectRef, SilverError
+from app.repositories.silver_governance_repo import approval_required
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -107,9 +108,13 @@ class SilverRepository:
             row = conn.execute(select(RUNS).where(RUNS.c.run_id == run_id)).mappings().one()
             return dict(row)
 
-    def publish(self, run_id: str) -> dict[str, Any]:
+    def publish(
+        self, run_id: str, *, authorize: Callable[[Connection, dict[str, Any]], None] | None = None
+    ) -> dict[str, Any]:
         # Thông tin trong PostgreSQL quyết định bộ dữ liệu nào đang được sử dụng.
         # Tệp có trên MinIO chưa có nghĩa là dữ liệu đã được công bố thành công.
+        if approval_required() and authorize is None:
+            raise SilverError("SILVER_PROFILE_APPROVAL_REQUIRED")
         try:
             with self.engine.begin() as conn:
                 run = conn.execute(select(RUNS).where(RUNS.c.run_id == run_id)).mappings().one()
@@ -124,6 +129,8 @@ class SilverRepository:
                     .first()
                 )
                 if existing:
+                    if authorize is not None:
+                        authorize(conn, dict(existing))
                     if existing["snapshot_id"] != run_id:
                         conn.execute(
                             update(RUNS).where(RUNS.c.run_id == run_id).values(status="REUSED")
@@ -133,6 +140,8 @@ class SilverRepository:
                     return dict(existing)
                 if run["status"] not in {"STAGED", "FAILED"} or not run["manifest_ref"]:
                     raise SilverError("RUN_NOT_STAGED")
+                if authorize is not None:
+                    authorize(conn, {**dict(run), "snapshot_id": run_id})
                 conn.execute(
                     insert(SNAPSHOTS).values(
                         snapshot_id=run_id,
@@ -175,6 +184,8 @@ class SilverRepository:
             if retry_existing is None:
                 raise
             with self.engine.begin() as conn:
+                if authorize is not None:
+                    authorize(conn, retry_existing)
                 conn.execute(update(RUNS).where(RUNS.c.run_id == run_id).values(status="REUSED"))
                 if self.on_published is not None:
                     self.on_published(conn, retry_existing["snapshot_id"])

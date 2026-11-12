@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="1.862" timestamp="2026-11-12T15:54:10.531820+07:00" hostname="MSI"><testcase classname="tests.test_quarantine_records" name="test_mapping_quarantine_keeps_pinned_mapping_version" time="0.007"><failure message="AssertionError: assert None == '1'&#10; +  where '1' = MappingKey(source_system_id='SYNTH', domain_id='hr', entity='position', source_schema_version='1', mapping_id='map', mapping_version='1', target_schema_version='0.1.0-draft').mapping_version&#10;[+1 more line; full report in element text]">def test_mapping_quarantine_keeps_pinned_mapping_version():
+        from app.modules.pipeline.standardization.schema_mapping import MappingIssue
+        from tests.test_identity_standardization import setup, typed
+    
+        types, identity = setup()
+        standardized = identity.standardize(typed(types))
+        standardized = replace(
+            standardized,
+            accepted=(),
+            rejected_locators=("record:0",),
+            mapping_issues=(MappingIssue("SOURCE_FIELD_MISSING", "error", "record:0", "position_code"),),
+        )
+        [issue] = quarantine.collect_standardization_issues(standardized)["record:0"]
+&gt;       assert issue["rule_version"] == standardized.key.mapping_version
+E       AssertionError: assert None == '1'
+E        +  where '1' = MappingKey(source_system_id='SYNTH', domain_id='hr', entity='position', source_schema_version='1', mapping_id='map', mapping_version='1', target_schema_version='0.1.0-draft').mapping_version
+E        +    where MappingKey(source_system_id='SYNTH', domain_id='hr', entity='position', source_schema_version='1', mapping_id='map', mapping_version='1', target_schema_version='0.1.0-draft') = IdentityResult(key=MappingKey(source_system_id='SYNTH', domain_id='hr', entity='position', source_schema_version='1', ...on_code'),), preview=False, inspected_count=1, total_count=1, provenance=None, silver_ready=False, processing_steps=()).key
+
+tests\test_quarantine_records.py:31: AssertionError</failure></testcase></testsuite></testsuites>

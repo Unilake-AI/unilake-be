@@ -23,6 +23,7 @@ from app.modules.pipeline.repositories.silver_storage import MinioSilverStore
 from app.modules.pipeline.silver.publication import SilverPublicationService
 from app.modules.pipeline.silver.validation import validate_snapshot
 from app.providers import silver_writer_client
+from app.repositories.silver_governance_repo import approval_required, authorize_manifest
 from app.repositories.silver_profile_repo import load_source_profile
 
 router = APIRouter(prefix="/pipeline/silver/snapshots", tags=["silver-snapshots"])
@@ -144,6 +145,8 @@ def activate_snapshot(
         )
     expected = str(request.expected_current_snapshot) if request.expected_current_snapshot else None
     with db.begin() as connection:
+        if approval_required():
+            authorize_manifest(connection, publisher.describe_snapshot(str(snapshot_id)))
         condition = (
             SilverHead.snapshot_id == expected if expected else SilverHead.snapshot_id.is_(None)
         )

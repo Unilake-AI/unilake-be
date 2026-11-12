@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 
+from app.core.exceptions import AppException
 from app.modules.governance.contracts import LineageEvidence, SnapshotLineage
 from app.modules.pipeline.contracts.identity import digest
 from app.modules.pipeline.repositories.silver_storage import ObjectRef, SilverError, checksum
@@ -25,8 +26,11 @@ from app.modules.pipeline.silver.validation import (
 )
 from app.modules.pipeline.standardization.schema_mapping import MappingKey
 from app.modules.pipeline.standardization.type_standardization import TypeStandardizationService
+from app.repositories.silver_governance_repo import approval_required, authorize_manifest, reject
 
 if TYPE_CHECKING:
+    from sqlalchemy.engine import Connection
+
     from app.modules.pipeline.repositories.silver import SilverRepository
     from app.modules.pipeline.repositories.silver_storage import SilverObjectStore
     from app.modules.pipeline.standardization.identity_standardization import (
@@ -105,6 +109,7 @@ class SilverPublicationService:
         scope: str,
         mode: str = "production",
         business_gate: BusinessGate | None = None,
+        profile_approvals: list[dict[str, Any]] | None = None,
     ) -> None:
         if (
             mode not in {"production", "test"}
@@ -146,6 +151,7 @@ class SilverPublicationService:
                 {
                     "scope": "silver-quality-v1",
                     "additional_gate": business_gate.version if business_gate else None,
+                    **({"profile_approvals": profile_approvals} if profile_approvals else {}),
                 },
                 sort_keys=True,
             ),
@@ -157,6 +163,16 @@ class SilverPublicationService:
         return {
             e: s for c in json.loads(self.contract_json).values() for e, s in c["$defs"].items()
         }
+
+    def _authorize(self, connection: Connection, snapshot: dict[str, Any]) -> None:
+        if not approval_required():
+            return
+        if self.mode != "production":
+            reject("SILVER_TEST_MODE_FORBIDDEN")
+        manifest = self._read_manifest_header(
+            ObjectRef(**json.loads(snapshot["manifest_ref"])), snapshot["snapshot_id"]
+        )
+        authorize_manifest(connection, manifest)
 
     def _gate(
         self, tables: Mapping[str, Sequence[dict[str, object]]], manifest: Mapping[str, Any]
@@ -311,6 +327,7 @@ class SilverPublicationService:
     ) -> PublicationReceipt:
         if not results:
             raise SilverError("NO_INPUT_BATCHES")
+        partial_check = None
         if quarantine_report is not None:
             # [SỬA - Vấn đề 1] Cho phép xuất bản một phần (kèm báo cáo cách ly) ở cả production và test.
             # Vẫn giữ điều kiện an toàn: chỉ áp dụng cho đúng 1 bảng/lô đầu vào và phải còn ít nhất 1 bản ghi sạch.
@@ -321,7 +338,9 @@ class SilverPublicationService:
             ):
                 raise SilverError("PARTIAL_PUBLICATION_NOT_ALLOWED")
             # Phải đọc được báo cáo cách ly trước khi gắn báo cáo vào bộ dữ liệu.
-            self.storage.get(quarantine_report)
+            report_bytes = self.storage.get(quarantine_report)
+            if approval_required():
+                partial_check = json.loads(report_bytes).get("partial_key_check")
         # Không coi thời điểm ghi nhận và mã lô mới là thay đổi của dữ liệu đầu vào.
         inputs: list[dict[str, Any]] = []
         for result in results:
@@ -373,6 +392,11 @@ class SilverPublicationService:
                 ObjectRef(**json.loads(existing["manifest_ref"])), existing["snapshot_id"]
             )
             self._gate(reused_tables, manifest)
+            if approval_required() or self.repository.on_published is not None:
+                with self.repository.engine.begin() as connection:
+                    self._authorize(connection, existing)
+                    if self.repository.on_published is not None:
+                        self.repository.on_published(connection, existing["snapshot_id"])
             return self._receipt(existing, True)
         run_id = str(uuid4())
         self.repository.start(run_id, self.scope, request_hash, base_snapshot)
@@ -532,6 +556,8 @@ class SilverPublicationService:
             }
             if quarantine_report is not None:
                 manifest["quarantine_report"] = asdict(quarantine_report)
+                if partial_check is not None:
+                    manifest["partial_key_check"] = partial_check
             # Kiểm tra điều kiện phê duyệt và chất lượng trước khi lưu tệp; nguồn gốc của dữ liệu mới đã được ghi nhận.
             manifest["business_issues"] = [asdict(issue) for issue in self._gate(tables, manifest)]
             prefix = f"silver/{self.mode}/{checksum(self.scope.encode())}/{run_id}"
@@ -557,7 +583,7 @@ class SilverPublicationService:
             ref = self.storage.put(f"{prefix}/manifest-{checksum(data)}.json", data)
             self._read_manifest(ref, run_id)
             self.repository.stage(run_id, ref)
-            published = self.repository.publish(run_id)
+            published = self.repository.publish(run_id, authorize=self._authorize)
             return self._receipt(published, published["snapshot_id"] != run_id)
         except Exception as exc:
             if not issues:
@@ -572,7 +598,7 @@ class SilverPublicationService:
             # Nếu không lưu được trạng thái, giữ nguyên thông tin lần chạy để đối chiếu sau.
             with suppress(Exception):
                 self.repository.fail(run_id, [asdict(i) for i in issues])
-            if isinstance(exc, SilverError):
+            if isinstance(exc, (SilverError, AppException)):
                 raise
             raise SilverError("STORAGE_OR_METADATA_FAILURE") from exc
 
@@ -591,7 +617,7 @@ class SilverPublicationService:
         if validate_snapshot(tables, self._specs()):
             raise SilverError("SNAPSHOT_REJECTED")
         self._gate(tables, manifest)
-        published = self.repository.publish(run_id)
+        published = self.repository.publish(run_id, authorize=self._authorize)
         return self._receipt(
             published, published["snapshot_id"] != run_id or run["status"] == "PUBLISHED"
         )

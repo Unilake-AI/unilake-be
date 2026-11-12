@@ -16,6 +16,7 @@ from sqlalchemy import URL, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
+from app.core.exceptions import AppException
 from app.modules.ingestion.contracts import MappingBinding
 from app.modules.ingestion.contracts.readers import (
     ReadRequest,
@@ -29,6 +30,7 @@ from app.modules.pipeline.cleaning.format_validation import (
     build_format_profile,
 )
 from app.modules.pipeline.cleaning.missing_values import MissingValueProfile, MissingValueRule
+from app.modules.pipeline.cleaning.partial_safety import partial_key_evidence
 from app.modules.pipeline.cleaning.pipeline import (
     CleaningPipeline,
     CleaningTask,
@@ -47,6 +49,12 @@ from app.modules.pipeline.silver.lineage import record_pipeline_lineage_sync
 from app.modules.pipeline.silver.pipeline import NormalizationTask, SilverPipeline
 from app.modules.pipeline.silver.publication import SilverPublicationService
 from app.providers import silver_writer_client, source_reader_client
+from app.repositories.silver_governance_repo import (
+    approval_required,
+    approved_evidence,
+    recheck_approvals,
+    reject,
+)
 from app.repositories.silver_profile_repo import load_source_profile
 
 if TYPE_CHECKING:
@@ -360,11 +368,27 @@ def run_manual_cleaning(
     publication_committed = False
     try:
         profile = load_source_profile(engine, settings.silver_profiles_path, profile_id)
+        approvals: list[dict[str, Any]] = []
+        if approval_required():
+            with engine.begin() as connection:
+                approvals.append(approved_evidence(connection, profile_id, profile.fingerprint))
         context = _job_context(engine, ingestion_job_id)
         _bind_profile(context, profile)
         mapping, identity = _identity_service(engine, profile)
         run_id = repository.start(
             context, entity=profile.entity, actor=requested_by, session=profile.scope
+        )
+        repository.update(
+            run_id,
+            profile_evidence={
+                "profile_id": profile_id,
+                "fingerprint": profile.fingerprint,
+                "rule_version": profile.rule_version,
+                "definition": profile.model_dump(mode="json"),
+                "approval": approvals[0]
+                if approvals
+                else {"status": "NEEDS_DOMAIN_OWNER_APPROVAL"},
+            },
         )
         cleaning = _read_bronze(context, profile)
         cleaned = CleaningPipeline().clean(cleaning)
@@ -436,7 +460,14 @@ def run_manual_cleaning(
             "quarantine_report": None,
             "profile_id": profile_id,
             "profile_fingerprint": profile.fingerprint,
+            "profile_approval": approvals[0]
+            if approvals
+            else {"status": "NEEDS_DOMAIN_OWNER_APPROVAL"},
         }
+        if total_quarantined and approval_required():
+            result["partial_key_check"] = partial_key_evidence(
+                cleaning, set(cleaned.quarantined_locators) | std_rejected
+            )
         # Các bảng liên quan dùng chung phạm vi để kiểm tra liên kết trước khi công bố.
         scope = profile.scope
         storage = MinioSilverStore(silver_writer_client(), settings.minio_bucket_silver)
@@ -473,8 +504,16 @@ def run_manual_cleaning(
         # [SỬA - Vấn đề 1 & 2] Chỉ chặn công bố khi:
         # 1) Có dòng bị cách ly (ở Cleaning hoặc Standardization) VÀ allow_partial_publication=False, HOẶC
         # 2) Có dòng bị cách ly VÀ không còn dòng sạch nào để công bố (toàn bộ tệp đều lỗi).
-        if total_quarantined and (not allow_partial_publication or not publishable_batch.records):
-            repository.update(run_id, publication_status="BLOCKED", finished_at=datetime.now(UTC))
+        key_blocked = result.get("partial_key_check", {}).get("status") == "BLOCKED"
+        if total_quarantined and (
+            not allow_partial_publication or not publishable_batch.records or key_blocked
+        ):
+            repository.update(
+                run_id,
+                publication_status="BLOCKED",
+                finished_at=datetime.now(UTC),
+                error_code="SILVER_PARTIAL_KEY_SAFETY_BLOCKED" if key_blocked else None,
+            )
             result["status"] = "QUARANTINED"
             _log_report(requested_by, result)
             return result
@@ -495,6 +534,20 @@ def run_manual_cleaning(
 
         def record_publication(connection: Connection | None, snapshot_id: str) -> None:
             nonlocal publication_recorded
+            if approval_required():
+                if connection is None:
+                    with engine.begin() as transaction:
+                        record_publication(transaction, snapshot_id)
+                    return
+                recheck_approvals(connection, approvals)
+                for proof in sorted(approvals, key=lambda item: item["profile_id"]):
+                    approved_evidence(
+                        connection,
+                        proof["profile_id"],
+                        proof["fingerprint"],
+                        partial=bool(total_quarantined) and proof["profile_id"] == profile_id,
+                        expected=proof,
+                    )
             repository.update(
                 cleaning_run_id,
                 connection=connection,
@@ -531,6 +584,7 @@ def run_manual_cleaning(
             contracts=contracts,
             scope=scope,
             mode="production",
+            profile_approvals=approvals,
         )
         # Lựa chọn "active" dùng bộ dữ liệu hiện hành; mã cụ thể dùng đúng bộ dữ liệu đó.
         # Nếu không chọn bộ dữ liệu trước đó thì công bố một bộ mới độc lập.
@@ -539,6 +593,36 @@ def run_manual_cleaning(
             if base_snapshot == "active"
             else base_snapshot
         )
+        if approval_required():
+            if base:
+                inherited = (
+                    publisher.describe_snapshot(base).get("governance", {}).get("profile_approvals")
+                )
+                if not inherited:
+                    reject("SILVER_PARENT_APPROVAL_REQUIRED")
+                # Keep all contributing evidence; fail closed on mixed revisions.
+                for proof in inherited:
+                    if proof not in approvals:
+                        approvals.append(proof)
+            with engine.begin() as connection:
+                recheck_approvals(connection, approvals)
+                for proof in sorted(approvals, key=lambda item: item["profile_id"]):
+                    approved_evidence(
+                        connection,
+                        proof["profile_id"],
+                        proof["fingerprint"],
+                        partial=bool(total_quarantined) and proof["profile_id"] == profile_id,
+                        expected=proof,
+                    )
+            # Include the complete evidence in both manifest and idempotency hash.
+            publisher = SilverPublicationService(
+                repository=publisher.repository,
+                storage=storage,
+                contracts=contracts,
+                scope=scope,
+                mode="production",
+                profile_approvals=approvals,
+            )
         # Chuyển đúng các bản ghi đã qua làm sạch + chuẩn hóa và được thống kê trong báo cáo.
         # [SỬA - Vấn đề 1 & 2] Nếu có dòng bị cách ly, truyền kèm quarantine_report để merge giữ dữ liệu cũ
         # và gắn bằng chứng báo cáo cách ly vào manifest của snapshot mới.
@@ -575,7 +659,9 @@ def run_manual_cleaning(
         # Không đánh dấu thất bại nếu Silver đã được công bố nhưng bước cập nhật thông tin cuối cùng bị lỗi.
         if run_id is not None and not publication_committed:
             error_code = (
-                "PIPELINE_METADATA_UNAVAILABLE"
+                exc.code
+                if isinstance(exc, AppException)
+                else "PIPELINE_METADATA_UNAVAILABLE"
                 if isinstance(exc, SQLAlchemyError)
                 else "SILVER_PUBLICATION_REJECTED"
                 if isinstance(exc, SilverError)

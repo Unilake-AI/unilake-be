@@ -133,6 +133,7 @@ CLEANING_RUNS = Table(
     Column("records_published", BigInteger, nullable=False),
     Column("silver_snapshot_id", String(36)),
     Column("report_ref", JSON),
+    Column("profile_evidence", JSON),
     Column("quarantine_source", JSON),
     Column("error_code", String(80)),
     Column("started_at", DateTime(timezone=True), nullable=False),

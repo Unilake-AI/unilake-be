@@ -43,6 +43,10 @@ class ManualCleaningResponse(BaseModel):
     issues: list[dict[str, Any]]
     publication: dict[str, Any] | None
     quarantine_report: dict[str, Any] | None = None
+    profile_id: str | None = None
+    profile_fingerprint: str | None = None
+    profile_approval: dict[str, Any] | None = None
+    partial_key_check: dict[str, Any] | None = None
 
 
 Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.ADMIN, RoleCode.DATA_ADMIN))]
