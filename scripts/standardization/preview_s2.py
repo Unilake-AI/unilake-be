@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from app.modules.ingestion.contracts import BronzeBatch, MappingBinding
-from app.modules.pipeline.mapping_profiles import build_profile
-from app.modules.pipeline.schema_mapping import (
+from app.modules.pipeline.standardization.mapping_profiles import build_profile
+from app.modules.pipeline.standardization.schema_mapping import (
     MappingKey,
     MappingRegistry,
     SchemaMappingService,

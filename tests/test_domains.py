@@ -10,7 +10,7 @@ from app.modules.governance.service import GovernanceService
 from app.modules.ingestion.services.records import InMemoryBronzeRepository, ingest_records
 from app.modules.nlq.schema_retriever import retrieve_schema_context
 from app.modules.pipeline.contracts import InMemoryLayerPublisher
-from app.modules.pipeline.service import PipelineOrchestrator, PipelineQualityError
+from app.modules.pipeline.services.orchestrator import PipelineOrchestrator, PipelineQualityError
 from tests.fixtures.registry import sample_registry
 
 

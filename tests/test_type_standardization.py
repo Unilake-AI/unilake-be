@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from app.modules.pipeline.schema_mapping import MappedRow, MappingKey, MappingResult
-from app.modules.pipeline.type_standardization import (
+from app.modules.pipeline.standardization.schema_mapping import MappedRow, MappingKey, MappingResult
+from app.modules.pipeline.standardization.type_standardization import (
     ConversionConfigurationError,
     ConversionError,
     FieldOptions,

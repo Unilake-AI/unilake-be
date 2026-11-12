@@ -23,14 +23,14 @@ from app.main import app as application
 from app.modules.ingestion.readers.contract import ReadRequest
 from app.modules.ingestion.readers.factory import SourceReaderFactory
 from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
-from app.modules.pipeline import source_cleaning as runner
-from app.modules.pipeline.identity_contracts import CrosswalkEntry, CrosswalkSnapshot
+from app.modules.pipeline.contracts.identity import CrosswalkEntry, CrosswalkSnapshot
 from app.modules.pipeline.models import CLEANING_RUNS, PIPELINE_LINEAGE, QUARANTINE_RECORDS
-from app.modules.pipeline.router import router
-from app.modules.pipeline.silver_publication import SilverPublicationService
-from app.modules.pipeline.silver_repository import SILVER_TABLES, SilverRepository
-from app.modules.pipeline.silver_storage import LocalSilverStore
-from app.modules.pipeline.source_profiles import SourceProfile, load_profile
+from app.modules.pipeline.repositories.silver import SILVER_TABLES, SilverRepository
+from app.modules.pipeline.repositories.silver_storage import LocalSilverStore
+from app.modules.pipeline.routers.pipeline import router
+from app.modules.pipeline.services import source_cleaning as runner
+from app.modules.pipeline.services.source_profiles import SourceProfile, load_profile
+from app.modules.pipeline.silver.publication import SilverPublicationService
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -260,9 +260,6 @@ def test_file_to_cleaning_to_production_parquet(
     with engine.connect() as connection:
         assert connection.execute(select(CLEANING_RUNS)).first() is None
     assert SilverRepository(engine).head("production:institution") is None
-    result = runner.run_manual_cleaning(
-        42, requested_by="1", profile_id="positions", base_snapshot=None
-    )
     publisher = SilverPublicationService(
         repository=SilverRepository(engine),
         storage=storage,
@@ -270,12 +267,44 @@ def test_file_to_cleaning_to_production_parquet(
         scope=profile.scope,
     )
     if invalid:
-        assert result["status"] == "QUARANTINED"
-        assert result["records_quarantined"] == 1
+        # Chế độ nghiêm ngặt (tắt công bố một phần) vẫn chặn nếu còn dòng lỗi.
+        blocked = runner.run_manual_cleaning(
+            42,
+            requested_by="1",
+            profile_id="positions",
+            base_snapshot=None,
+            allow_partial_publication=False,
+        )
+        assert blocked["status"] == "QUARANTINED"
+        assert blocked["records_quarantined"] == 1
         assert publisher.read_active() == {}
+        # Mặc định cho phép công bố một phần dữ liệu sạch khi còn dòng cách ly.
+        result = runner.run_manual_cleaning(
+            42, requested_by="1", profile_id="positions", base_snapshot=None
+        )
+        assert result["status"] == "PUBLISHED_WITH_QUARANTINE"
+        assert result["records_passed"] == 1
+        assert result["records_quarantined"] == 1
+        assert result["quarantine_report"] is not None
+        assert result["publication"]["records_published"] == 1
+        [record] = publisher.read_active()["position"]
+        assert record["position_id"] == 7009
+        manifest = publisher.describe_snapshot(result["publication"]["snapshot_id"])
+        assert manifest["quarantine_report"]["sha256"] == result["quarantine_report"]["sha256"]
         with engine.begin() as conn:
-            assert len(conn.execute(select(QUARANTINE_RECORDS)).all()) == 1
+            assert len(conn.execute(select(QUARANTINE_RECORDS)).all()) == 2
+            statuses = (
+                conn.execute(
+                    select(CLEANING_RUNS.c.publication_status).order_by(CLEANING_RUNS.c.started_at)
+                )
+                .scalars()
+                .all()
+            )
+            assert statuses == ["BLOCKED", "PUBLISHED_WITH_QUARANTINE"]
     else:
+        result = runner.run_manual_cleaning(
+            42, requested_by="1", profile_id="positions", base_snapshot=None
+        )
         assert result["status"] == "PUBLISHED"
         assert result["publication"]["mode"] == "production"
         [record] = publisher.read_active()["position"]
@@ -288,6 +317,233 @@ def test_file_to_cleaning_to_production_parquet(
             assert (
                 conn.execute(select(CLEANING_RUNS.c.publication_status)).scalar_one() == "PUBLISHED"
             )
+    engine.dispose()
+
+
+def test_all_quarantined_rows_remain_blocked_even_with_partial_publication(tmp_path, monkeypatch):
+    payload = definition()
+    payload["source_table"] = "positions.csv"
+    profile = SourceProfile.model_validate(payload)
+    columns = list(profile.field_mapping)
+    rows = [["10", "", "Thiếu mã chức vụ", "Nhân viên"]]
+    path = tmp_path / profile.source_table
+    import csv
+
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(columns)
+        writer.writerows(rows)
+    options = {"delimiter": ",", "encoding": "utf-8", "has_header": True}
+    parsed = read_file_snapshot(
+        ReadRequest(profile.source_type, str(path), options, path.name),
+        SourceReaderFactory.get_reader(profile.source_type),
+        source_system_id="17",
+        data_source_id="21",
+        dataset_id="31",
+    )
+    uri = f"s3://{settings.minio_bucket_bronze}/hr/2026/11/09/job-42/{path.name}"
+    assert parsed.provenance is not None
+    parsed = replace(
+        parsed, provenance=replace(parsed.provenance, source_ref=uri, object_version_id="pinned")
+    )
+    assert parsed.provenance is not None
+    context = {
+        "ingestion_job_id": 42,
+        "status": "SUCCESS",
+        "job_type": "UPLOAD_V1",
+        "source_system_id": 17,
+        "dataset_source_id": 17,
+        "data_source_id": 21,
+        "dataset_id": 31,
+        "domain": "hr",
+        "layer_code": "BRONZE",
+        "source_type": profile.source_type,
+        "source_table": path.name,
+        "rows_read": 1,
+        "output": {
+            "uri": uri,
+            "version_id": "pinned",
+            "sha256": parsed.provenance.content_sha256,
+            "size_bytes": path.stat().st_size,
+            "source_type": profile.source_type,
+            "parser_options": options,
+        },
+    }
+    runner._validate_job_context(context)
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'metadata.db'}",
+        execution_options={"schema_translate_map": {"app": None}},
+    )
+    for table in [*SILVER_TABLES, CLEANING_RUNS, QUARANTINE_RECORDS, PIPELINE_LINEAGE]:
+        table.create(engine)
+    storage = LocalSilverStore(tmp_path / "silver")
+    monkeypatch.setattr(runner, "create_engine", lambda *_args, **_kwargs: engine)
+    monkeypatch.setattr(runner, "load_source_profile", lambda *_: profile)
+    monkeypatch.setattr(runner, "_job_context", lambda *_: context)
+    monkeypatch.setattr(
+        runner,
+        "_identity_service",
+        lambda *_: profile.services(CrosswalkSnapshot(profile.crosswalk_release, ())),
+    )
+    monkeypatch.setattr(runner, "read_file_snapshot", lambda *_args, **_kwargs: parsed)
+    client = MagicMock()
+    client.stat_object.return_value = SimpleNamespace(version_id="pinned", size=path.stat().st_size)
+    monkeypatch.setattr(runner, "source_reader_client", lambda *_: client)
+    monkeypatch.setattr(runner, "silver_writer_client", lambda: None)
+    monkeypatch.setattr(runner, "MinioSilverStore", lambda *_: storage)
+
+    result = runner.run_manual_cleaning(
+        42, requested_by="1", profile_id="positions", base_snapshot=None
+    )
+    assert result["status"] == "QUARANTINED"
+    assert result["records_passed"] == 0
+    assert result["records_quarantined"] == 1
+    with engine.begin() as conn:
+        assert conn.execute(select(CLEANING_RUNS.c.publication_status)).scalar_one() == "BLOCKED"
+    engine.dispose()
+
+
+def test_standardization_errors_are_quarantined_and_clean_rows_publish(tmp_path, monkeypatch):
+    payload = definition()
+    payload["source_table"] = "positions.csv"
+    profile = SourceProfile.model_validate(payload)
+    columns = list(profile.field_mapping)
+    # Dòng 1 hợp lệ; dòng 2 vượt qua cleaning nhưng thiếu crosswalk (SOURCE_ID_UNMAPPED);
+    # dòng 3 và 4 vượt qua cleaning nhưng cùng quy về 1 canonical key (CANONICAL_KEY_COLLISION).
+    rows = [
+        ["9", "NV", "Chuyên viên", "Nhân viên"],
+        ["10", "TP", "Trưởng phòng", "Nhân viên"],
+        ["11", "GDA", "Giám đốc 1", "Nhân viên"],
+        ["12", "GDB", "Giám đốc 2", "Nhân viên"],
+    ]
+    path = tmp_path / profile.source_table
+    import csv
+
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(columns)
+        writer.writerows(rows)
+    options = {"delimiter": ",", "encoding": "utf-8", "has_header": True}
+    parsed = read_file_snapshot(
+        ReadRequest(profile.source_type, str(path), options, path.name),
+        SourceReaderFactory.get_reader(profile.source_type),
+        source_system_id="17",
+        data_source_id="21",
+        dataset_id="31",
+    )
+    uri = f"s3://{settings.minio_bucket_bronze}/hr/2026/11/09/job-42/{path.name}"
+    assert parsed.provenance is not None
+    parsed = replace(
+        parsed, provenance=replace(parsed.provenance, source_ref=uri, object_version_id="pinned")
+    )
+    assert parsed.provenance is not None
+    context = {
+        "ingestion_job_id": 42,
+        "status": "SUCCESS",
+        "job_type": "UPLOAD_V1",
+        "source_system_id": 17,
+        "dataset_source_id": 17,
+        "data_source_id": 21,
+        "dataset_id": 31,
+        "domain": "hr",
+        "layer_code": "BRONZE",
+        "source_type": profile.source_type,
+        "source_table": path.name,
+        "rows_read": len(rows),
+        "output": {
+            "uri": uri,
+            "version_id": "pinned",
+            "sha256": parsed.provenance.content_sha256,
+            "size_bytes": path.stat().st_size,
+            "source_type": profile.source_type,
+            "parser_options": options,
+        },
+    }
+    runner._validate_job_context(context)
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'metadata.db'}",
+        execution_options={"schema_translate_map": {"app": None}},
+    )
+    for table in [*SILVER_TABLES, CLEANING_RUNS, QUARANTINE_RECORDS, PIPELINE_LINEAGE]:
+        table.create(engine)
+    crosswalk = CrosswalkSnapshot(
+        profile.crosswalk_release,
+        (
+            CrosswalkEntry(
+                "17",
+                "position",
+                ("9",),
+                7009,
+                "Đối chiếu theo mã nguồn",
+                datetime(2020, 1, 1, tzinfo=UTC),
+            ),
+            CrosswalkEntry(
+                "17",
+                "position",
+                ("11",),
+                7011,
+                "Đối chiếu theo mã nguồn",
+                datetime(2020, 1, 1, tzinfo=UTC),
+            ),
+            CrosswalkEntry(
+                "17",
+                "position",
+                ("12",),
+                7011,
+                "Đối chiếu theo mã nguồn",
+                datetime(2020, 1, 1, tzinfo=UTC),
+            ),
+        ),
+    )
+    storage = LocalSilverStore(tmp_path / "silver")
+    monkeypatch.setattr(runner, "create_engine", lambda *_args, **_kwargs: engine)
+    monkeypatch.setattr(runner, "load_source_profile", lambda *_: profile)
+    monkeypatch.setattr(runner, "_job_context", lambda *_: context)
+    monkeypatch.setattr(runner, "_identity_service", lambda *_: profile.services(crosswalk))
+    monkeypatch.setattr(runner, "read_file_snapshot", lambda *_args, **_kwargs: parsed)
+    client = MagicMock()
+    client.stat_object.return_value = SimpleNamespace(version_id="pinned", size=path.stat().st_size)
+    monkeypatch.setattr(runner, "source_reader_client", lambda *_: client)
+    monkeypatch.setattr(runner, "silver_writer_client", lambda: None)
+    monkeypatch.setattr(runner, "MinioSilverStore", lambda *_: storage)
+
+    result = runner.run_manual_cleaning(
+        42, requested_by="1", profile_id="positions", base_snapshot=None
+    )
+    assert result["status"] == "PUBLISHED_WITH_QUARANTINE"
+    assert result["records_read"] == 4
+    assert result["records_passed"] == 1
+    assert result["records_quarantined"] == 3
+    assert result["publication"]["records_published"] == 1
+    assert result["quarantine_report"] is not None
+
+    publisher = SilverPublicationService(
+        repository=SilverRepository(engine),
+        storage=storage,
+        contracts=profile.contracts,
+        scope=profile.scope,
+    )
+    [published_row] = publisher.read_active()["position"]
+    assert published_row["position_id"] == 7009
+
+    with engine.begin() as conn:
+        quarantined = (
+            conn.execute(select(QUARANTINE_RECORDS).order_by(QUARANTINE_RECORDS.c.record_position))
+            .mappings()
+            .all()
+        )
+        assert len(quarantined) == 3
+        assert quarantined[0]["record_position"] == 2
+        assert quarantined[0]["error_codes"] == ["SOURCE_ID_UNMAPPED"]
+        assert quarantined[1]["record_position"] == 3
+        assert quarantined[1]["error_codes"] == ["CANONICAL_KEY_COLLISION"]
+        assert quarantined[2]["record_position"] == 4
+        assert quarantined[2]["error_codes"] == ["CANONICAL_KEY_COLLISION"]
+        run_row = conn.execute(select(CLEANING_RUNS)).mappings().one()
+        assert run_row["publication_status"] == "PUBLISHED_WITH_QUARANTINE"
+        assert run_row["records_published"] == 1
+        assert run_row["records_quarantined"] == 3
+        assert run_row["quarantine_source"] is not None
     engine.dispose()
 
 
@@ -325,7 +581,7 @@ def test_api_uses_explicit_profile_and_authorization(monkeypatch, roles, expecte
             "publication": {"mode": "production"},
         }
 
-    monkeypatch.setattr("app.modules.pipeline.router.run_manual_cleaning", run)
+    monkeypatch.setattr("app.modules.pipeline.routers.pipeline.run_manual_cleaning", run)
     app = FastAPI()
     app.add_exception_handler(AppException, app_exception_handler)
     app.include_router(router)
@@ -337,6 +593,65 @@ def test_api_uses_explicit_profile_and_authorization(monkeypatch, roles, expecte
     assert bool(called) == (expected == 200)
     if called:
         assert called[0]["profile_id"] == "positions"
+        assert called[0]["allow_partial_publication"] is True
+
+
+@pytest.mark.parametrize(
+    ("raised", "expected_status", "expected_code", "expected_snippet"),
+    [
+        (LookupError("INGESTION_JOB_NOT_FOUND"), 404, "INGESTION_JOB_NOT_FOUND", "lần tải dữ liệu"),
+        (
+            ValueError("SUCCESSFUL_BRONZE_JOB_REQUIRED"),
+            409,
+            "SUCCESSFUL_BRONZE_JOB_REQUIRED",
+            "hoàn tất thành công",
+        ),
+        (
+            ValueError("SILVER_PUBLICATION_REJECTED:PARTIAL_PUBLICATION_NOT_ALLOWED"),
+            422,
+            "SILVER_PUBLICATION_REJECTED",
+            "công bố một phần",
+        ),
+        (
+            ValueError("SOURCE_LAYOUT_MISMATCH"),
+            422,
+            "SOURCE_LAYOUT_MISMATCH",
+            "Các cột trong tệp dữ liệu",
+        ),
+    ],
+)
+def test_api_returns_non_tech_vietnamese_errors(
+    monkeypatch, raised, expected_status, expected_code, expected_snippet
+):
+    from app.modules.pipeline.repositories import management_db
+
+    def fail(*_args, **_kwargs):
+        raise raised
+
+    monkeypatch.setattr("app.modules.pipeline.routers.pipeline.run_manual_cleaning", fail)
+    monkeypatch.setattr("app.modules.pipeline.routers.pipeline.preview_cleaning", fail)
+    app = FastAPI()
+    app.add_exception_handler(AppException, app_exception_handler)
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: {"sub": "1", "roles": ["DATA_ADMIN"]}
+    app.dependency_overrides[management_db.management_engine] = lambda: MagicMock()
+    client = TestClient(app)
+
+    run_resp = client.post(
+        "/pipeline/cleaning/ingestion-jobs/42",
+        json={"profile_id": "positions", "allow_partial_publication": False},
+    )
+    assert run_resp.status_code == expected_status
+    assert run_resp.json()["error"]["code"] == expected_code
+    assert expected_snippet in run_resp.json()["error"]["message"]
+
+    preview_resp = client.post(
+        "/pipeline/cleaning/ingestion-jobs/42/preview",
+        json={"profile_id": "positions"},
+    )
+    assert preview_resp.status_code == expected_status
+    assert preview_resp.json()["error"]["code"] == expected_code
+    assert expected_snippet in preview_resp.json()["error"]["message"]
 
 
 def test_application_does_not_register_sample_domain():
@@ -354,7 +669,7 @@ def test_application_does_not_register_sample_domain():
 async def test_source_preview_requires_explicit_columns(monkeypatch, allowed):
     from fastapi import Response
 
-    from app.modules.pipeline import quarantine_records_router as routes
+    from app.modules.pipeline.routers import quarantine_records as routes
 
     calls = []
 

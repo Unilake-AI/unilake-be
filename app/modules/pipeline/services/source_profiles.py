@@ -8,16 +8,26 @@ from typing import Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from app.modules.pipeline.duplicate_records import build_duplicate_profile
-from app.modules.pipeline.format_validation import SourceFormatOptions, build_format_profile
-from app.modules.pipeline.identity_contracts import CrosswalkSnapshot, digest
-from app.modules.pipeline.identity_standardization import (
+from app.modules.pipeline.cleaning.duplicate_records import build_duplicate_profile
+from app.modules.pipeline.cleaning.format_validation import (
+    SourceFormatOptions,
+    build_format_profile,
+)
+from app.modules.pipeline.contracts.identity import CrosswalkSnapshot, digest
+from app.modules.pipeline.standardization.identity_standardization import (
     IdentityStandardizationService,
     ValueDictionary,
 )
-from app.modules.pipeline.mapping_profiles import build_profile, pointer
-from app.modules.pipeline.schema_mapping import MappingKey, MappingRegistry, SchemaMappingService
-from app.modules.pipeline.type_standardization import FieldOptions, TypeStandardizationService
+from app.modules.pipeline.standardization.mapping_profiles import build_profile, pointer
+from app.modules.pipeline.standardization.schema_mapping import (
+    MappingKey,
+    MappingRegistry,
+    SchemaMappingService,
+)
+from app.modules.pipeline.standardization.type_standardization import (
+    FieldOptions,
+    TypeStandardizationService,
+)
 
 
 class SourceProfile(BaseModel):

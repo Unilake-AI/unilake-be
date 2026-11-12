@@ -17,15 +17,15 @@ from starlette.concurrency import run_in_threadpool
 from urllib3.exceptions import HTTPError
 
 from app.core.config import settings
-from app.modules.pipeline.quarantine_records import SourceReadLimitError, read_bronze_snapshot
-from app.modules.pipeline.source_profiles import SourceProfile
+from app.modules.pipeline.cleaning.quarantine import SourceReadLimitError, read_bronze_snapshot
+from app.modules.pipeline.services.source_profiles import SourceProfile
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from app.modules.ingestion.contracts.readers import ReadResult
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 _DOMAIN_PATTERN = re.compile(r"^[a-z][a-z0-9_-]{0,62}$")
 _PUBLISHED_STATUSES = frozenset({"PUBLISHED", "PUBLISHED_WITH_QUARANTINE"})
 

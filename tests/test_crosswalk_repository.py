@@ -8,8 +8,8 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateTable
 
 from app.infra.db.base import Base
-from app.modules.pipeline.identity_contracts import IdentityConfigurationError
-from app.modules.pipeline.identity_repository import (
+from app.modules.pipeline.contracts.identity import IdentityConfigurationError
+from app.modules.pipeline.repositories.identity import (
     IDENTITIES,
     IDENTITY_TABLES,
     RELEASES,

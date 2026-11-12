@@ -18,9 +18,9 @@ from app.core.config import settings
 from app.core.deps import require_role
 from app.core.exceptions import AppException
 from app.core.roles import RoleCode
-from app.modules.pipeline.management_db import management_engine
-from app.modules.pipeline.profile_models import SilverSourceProfile
-from app.modules.pipeline.source_profiles import SourceProfile
+from app.modules.pipeline.models.profiles import SilverSourceProfile
+from app.modules.pipeline.repositories.management_db import management_engine
+from app.modules.pipeline.services.source_profiles import SourceProfile
 from app.repositories.silver_profile_repo import validate_profile_source
 
 router = APIRouter(prefix="/pipeline/profiles", tags=["silver-profiles"])

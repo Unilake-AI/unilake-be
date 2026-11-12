@@ -11,31 +11,36 @@ from sqlalchemy import create_engine, event
 from app.infra.db.base import Base
 from app.modules.ingestion.contracts import BronzeBatch, FileProvenance, MappingBinding
 from app.modules.ingestion.readers.file_snapshot import fingerprint
-from app.modules.pipeline.cleaning_pipeline import (
+from app.modules.pipeline.cleaning.duplicate_records import build_duplicate_profile
+from app.modules.pipeline.cleaning.format_validation import (
+    SourceFormatOptions,
+    build_format_profile,
+)
+from app.modules.pipeline.cleaning.missing_values import MissingValueProfile, MissingValueRule
+from app.modules.pipeline.cleaning.pipeline import (
     CleaningNormalizationTask,
     CleaningPipeline,
     CleaningSilverPipeline,
     CleaningTask,
 )
-from app.modules.pipeline.duplicate_records import build_duplicate_profile
-from app.modules.pipeline.format_validation import (
-    SourceFormatOptions,
-    build_format_profile,
+from app.modules.pipeline.repositories.silver import SILVER_TABLES, SilverRepository
+from app.modules.pipeline.repositories.silver_storage import LocalSilverStore
+from app.modules.pipeline.silver.pipeline import SilverPipeline
+from app.modules.pipeline.silver.publication import SilverPublicationService
+from app.modules.pipeline.standardization.mapping_profiles import build_profile
+from app.modules.pipeline.standardization.schema_mapping import (
+    MappingRegistry,
+    SchemaMappingService,
 )
-from app.modules.pipeline.mapping_profiles import build_profile
-from app.modules.pipeline.missing_values import MissingValueProfile, MissingValueRule
-from app.modules.pipeline.schema_mapping import MappingRegistry, SchemaMappingService
-from app.modules.pipeline.silver_pipeline import SilverPipeline
-from app.modules.pipeline.silver_publication import SilverPublicationService
-from app.modules.pipeline.silver_repository import SILVER_TABLES, SilverRepository
-from app.modules.pipeline.silver_storage import LocalSilverStore
 from tests.test_identity_standardization import CONTRACTS, RECORDS
 from tests.test_identity_standardization import setup as identity_setup
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from app.modules.pipeline.identity_standardization import IdentityStandardizationService
+    from app.modules.pipeline.standardization.identity_standardization import (
+        IdentityStandardizationService,
+    )
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = (

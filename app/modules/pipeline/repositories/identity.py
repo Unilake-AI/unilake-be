@@ -13,14 +13,14 @@ from typing import TYPE_CHECKING, cast
 from sqlalchemy import Table, insert, select
 from sqlalchemy.exc import IntegrityError
 
-from app.modules.pipeline.identity_contracts import (
+from app.modules.pipeline.contracts.identity import (
     CrosswalkEntry,
     CrosswalkSnapshot,
     IdentityConfigurationError,
     source_key,
     utc,
 )
-from app.modules.pipeline.identity_models import (
+from app.modules.pipeline.models.identity import (
     CanonicalIdentity,
     CrosswalkRelease,
     IdentityCrosswalk,

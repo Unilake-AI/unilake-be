@@ -19,8 +19,8 @@ from app.core.deps import require_role
 from app.core.exceptions import AppException
 from app.core.roles import RoleCode
 from app.dependencies import get_db
+from app.modules.pipeline.cleaning.quarantine import SourceReadLimitError, read_quarantine_source
 from app.modules.pipeline.models import CLEANING_RUNS, DATASET_CATALOG, QUARANTINE_RECORDS
-from app.modules.pipeline.quarantine_records import SourceReadLimitError, read_quarantine_source
 
 router = APIRouter(
     prefix="/quarantine-records",
@@ -71,7 +71,7 @@ class QuarantineSummary(BaseModel):
     by_owner_department: list[dict[str, Any]]
     by_error_code: list[dict[str, Any]]
 
-
+# Hàm query lấy danh sách hồ sơ cách ly với các bộ lọc
 def _record_query(filters: QuarantineFilters) -> Any:
     query = (
         select(
@@ -115,7 +115,7 @@ async def _execute(db: AsyncSession, query: Any) -> list[dict[str, Any]]:
             status_code=503,
         ) from None
 
-
+# Hàm query lấy chi tiết hồ sơ cách ly
 async def _get_record(record_id: UUID, db: DB) -> dict[str, Any]:
     query = (
         _record_query(QuarantineFilters())
@@ -134,7 +134,7 @@ async def _get_record(record_id: UUID, db: DB) -> dict[str, Any]:
         )
     return rows[0]
 
-
+# Hàm lấy metadata của hồ sơ cách ly
 def _source_metadata(record: dict[str, Any]) -> dict[str, Any]:
     evidence = record["quarantine_source"]
     metadata = {

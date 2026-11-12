@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 from app.modules.ingestion.contracts import BronzeBatch, MappingBinding
-from app.modules.pipeline.mapping_profiles import build_profile, pointer
-from app.modules.pipeline.schema_mapping import (
+from app.modules.pipeline.standardization.mapping_profiles import build_profile, pointer
+from app.modules.pipeline.standardization.schema_mapping import (
     FieldMapping,
     MappingConfigurationError,
     MappingKey,
@@ -219,7 +219,7 @@ def test_invalid_handoff(change, code):
 
 
 def test_version_required_and_no_legacy_publish():
-    from app.modules.pipeline.service import PipelineOrchestrator
+    from app.modules.pipeline.services.orchestrator import PipelineOrchestrator
 
     with pytest.raises(MappingConfigurationError, match="INPUT_VERSION_REQUIRED"):
         service().map_batch(replace(batch(), metadata={}))

@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.modules.governance.contracts import LineageEvidence
-from app.modules.pipeline.lineage import silver_lineage
+from app.modules.pipeline.silver.lineage import silver_lineage
 
 
 def evidence(verified=True):

@@ -12,7 +12,7 @@ from urllib3.exceptions import HTTPError
 
 from app.core.config import settings
 from app.core.exceptions import AppException
-from app.modules.pipeline.silver_storage import SilverError
+from app.modules.pipeline.repositories.silver_storage import SilverError
 
 
 def management_engine() -> Generator[Engine, None, None]:

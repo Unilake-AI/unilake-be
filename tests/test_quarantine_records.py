@@ -10,8 +10,8 @@ from app.core.config import settings
 from app.modules.ingestion.readers.contract import ReadRequest
 from app.modules.ingestion.readers.csv_reader import CSVReader
 from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
-from app.modules.pipeline import quarantine_records as quarantine
-from app.modules.pipeline.cleaning_pipeline import CleaningPipeline
+from app.modules.pipeline.cleaning import quarantine
+from app.modules.pipeline.cleaning.pipeline import CleaningPipeline
 from tests.fixtures.cleaning import _demo_cleaning_task
 
 
@@ -30,6 +30,60 @@ def test_records_keep_original_position_and_group_rules_for_same_row():
     assert saved["error_codes"] == [issue.code]
     assert [entry["rule_version"] for entry in saved["issues"]] == [issue.rule_version, "2"]
     assert "data" not in saved
+
+
+def test_save_quarantine_records_merges_standardization_issues_and_maps_source_fields():
+    from types import SimpleNamespace
+
+    task = _demo_cleaning_task("hr")
+    second_record = {**task.batch.records[0], "id": "2"}
+    original = replace(
+        task.batch,
+        records=(task.batch.records[0], second_record),
+        record_locators=("record:1", "record:2"),
+    )
+    cleaned = CleaningPipeline().clean(replace(task, batch=original))
+    standardized = SimpleNamespace(
+        rejected_locators=("record:2",),
+        mapping_issues=(),
+        type_issues=(),
+        issues=(
+            SimpleNamespace(
+                locator="record:2",
+                field="position_id",
+                code="SOURCE_ID_UNMAPPED",
+                severity="error",
+                rule_version="s4-1",
+            ),
+            SimpleNamespace(
+                locator="record:2",
+                field="position_id,position_code",
+                code="CANONICAL_KEY_COLLISION",
+                severity="error",
+                rule_version="s4-1",
+            ),
+        ),
+    )
+    conn = MagicMock()
+    quarantine.save_quarantine_records(
+        conn,
+        "run",
+        original,
+        cleaned,
+        standardized=standardized,
+        field_mapping={"position_id": "id", "position_code": "code"},
+    )
+
+    _, saved = conn.execute.call_args.args[1]
+    assert saved["record_position"] == 2
+    assert saved["locator"] == "record:2"
+    assert {"CANONICAL_KEY_COLLISION", "SOURCE_ID_UNMAPPED"} <= set(saved["error_codes"])
+    std_issues = [
+        item for item in saved["issues"] if item.get("stage") == "IDENTITY_STANDARDIZATION"
+    ]
+    assert std_issues[0]["field"] == "id"
+    assert std_issues[0]["target_field"] == "position_id"
+    assert std_issues[1]["key_fields"] == ["id", "code"]
 
 
 @pytest.mark.parametrize(

@@ -21,7 +21,7 @@ from app.core.exceptions import AppException
 from app.core.roles import RoleCode
 from app.dependencies import get_db
 from app.modules.pipeline.models import CLEANING_RUNS
-from app.modules.pipeline.silver_storage import MinioSilverStore, ObjectRef
+from app.modules.pipeline.repositories.silver_storage import MinioSilverStore, ObjectRef
 from app.providers import silver_writer_client
 
 router = APIRouter(

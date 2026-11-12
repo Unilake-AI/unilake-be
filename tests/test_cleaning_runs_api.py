@@ -10,8 +10,8 @@ from fastapi.testclient import TestClient
 from app.core.deps import get_current_user
 from app.core.exceptions import AppException, app_exception_handler
 from app.dependencies import get_db
-from app.modules.pipeline import cleaning_runs_router as api
-from app.modules.pipeline.silver_storage import LocalSilverStore, checksum
+from app.modules.pipeline.repositories.silver_storage import LocalSilverStore, checksum
+from app.modules.pipeline.routers import cleaning_runs as api
 
 RUN_ID = "32840586-3d8e-4aeb-9b7e-af4388f4347d"
 

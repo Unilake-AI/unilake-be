@@ -10,19 +10,19 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from app.modules.pipeline.identity_contracts import (
+from app.modules.pipeline.contracts.identity import (
     CrosswalkSnapshot,
     IdentityConfigurationError,
     digest,
     source_key,
     utc,
 )
-from app.modules.pipeline.type_standardization import ConversionError, convert_value
+from app.modules.pipeline.standardization.type_standardization import ConversionError, convert_value
 
 if TYPE_CHECKING:
     from app.modules.ingestion.contracts import FileProvenance
-    from app.modules.pipeline.schema_mapping import MappingIssue, MappingKey
-    from app.modules.pipeline.type_standardization import (
+    from app.modules.pipeline.standardization.schema_mapping import MappingIssue, MappingKey
+    from app.modules.pipeline.standardization.type_standardization import (
         TypeIssue,
         TypeResult,
         TypeStandardizationService,

@@ -12,7 +12,7 @@ from openpyxl import Workbook
 
 from app.modules.ingestion.contracts import FileProvenance
 from app.modules.ingestion.readers.contract import ReadRequest
-from app.modules.pipeline.duplicate_records import (
+from app.modules.pipeline.cleaning.duplicate_records import (
     DuplicateKeyRule,
     DuplicateProfile,
     build_duplicate_profile,

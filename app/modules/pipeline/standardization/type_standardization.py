@@ -15,11 +15,11 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from app.modules.pipeline.schema_mapping import MappingKey
+from app.modules.pipeline.standardization.schema_mapping import MappingKey
 
 if TYPE_CHECKING:
     from app.modules.ingestion.contracts import FileProvenance
-    from app.modules.pipeline.schema_mapping import MappingIssue, MappingResult
+    from app.modules.pipeline.standardization.schema_mapping import MappingIssue, MappingResult
 
 
 class ConversionError(ValueError):

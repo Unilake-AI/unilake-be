@@ -8,10 +8,12 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.modules.ingestion.contracts import BronzeBatch
-    from app.modules.pipeline.identity_standardization import IdentityStandardizationService
-    from app.modules.pipeline.schema_mapping import SchemaMappingService
-    from app.modules.pipeline.silver_publication import PublicationReceipt, SilverPublicationService
-    from app.modules.pipeline.silver_storage import ObjectRef
+    from app.modules.pipeline.repositories.silver_storage import ObjectRef
+    from app.modules.pipeline.silver.publication import PublicationReceipt, SilverPublicationService
+    from app.modules.pipeline.standardization.identity_standardization import (
+        IdentityStandardizationService,
+    )
+    from app.modules.pipeline.standardization.schema_mapping import SchemaMappingService
 
 
 @dataclass(frozen=True)

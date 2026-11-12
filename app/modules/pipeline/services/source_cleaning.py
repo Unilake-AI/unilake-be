@@ -23,33 +23,40 @@ from app.modules.ingestion.contracts.readers import (
     read_file_snapshot,
     reader_to_batch,
 )
-from app.modules.pipeline.cleaning_pipeline import (
+from app.modules.pipeline.cleaning.duplicate_records import build_duplicate_profile
+from app.modules.pipeline.cleaning.format_validation import (
+    SourceFormatOptions,
+    build_format_profile,
+)
+from app.modules.pipeline.cleaning.missing_values import MissingValueProfile, MissingValueRule
+from app.modules.pipeline.cleaning.pipeline import (
     CleaningPipeline,
     CleaningTask,
 )
-from app.modules.pipeline.cleaning_runs import CleaningRunRepository
-from app.modules.pipeline.duplicate_records import build_duplicate_profile
-from app.modules.pipeline.format_validation import SourceFormatOptions, build_format_profile
-from app.modules.pipeline.identity_repository import CrosswalkRepository
-from app.modules.pipeline.lineage import record_pipeline_lineage_sync
-from app.modules.pipeline.missing_values import MissingValueProfile, MissingValueRule
-from app.modules.pipeline.quarantine_records import (
+from app.modules.pipeline.cleaning.quarantine import (
+    collect_standardization_issues,
     quarantine_source,
     save_quarantine_records,
 )
-from app.modules.pipeline.silver_pipeline import NormalizationTask, SilverPipeline
-from app.modules.pipeline.silver_publication import SilverPublicationService
-from app.modules.pipeline.silver_repository import SilverRepository
-from app.modules.pipeline.silver_storage import MinioSilverStore, SilverError, checksum
-from app.modules.pipeline.source_profiles import SourceProfile, _tuples
+from app.modules.pipeline.repositories.cleaning_runs import CleaningRunRepository
+from app.modules.pipeline.repositories.identity import CrosswalkRepository
+from app.modules.pipeline.repositories.silver import SilverRepository
+from app.modules.pipeline.repositories.silver_storage import MinioSilverStore, SilverError, checksum
+from app.modules.pipeline.services.source_profiles import SourceProfile, _tuples
+from app.modules.pipeline.silver.lineage import record_pipeline_lineage_sync
+from app.modules.pipeline.silver.pipeline import NormalizationTask, SilverPipeline
+from app.modules.pipeline.silver.publication import SilverPublicationService
 from app.providers import silver_writer_client, source_reader_client
 from app.repositories.silver_profile_repo import load_source_profile
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
 
-    from app.modules.pipeline.identity_standardization import IdentityStandardizationService
-    from app.modules.pipeline.schema_mapping import SchemaMappingService
+    from app.modules.pipeline.standardization.identity_standardization import (
+        IdentityResult,
+        IdentityStandardizationService,
+    )
+    from app.modules.pipeline.standardization.schema_mapping import SchemaMappingService
 
 logger = logging.getLogger(__name__)
 
@@ -323,11 +330,15 @@ def run_manual_cleaning(
     requested_by: str,
     profile_id: str,
     base_snapshot: str | None = "active",
+    # [SỬA - Vấn đề 1] Cho phép xuất bản riêng các dòng sạch khi tệp vẫn còn dòng bị cách ly.
+    allow_partial_publication: bool = True,
 ) -> dict[str, Any]:
     """Làm sạch và lưu vào Silver từ một lần thu thập thành công, dùng quy tắc của nguồn đã khai báo."""
     if base_snapshot is not None and (
         not isinstance(base_snapshot, str) or not base_snapshot.strip()
     ):
+        raise ValueError("INVALID_MANUAL_CLEANING_OPTIONS")
+    if type(allow_partial_publication) is not bool:
         raise ValueError("INVALID_MANUAL_CLEANING_OPTIONS")
     if type(ingestion_job_id) is not int or ingestion_job_id <= 0:
         raise ValueError("INVALID_INGESTION_JOB_ID")
@@ -358,22 +369,50 @@ def run_manual_cleaning(
         cleaning = _read_bronze(context, profile)
         cleaned = CleaningPipeline().clean(cleaning)
         report = cleaned.report
+
+        # [SỬA - Vấn đề 2] Chạy trước các bước chuẩn hóa (S2 Mapping -> S3 Type -> S4 Identity/Dictionary)
+        # ngay tại đây để phát hiện và gom các dòng bị loại ở bước chuẩn hóa vào cùng hồ sơ quarantine.
+        standardized: IdentityResult | None = None
+        std_rejected: set[str] = set()
+        std_issues: list[dict[str, Any]] = []
+        if cleaned.batch.records:
+            mapped = mapping.map_batch(cleaned.batch)
+            typed = identity.types.standardize(mapped)
+            standardized = identity.standardize(typed)
+            std_rejected = set(standardized.rejected_locators)
+            std_issues = [
+                item
+                for issues in collect_standardization_issues(
+                    standardized, field_mapping=profile.field_mapping
+                ).values()
+                for item in issues
+            ]
+
+        total_quarantined = report.records_quarantined + len(std_rejected)
+        total_passed = report.records_passed - len(std_rejected)
         counts = {
             "records_read": report.records_read,
-            "records_passed": report.records_passed,
-            "records_quarantined": report.records_quarantined,
+            "records_passed": total_passed,
+            "records_quarantined": total_quarantined,
             "records_collapsed": report.records_collapsed,
         }
-        # Giữ số liệu làm sạch kể cả khi chuẩn hóa hoặc công bố thất bại ở bước sau.
+        # Giữ số liệu làm sạch và chuẩn hóa kể cả khi bước công bố Silver thất bại ở bước sau.
         with engine.begin() as connection:
-            # Lưu đầy đủ thông tin lần chạy và số liệu cùng lúc trước khi công bố dữ liệu Silver.
+            # Lưu đầy đủ thông tin lần chạy và hồ sơ quarantine của cả Cleaning + Standardization.
             evidence = None
-            if report.records_quarantined:
+            if total_quarantined:
                 evidence = {
                     **quarantine_source(context, cleaning.batch),
                     "allowed_columns": profile.source_preview_columns,
                 }
-                save_quarantine_records(connection, run_id, cleaning.batch, cleaned)
+                save_quarantine_records(
+                    connection,
+                    run_id,
+                    cleaning.batch,
+                    cleaned,
+                    standardized=standardized,
+                    field_mapping=profile.field_mapping,
+                )
             repository.update(
                 run_id,
                 connection=connection,
@@ -392,8 +431,9 @@ def run_manual_cleaning(
             "entity": report.entity,
             "input_version": report.input_version,
             **counts,
-            "issues": [asdict(issue) for issue in report.issues],
+            "issues": [*[asdict(issue) for issue in report.issues], *std_issues],
             "publication": None,
+            "quarantine_report": None,
             "profile_id": profile_id,
             "profile_fingerprint": profile.fingerprint,
         }
@@ -402,14 +442,43 @@ def run_manual_cleaning(
         storage = MinioSilverStore(silver_writer_client(), settings.minio_bucket_silver)
         data = json.dumps(result, sort_keys=True, ensure_ascii=False).encode()
         ref = storage.put(f"silver/reports/{run_id}/report-{checksum(data)}.json", data)
-        storage.get(ref)
-        repository.update(run_id, report_ref=asdict(ref))
-        if report.records_quarantined:
+        storage.get(ref)  # Kiểm tra ghi thành công
+        repository.update(run_id, report_ref=asdict(ref))  # Lưu reference của report vào database
+        if total_quarantined:
+            # [SỬA - Vấn đề 1] Trả về tham chiếu báo cáo cách ly để người gọi/manifest đối chiếu được.
+            result["quarantine_report"] = asdict(ref)
+
+        # [SỬA - Vấn đề 2] Loại bỏ các dòng đã rớt ở S2/S3/S4 khỏi batch sạch trước khi đưa vào
+        # SilverPublicationService, để lớp publication nhận tập 100% hợp lệ và giữ nguyên invariant.
+        publishable_batch = (
+            replace(
+                cleaned.batch,
+                records=tuple(
+                    record
+                    for record, locator in zip(
+                        cleaned.batch.records, cleaned.batch.record_locators, strict=True
+                    )
+                    if locator not in std_rejected
+                ),
+                record_locators=tuple(
+                    locator
+                    for locator in cleaned.batch.record_locators
+                    if locator not in std_rejected
+                ),
+            )
+            if std_rejected
+            else cleaned.batch
+        )
+
+        # [SỬA - Vấn đề 1 & 2] Chỉ chặn công bố khi:
+        # 1) Có dòng bị cách ly (ở Cleaning hoặc Standardization) VÀ allow_partial_publication=False, HOẶC
+        # 2) Có dòng bị cách ly VÀ không còn dòng sạch nào để công bố (toàn bộ tệp đều lỗi).
+        if total_quarantined and (not allow_partial_publication or not publishable_batch.records):
             repository.update(run_id, publication_status="BLOCKED", finished_at=datetime.now(UTC))
             result["status"] = "QUARANTINED"
             _log_report(requested_by, result)
             return result
-        if not cleaned.batch.records:
+        if not publishable_batch.records:
             repository.update(run_id, publication_status="SKIPPED", finished_at=datetime.now(UTC))
             result["status"] = "EMPTY"
             _log_report(requested_by, result)
@@ -417,7 +486,10 @@ def run_manual_cleaning(
 
         repository.update(run_id, publication_status="RUNNING")
         contracts = profile.contracts
-        published_status = "PUBLISHED"
+        # [SỬA - Vấn đề 1 & 2] Phân biệt trạng thái công bố toàn phần ("PUBLISHED")
+        # và công bố một phần dữ liệu sạch khi vẫn còn dòng bị cách ly ("PUBLISHED_WITH_QUARANTINE").
+        quarantine_ref = ref if total_quarantined else None
+        published_status = "PUBLISHED_WITH_QUARANTINE" if total_quarantined else "PUBLISHED"
         cleaning_run_id = run_id
         publication_recorded = False
 
@@ -427,7 +499,7 @@ def run_manual_cleaning(
                 cleaning_run_id,
                 connection=connection,
                 publication_status=published_status,
-                records_published=report.records_passed,
+                records_published=total_passed,
                 silver_snapshot_id=snapshot_id,
                 finished_at=datetime.now(UTC),
             )
@@ -445,8 +517,8 @@ def run_manual_cleaning(
                         "domain": profile.domain,
                         "entity": profile.entity,
                         "records_read": report.records_read,
-                        "records_passed": report.records_passed,
-                        "records_quarantined": report.records_quarantined,
+                        "records_passed": total_passed,
+                        "records_quarantined": total_quarantined,
                         "records_collapsed": report.records_collapsed,
                         "status": published_status,
                     },
@@ -467,16 +539,19 @@ def run_manual_cleaning(
             if base_snapshot == "active"
             else base_snapshot
         )
-        # Chuyển đúng các bản ghi đã qua làm sạch và được thống kê trong báo cáo.
+        # Chuyển đúng các bản ghi đã qua làm sạch + chuẩn hóa và được thống kê trong báo cáo.
+        # [SỬA - Vấn đề 1 & 2] Nếu có dòng bị cách ly, truyền kèm quarantine_report để merge giữ dữ liệu cũ
+        # và gắn bằng chứng báo cáo cách ly vào manifest của snapshot mới.
         publication = SilverPipeline(publisher).run(
             (
                 NormalizationTask(
-                    batch=cleaned.batch,
+                    batch=publishable_batch,
                     mapping=mapping,
                     identity=identity,
                 ),
             ),
             base_snapshot=base,
+            quarantine_report=quarantine_ref,
         )
         publication_committed = True
         # Khi dùng lại bộ dữ liệu đã công bố, cần lưu riêng kết quả vì không có lần công bố mới.
@@ -489,7 +564,7 @@ def run_manual_cleaning(
                 "scope": publication.scope,
                 "mode": publication.mode,
                 "reused": publication.reused,
-                "records_published": report.records_passed,
+                "records_published": total_passed,
                 "base_snapshot": base,
                 "entity": profile.entity,
             },

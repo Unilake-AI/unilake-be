@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from app.modules.pipeline.cleaning_pipeline import (
+from app.modules.pipeline.cleaning.pipeline import (
     CleaningNormalizationTask,
     CleaningPipeline,
     CleaningReport,
     CleaningSilverPipeline,
     CleaningTask,
 )
-from app.modules.pipeline.service import PipelineOrchestrator
-from app.modules.pipeline.silver_pipeline import NormalizationTask, SilverPipeline
+from app.modules.pipeline.services.orchestrator import PipelineOrchestrator
+from app.modules.pipeline.silver.pipeline import NormalizationTask, SilverPipeline
 
 __all__ = [
     "CleaningNormalizationTask",

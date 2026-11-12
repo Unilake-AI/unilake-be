@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.core.exceptions import AppException, app_exception_handler
 from app.dependencies import get_db
-from app.modules.pipeline.data_quality_issues_router import _actor, router
+from app.modules.pipeline.routers.data_quality_issues import _actor, router
 from app.modules.staff.services import quality_issues as api
 
 

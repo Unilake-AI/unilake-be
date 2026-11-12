@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
-from app.modules.pipeline.issue_comparison import (
+from app.modules.pipeline.services.issue_comparison import (
     build_issue_comparison as build_issue_comparison,
 )
 

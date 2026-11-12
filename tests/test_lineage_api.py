@@ -17,7 +17,7 @@ from app.dependencies import get_db
 from app.main import create_app
 from app.modules.auth.models import LoginSession, Role, UserRole
 from app.modules.governance.models import PipelineLineage
-from app.modules.pipeline.lineage import record_pipeline_lineage_sync
+from app.modules.pipeline.silver.lineage import record_pipeline_lineage_sync
 from app.modules.users.models import User
 
 LINEAGE_ENDPOINT = "/api/v1/governance/lineage"
