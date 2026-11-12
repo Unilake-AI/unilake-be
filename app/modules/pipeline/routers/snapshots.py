@@ -15,13 +15,13 @@ from app.core.config import settings
 from app.core.deps import require_role
 from app.core.exceptions import AppException
 from app.core.roles import RoleCode
-from app.modules.pipeline.management_db import management_engine
-from app.modules.pipeline.profile_models import SilverActivation
-from app.modules.pipeline.silver_models import SilverHead, SilverSnapshot
-from app.modules.pipeline.silver_publication import SilverPublicationService
-from app.modules.pipeline.silver_repository import SilverRepository
-from app.modules.pipeline.silver_storage import MinioSilverStore
-from app.modules.pipeline.silver_validation import validate_snapshot
+from app.modules.pipeline.models.profiles import SilverActivation
+from app.modules.pipeline.models.silver import SilverHead, SilverSnapshot
+from app.modules.pipeline.repositories.management_db import management_engine
+from app.modules.pipeline.repositories.silver import SilverRepository
+from app.modules.pipeline.repositories.silver_storage import MinioSilverStore
+from app.modules.pipeline.silver.publication import SilverPublicationService
+from app.modules.pipeline.silver.validation import validate_snapshot
 from app.providers import silver_writer_client
 from app.repositories.silver_profile_repo import load_source_profile
 

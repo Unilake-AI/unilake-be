@@ -11,7 +11,7 @@ from openpyxl import Workbook
 
 from app.modules.ingestion.contracts import FileProvenance
 from app.modules.ingestion.readers.contract import ReadRequest
-from app.modules.pipeline.missing_values import (
+from app.modules.pipeline.cleaning.missing_values import (
     MissingValueProfile,
     MissingValueRule,
     apply_missing_value_rules,

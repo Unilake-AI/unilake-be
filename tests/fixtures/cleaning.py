@@ -7,11 +7,14 @@ from typing import Any
 from app.core.config import settings
 from app.modules.ingestion.contracts import BronzeBatch, FileProvenance, MappingBinding
 from app.modules.ingestion.readers.file_snapshot import fingerprint
-from app.modules.pipeline.cleaning_pipeline import CleaningTask
-from app.modules.pipeline.duplicate_records import build_duplicate_profile
-from app.modules.pipeline.format_validation import SourceFormatOptions, build_format_profile
-from app.modules.pipeline.mapping_profiles import pointer
-from app.modules.pipeline.missing_values import MissingValueProfile, MissingValueRule
+from app.modules.pipeline.cleaning.duplicate_records import build_duplicate_profile
+from app.modules.pipeline.cleaning.format_validation import (
+    SourceFormatOptions,
+    build_format_profile,
+)
+from app.modules.pipeline.cleaning.missing_values import MissingValueProfile, MissingValueRule
+from app.modules.pipeline.cleaning.pipeline import CleaningTask
+from app.modules.pipeline.standardization.mapping_profiles import pointer
 
 
 def _demo_cleaning_task(domain: str) -> CleaningTask:

@@ -15,12 +15,14 @@ from app.modules.governance.router import router as governance_router
 from app.modules.ingestion.router import router as ingestion_router
 from app.modules.nlq.dependencies import get_nlq_service
 from app.modules.nlq.router import router as nlq_router
-from app.modules.pipeline.cleaning_runs_router import router as cleaning_runs_router
-from app.modules.pipeline.data_quality_issues_router import router as data_quality_issues_router
-from app.modules.pipeline.profiles_router import router as profiles_router
-from app.modules.pipeline.quarantine_records_router import router as quarantine_records_router
-from app.modules.pipeline.router import router as pipeline_router
-from app.modules.pipeline.snapshots_router import router as snapshots_router
+from app.modules.pipeline.routers import (
+    cleaning_runs_router,
+    data_quality_issues_router,
+    pipeline_router,
+    profiles_router,
+    quarantine_records_router,
+    snapshots_router,
+)
 from app.modules.query_history.router import router as query_history_router
 from app.modules.staff.router import router as staff_router
 from app.modules.users.router import router as users_router

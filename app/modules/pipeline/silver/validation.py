@@ -11,8 +11,8 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from app.modules.pipeline.silver_storage import SilverError
-from app.modules.pipeline.type_standardization import ConversionError, convert_value
+from app.modules.pipeline.repositories.silver_storage import SilverError
+from app.modules.pipeline.standardization.type_standardization import ConversionError, convert_value
 
 
 @dataclass(frozen=True)

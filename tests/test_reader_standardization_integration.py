@@ -20,14 +20,18 @@ from app.modules.ingestion.readers.csv_reader import CSVReader
 from app.modules.ingestion.readers.excel_reader import ExcelReader
 from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
 from app.modules.ingestion.services.reader_batch import reader_to_batch
-from app.modules.pipeline.identity_contracts import CrosswalkEntry, CrosswalkSnapshot
-from app.modules.pipeline.identity_standardization import (
+from app.modules.pipeline.contracts.identity import CrosswalkEntry, CrosswalkSnapshot
+from app.modules.pipeline.standardization.identity_standardization import (
     IdentityStandardizationService,
     ValueDictionary,
 )
-from app.modules.pipeline.mapping_profiles import build_profile, pointer
-from app.modules.pipeline.schema_mapping import MappingKey, MappingRegistry, SchemaMappingService
-from app.modules.pipeline.type_standardization import (
+from app.modules.pipeline.standardization.mapping_profiles import build_profile, pointer
+from app.modules.pipeline.standardization.schema_mapping import (
+    MappingKey,
+    MappingRegistry,
+    SchemaMappingService,
+)
+from app.modules.pipeline.standardization.type_standardization import (
     ConversionConfigurationError,
     FieldOptions,
     TypeStandardizationService,

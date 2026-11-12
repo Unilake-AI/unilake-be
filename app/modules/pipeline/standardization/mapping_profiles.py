@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from app.modules.pipeline.schema_mapping import (
+from app.modules.pipeline.standardization.schema_mapping import (
     FieldMapping,
     MappingKey,
     MappingProfile,

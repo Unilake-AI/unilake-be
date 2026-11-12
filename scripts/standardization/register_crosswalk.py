@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 from sqlalchemy import URL, create_engine  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
-from app.modules.pipeline.identity_repository import CrosswalkRepository  # noqa: E402
+from app.modules.pipeline.repositories.identity import CrosswalkRepository  # noqa: E402
 
 
 def main() -> None:

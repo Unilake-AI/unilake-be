@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from preview_s2 import ROOT, preview_case
 
-from app.modules.pipeline.type_standardization import (
+from app.modules.pipeline.standardization.type_standardization import (
     FieldOptions,
     TypeStandardizationService,
 )

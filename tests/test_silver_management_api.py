@@ -24,11 +24,12 @@ from app.main import app as application
 from app.modules.datasources import datasets_router
 from app.modules.datasources.models import DataLayer, Dataset, DataSource, SourceSystem
 from app.modules.ingestion.contracts import FileProvenance
-from app.modules.pipeline import profiles_router, snapshots_router
-from app.modules.pipeline.profile_models import SilverActivation, SilverSourceProfile
-from app.modules.pipeline.silver_publication import SilverPublicationService
-from app.modules.pipeline.silver_repository import SILVER_TABLES, SilverRepository
-from app.modules.pipeline.silver_storage import LocalSilverStore
+from app.modules.pipeline.models.profiles import SilverActivation, SilverSourceProfile
+from app.modules.pipeline.repositories.silver import SILVER_TABLES, SilverRepository
+from app.modules.pipeline.repositories.silver_storage import LocalSilverStore
+from app.modules.pipeline.routers import profiles as profiles_router
+from app.modules.pipeline.routers import snapshots as snapshots_router
+from app.modules.pipeline.silver.publication import SilverPublicationService
 from app.repositories.silver_profile_repo import load_source_profile
 from tests.test_silver_publication import normalized
 from tests.test_source_cleaning import definition
@@ -99,7 +100,7 @@ def environment(tmp_path, monkeypatch):
     app.include_router(snapshots_router.router)
     app.include_router(datasets_router.router)
     monkeypatch.setattr(
-        "app.modules.pipeline.management_db.create_engine", lambda *_args, **_kwargs: engine
+        "app.modules.pipeline.repositories.management_db.create_engine", lambda *_args, **_kwargs: engine
     )
     user = {"sub": "1", "roles": ["DATA_ADMIN"]}
     app.dependency_overrides[get_current_user] = lambda: user

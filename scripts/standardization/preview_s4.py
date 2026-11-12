@@ -11,12 +11,12 @@ from datetime import datetime
 from preview_s2 import ROOT, map_case, preview_case
 from preview_s3 import encode
 
-from app.modules.pipeline.identity_contracts import CrosswalkEntry, CrosswalkSnapshot
-from app.modules.pipeline.identity_standardization import (
+from app.modules.pipeline.contracts.identity import CrosswalkEntry, CrosswalkSnapshot
+from app.modules.pipeline.standardization.identity_standardization import (
     IdentityStandardizationService,
     ValueDictionary,
 )
-from app.modules.pipeline.type_standardization import (
+from app.modules.pipeline.standardization.type_standardization import (
     FieldOptions,
     TypeStandardizationService,
 )

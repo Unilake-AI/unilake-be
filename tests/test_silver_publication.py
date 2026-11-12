@@ -19,21 +19,29 @@ from app.modules.ingestion.readers.csv_reader import CSVReader
 from app.modules.ingestion.readers.excel_reader import ExcelReader
 from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
 from app.modules.ingestion.services.reader_batch import reader_to_batch
-from app.modules.pipeline.mapping_profiles import build_profile
-from app.modules.pipeline.schema_mapping import MappingRegistry, SchemaMappingService
-from app.modules.pipeline.silver_pipeline import NormalizationTask, SilverPipeline
-from app.modules.pipeline.silver_publication import (
-    BusinessEvidence,
-    SilverPublicationService,
+from app.modules.pipeline.repositories.silver import (
+    RUNS,
+    SILVER_TABLES,
+    SNAPSHOTS,
+    SilverRepository,
 )
-from app.modules.pipeline.silver_repository import RUNS, SILVER_TABLES, SNAPSHOTS, SilverRepository
-from app.modules.pipeline.silver_storage import (
+from app.modules.pipeline.repositories.silver_storage import (
     LocalSilverStore,
     MinioSilverStore,
     SilverError,
     checksum,
 )
-from app.modules.pipeline.silver_validation import SilverIssue
+from app.modules.pipeline.silver.pipeline import NormalizationTask, SilverPipeline
+from app.modules.pipeline.silver.publication import (
+    BusinessEvidence,
+    SilverPublicationService,
+)
+from app.modules.pipeline.silver.validation import SilverIssue
+from app.modules.pipeline.standardization.mapping_profiles import build_profile
+from app.modules.pipeline.standardization.schema_mapping import (
+    MappingRegistry,
+    SchemaMappingService,
+)
 from tests.test_identity_standardization import CONTRACTS, RECORDS, setup, typed
 
 RULE_IDS = frozenset(
@@ -208,13 +216,47 @@ def test_quarantined_publication_merges_without_losing_parent_rows(environment):
             base_snapshot=second.snapshot_id,
             quarantine_report=report,
         )
+    with pytest.raises(SilverError, match="PARTIAL_PUBLICATION_NOT_ALLOWED"):
+        publisher.publish(
+            (replace(incoming, accepted=(), total_count=0, inspected_count=0),),
+            base_snapshot=second.snapshot_id,
+            quarantine_report=report,
+        )
     assert repo.head(publisher.scope) == second.snapshot_id
+
+
+def test_quarantined_publication_is_allowed_in_production_mode(environment):
+    _, repo, store = environment
+    prod_publisher = SilverPublicationService(
+        repository=repo, storage=store, contracts=CONTRACTS, scope="prod-partial", mode="production"
+    )
+    provenance = FileProvenance(
+        "SYNTH",
+        "1",
+        "positions",
+        "CSV",
+        "s3://bronze/hr/2026/11/10/job-1/positions.csv",
+        "v1",
+        "0" * 64,
+        "1" * 64,
+        "2" * 64,
+        "2026-01-01T00:00:00Z",
+        "parsed_record_ordinal",
+    )
+    original = replace(normalized(), provenance=provenance, input_version=provenance.input_version)
+    data = b'{"records_quarantined":1}'
+    report = store.put(f"report-{checksum(data)}.json", data)
+    receipt = prod_publisher.publish((original,), quarantine_report=report)
+    assert receipt.mode == "production"
+    assert len(prod_publisher.read_active()["position"]) == 1
+    manifest = json.loads(store.get(receipt.manifest))
+    assert manifest["quarantine_report"]["sha256"] == report.sha256
 
 
 def test_missing_updated_lineage_does_not_inherit_outdated_evidence(environment, monkeypatch):
     publisher, _, _ = environment
     first = publisher.publish(all_entities())
-    monkeypatch.setattr("app.modules.pipeline.silver_publication.silver_lineage", lambda **_: None)
+    monkeypatch.setattr("app.modules.pipeline.silver.publication.silver_lineage", lambda **_: None)
     second = publisher.publish(
         (normalized(changes={"position_name": "Changed"}),), base_snapshot=first.snapshot_id
     )

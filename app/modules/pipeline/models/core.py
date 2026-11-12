@@ -25,18 +25,19 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infra.db.base import Base
-from app.modules.pipeline.identity_models import (
+from app.modules.pipeline.models.identity import (
     CanonicalIdentity,
     CrosswalkRelease,
     IdentityCrosswalk,
 )
-from app.modules.pipeline.silver_models import SilverHead, SilverRun, SilverSnapshot
+from app.modules.pipeline.models.silver import SilverHead, SilverRun, SilverSnapshot
 
 __all__ = [
     "CLEANING_RUNS",
     "DATASET_CATALOG",
     "PIPELINE_LINEAGE",
     "QUARANTINE_RECORDS",
+    "Base",
     "CanonicalIdentity",
     "CrosswalkRelease",
     "DataProcessingRun",

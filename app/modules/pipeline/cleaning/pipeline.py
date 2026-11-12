@@ -7,17 +7,17 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Protocol
 from urllib.parse import urlsplit
 
-from app.modules.pipeline.duplicate_records import (
+from app.modules.pipeline.cleaning.duplicate_records import (
     DuplicateIssue,
     DuplicateProfile,
     detect_and_handle_duplicates,
 )
-from app.modules.pipeline.format_validation import (
+from app.modules.pipeline.cleaning.format_validation import (
     FormatIssue,
     FormatProfile,
     apply_format_rules,
 )
-from app.modules.pipeline.missing_values import (
+from app.modules.pipeline.cleaning.missing_values import (
     MissingValueIssue,
     MissingValueProfile,
     apply_missing_value_rules,
@@ -26,10 +26,12 @@ from app.shared.fingerprints import fingerprint
 
 if TYPE_CHECKING:
     from app.modules.ingestion.contracts import BronzeBatch
-    from app.modules.pipeline.identity_standardization import IdentityStandardizationService
-    from app.modules.pipeline.schema_mapping import SchemaMappingService
-    from app.modules.pipeline.silver_pipeline import SilverPipeline
-    from app.modules.pipeline.silver_publication import PublicationReceipt
+    from app.modules.pipeline.silver.pipeline import SilverPipeline
+    from app.modules.pipeline.silver.publication import PublicationReceipt
+    from app.modules.pipeline.standardization.identity_standardization import (
+        IdentityStandardizationService,
+    )
+    from app.modules.pipeline.standardization.schema_mapping import SchemaMappingService
 
 
 CleaningIssue = MissingValueIssue | FormatIssue | DuplicateIssue
@@ -216,7 +218,7 @@ class CleaningSilverPipeline:
         *,
         base_snapshot: str | None = None,
     ) -> CleaningPublicationResult:
-        from app.modules.pipeline.silver_pipeline import NormalizationTask
+        from app.modules.pipeline.silver.pipeline import NormalizationTask
 
         normalization_tasks = []
         reports = []

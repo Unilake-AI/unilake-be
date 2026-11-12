@@ -28,17 +28,17 @@ from app.modules.ingestion.models import IngestionJob
 from app.modules.ingestion.readers.contract import ReadRequest
 from app.modules.ingestion.readers.csv_reader import CSVReader
 from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
-from app.modules.pipeline import quarantine_records
-from app.modules.pipeline.issue_comparison import (
-    build_issue_comparison,
-    resolve_business_key_fields,
-)
+from app.modules.pipeline.cleaning import quarantine as quarantine_records
 from app.modules.pipeline.models import (
     CLEANING_RUNS,
     DATA_QUALITY_ISSUE_EVENTS,
     DATA_QUALITY_ISSUE_RECORDS,
     DATA_QUALITY_ISSUES,
     QUARANTINE_RECORDS,
+)
+from app.modules.pipeline.services.issue_comparison import (
+    build_issue_comparison,
+    resolve_business_key_fields,
 )
 from app.modules.users.models import Assignment, Department, Employee, Position, User
 

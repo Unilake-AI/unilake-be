@@ -25,11 +25,14 @@ from app.modules.pipeline.models import QUARANTINE_RECORDS
 from app.providers import bronze_reader_client
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from sqlalchemy.engine import Connection
 
     from app.modules.ingestion.contracts import BronzeBatch
     from app.modules.ingestion.contracts.readers import ReadResult
-    from app.modules.pipeline.cleaning_pipeline import CleaningResult
+    from app.modules.pipeline.cleaning.pipeline import CleaningResult
+    from app.modules.pipeline.standardization.identity_standardization import IdentityResult
 
 MAX_SOURCE_BYTES = 8 * 1024 * 1024
 MAX_EXCEL_EXPANDED_BYTES = 32 * 1024 * 1024
@@ -66,17 +69,94 @@ def quarantine_source(context: dict[str, Any], batch: BronzeBatch) -> dict[str, 
     }
 
 
-def save_quarantine_records(
-    conn: Connection, run_id: str, original: BronzeBatch, cleaned: CleaningResult
-) -> None:
-    # Một hồ sơ cho một dòng, dù bước kiểm tra phát hiện nhiều lỗi trên dòng đó.
+def _normalize_standardization_issue(
+    issue: Any,
+    *,
+    stage: str,
+    field_mapping: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Chuẩn hóa lỗi từ S2/S3/S4 về cùng định dạng hồ sơ quarantine và ánh xạ lại tên cột nguồn."""
+    target_field = getattr(issue, "field", None)
+    payload: dict[str, Any] = {
+        "code": issue.code,
+        "locator": issue.locator,
+        "field": target_field,
+        "severity": issue.severity,
+        "disposition": "QUARANTINED",
+        "stage": stage,
+        "rule_version": getattr(issue, "rule_version", None),
+    }
+    if not target_field:
+        return payload
+    mapping = field_mapping or {}
+    # Lỗi CANONICAL_KEY_COLLISION ghép nhiều trường khóa bằng dấu phẩy; tách để đánh dấu đủ cột nguồn.
+    if "," in target_field:
+        target_fields = [part.strip() for part in target_field.split(",") if part.strip()]
+        source_fields = [mapping.get(name, name) for name in target_fields]
+        payload["field"] = source_fields[0] if source_fields else target_field
+        payload["key_fields"] = source_fields
+        return payload
+    source_field = mapping.get(target_field, target_field)
+    payload["field"] = source_field
+    if source_field != target_field:
+        payload["target_field"] = target_field
+    return payload
+
+
+def collect_standardization_issues(
+    standardized: IdentityResult,
+    *,
+    field_mapping: Mapping[str, str] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Gom toàn bộ lỗi mức error của S2 (mapping), S3 (type) và S4 (identity/dictionary) theo locator."""
+    rejected = set(standardized.rejected_locators)
     by_locator: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    quarantined = set(cleaned.quarantined_locators)
-    for issue in cleaned.report.issues:
-        if issue.locator in quarantined and issue.disposition == "QUARANTINED":
-            by_locator[issue.locator].append(asdict(issue))
-    if set(by_locator) != quarantined or len(quarantined) != cleaned.report.records_quarantined:
+    if not rejected:
+        return by_locator
+    stage_batches = (
+        ("SCHEMA_MAPPING", standardized.mapping_issues),
+        ("TYPE_STANDARDIZATION", standardized.type_issues),
+        ("IDENTITY_STANDARDIZATION", standardized.issues),
+    )
+    for stage, stage_issues in stage_batches:
+        for issue in stage_issues:
+            if issue.locator in rejected and issue.severity == "error":
+                by_locator[issue.locator].append(
+                    _normalize_standardization_issue(
+                        issue, stage=stage, field_mapping=field_mapping
+                    )
+                )
+    if set(by_locator) != rejected:
         raise ValueError("QUARANTINE_RECORDS_INCOMPLETE")
+    return by_locator
+
+
+def save_quarantine_records(
+    conn: Connection,
+    run_id: str,
+    original: BronzeBatch,
+    cleaned: CleaningResult,
+    *,
+    standardized: IdentityResult | None = None,
+    field_mapping: Mapping[str, str] | None = None,
+) -> None:
+    # Một hồ sơ cho một dòng, dù bước kiểm tra phát hiện nhiều lỗi ở Cleaning hay Standardization.
+    by_locator: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    cleaning_quarantined = set(cleaned.quarantined_locators)
+    for issue in cleaned.report.issues:
+        if issue.locator in cleaning_quarantined and issue.disposition == "QUARANTINED":
+            by_locator[issue.locator].append(asdict(issue))
+    if (
+        set(by_locator) != cleaning_quarantined
+        or len(cleaning_quarantined) != cleaned.report.records_quarantined
+    ):
+        raise ValueError("QUARANTINE_RECORDS_INCOMPLETE")
+    # [SỬA - Vấn đề 2] Gộp thêm các dòng bị loại ở S2/S3/S4 vào cùng danh sách hồ sơ quarantine.
+    if standardized is not None:
+        std_issues = collect_standardization_issues(standardized, field_mapping=field_mapping)
+        for locator, issues in std_issues.items():
+            by_locator[locator].extend(issues)
+    all_quarantined = set(by_locator)
     conn.execute(
         insert(QUARANTINE_RECORDS),
         [
@@ -89,7 +169,7 @@ def save_quarantine_records(
                 "error_codes": sorted({issue["code"] for issue in by_locator[locator]}),
             }
             for position, locator in enumerate(original.record_locators, start=1)
-            if locator in quarantined
+            if locator in all_quarantined
         ],
     )
 

@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any, cast
 from sqlalchemy import Table, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
-from app.modules.pipeline.silver_models import SilverHead, SilverRun, SilverSnapshot
-from app.modules.pipeline.silver_storage import ObjectRef, SilverError
+from app.modules.pipeline.models.silver import SilverHead, SilverRun, SilverSnapshot
+from app.modules.pipeline.repositories.silver_storage import ObjectRef, SilverError
 
 if TYPE_CHECKING:
     from collections.abc import Callable

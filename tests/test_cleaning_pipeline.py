@@ -8,24 +8,26 @@ import pytest
 
 from app.modules.ingestion.contracts import BronzeBatch, FileProvenance, MappingBinding
 from app.modules.ingestion.readers.file_snapshot import fingerprint
-from app.modules.pipeline.cleaning_pipeline import (
+from app.modules.pipeline.cleaning.duplicate_records import DuplicateKeyRule, DuplicateProfile
+from app.modules.pipeline.cleaning.format_validation import (
+    FormatFieldRule,
+    FormatProfile,
+)
+from app.modules.pipeline.cleaning.missing_values import MissingValueProfile, MissingValueRule
+from app.modules.pipeline.cleaning.pipeline import (
     CleaningNormalizationTask,
     CleaningPipeline,
     CleaningSilverPipeline,
     CleaningTask,
 )
-from app.modules.pipeline.duplicate_records import DuplicateKeyRule, DuplicateProfile
-from app.modules.pipeline.format_validation import (
-    FormatFieldRule,
-    FormatProfile,
-)
-from app.modules.pipeline.missing_values import MissingValueProfile, MissingValueRule
-from app.modules.pipeline.silver_pipeline import SilverPipeline
+from app.modules.pipeline.silver.pipeline import SilverPipeline
 
 if TYPE_CHECKING:
-    from app.modules.pipeline.identity_standardization import IdentityStandardizationService
-    from app.modules.pipeline.schema_mapping import SchemaMappingService
-    from app.modules.pipeline.silver_publication import SilverPublicationService
+    from app.modules.pipeline.silver.publication import SilverPublicationService
+    from app.modules.pipeline.standardization.identity_standardization import (
+        IdentityStandardizationService,
+    )
+    from app.modules.pipeline.standardization.schema_mapping import SchemaMappingService
 
 
 def batch() -> BronzeBatch:

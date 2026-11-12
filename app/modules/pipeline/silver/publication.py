@@ -13,25 +13,28 @@ from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 
 from app.modules.governance.contracts import LineageEvidence, SnapshotLineage
-from app.modules.pipeline.identity_contracts import digest
-from app.modules.pipeline.lineage import silver_lineage
-from app.modules.pipeline.schema_mapping import MappingKey
-from app.modules.pipeline.silver_storage import ObjectRef, SilverError, checksum
-from app.modules.pipeline.silver_validation import (
+from app.modules.pipeline.contracts.identity import digest
+from app.modules.pipeline.repositories.silver_storage import ObjectRef, SilverError, checksum
+from app.modules.pipeline.silver.lineage import silver_lineage
+from app.modules.pipeline.silver.validation import (
     SilverIssue,
     arrow_schema,
     parquet_bytes,
     read_parquet,
     validate_snapshot,
 )
-from app.modules.pipeline.type_standardization import TypeStandardizationService
+from app.modules.pipeline.standardization.schema_mapping import MappingKey
+from app.modules.pipeline.standardization.type_standardization import TypeStandardizationService
 
 if TYPE_CHECKING:
-    from app.modules.pipeline.identity_standardization import IdentityIssue, IdentityResult
-    from app.modules.pipeline.schema_mapping import MappingIssue
-    from app.modules.pipeline.silver_repository import SilverRepository
-    from app.modules.pipeline.silver_storage import SilverObjectStore
-    from app.modules.pipeline.type_standardization import TypeIssue
+    from app.modules.pipeline.repositories.silver import SilverRepository
+    from app.modules.pipeline.repositories.silver_storage import SilverObjectStore
+    from app.modules.pipeline.standardization.identity_standardization import (
+        IdentityIssue,
+        IdentityResult,
+    )
+    from app.modules.pipeline.standardization.schema_mapping import MappingIssue
+    from app.modules.pipeline.standardization.type_standardization import TypeIssue
 
 
 def upstream_issues(result: IdentityResult) -> tuple[MappingIssue | TypeIssue | IdentityIssue, ...]:
@@ -298,6 +301,7 @@ class SilverPublicationService:
             missing_entities=tuple(sorted(missing)),
         )
 
+    # Hàm publish db silver
     def publish(
         self,
         results: Sequence[IdentityResult],
@@ -308,7 +312,13 @@ class SilverPublicationService:
         if not results:
             raise SilverError("NO_INPUT_BATCHES")
         if quarantine_report is not None:
-            if self.mode != "test" or len(results) != 1 or not results[0].accepted:
+            # [SỬA - Vấn đề 1] Cho phép xuất bản một phần (kèm báo cáo cách ly) ở cả production và test.
+            # Vẫn giữ điều kiện an toàn: chỉ áp dụng cho đúng 1 bảng/lô đầu vào và phải còn ít nhất 1 bản ghi sạch.
+            if (
+                self.mode not in {"production", "test"}
+                or len(results) != 1
+                or not results[0].accepted
+            ):
                 raise SilverError("PARTIAL_PUBLICATION_NOT_ALLOWED")
             # Phải đọc được báo cáo cách ly trước khi gắn báo cáo vào bộ dữ liệu.
             self.storage.get(quarantine_report)

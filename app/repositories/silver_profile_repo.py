@@ -8,8 +8,8 @@ from sqlalchemy import select
 
 from app.core.exceptions import AppException
 from app.modules.datasources.models import DataLayer, Dataset, DataSource, SourceSystem
-from app.modules.pipeline.profile_models import SilverSourceProfile
-from app.modules.pipeline.source_profiles import SourceProfile, load_profile
+from app.modules.pipeline.models.profiles import SilverSourceProfile
+from app.modules.pipeline.services.source_profiles import SourceProfile, load_profile
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Engine
