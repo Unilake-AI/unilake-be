@@ -61,6 +61,7 @@ class CleaningRunRead(BaseModel):
     records_published: int
     silver_snapshot_id: str | None
     report_available: bool
+    profile_evidence: dict[str, Any] | None = None
     error_code: str | None
     started_at: AwareDatetime
     finished_at: AwareDatetime | None

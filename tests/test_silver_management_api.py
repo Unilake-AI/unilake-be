@@ -24,7 +24,13 @@ from app.main import app as application
 from app.modules.datasources import datasets_router
 from app.modules.datasources.models import DataLayer, Dataset, DataSource, SourceSystem
 from app.modules.ingestion.contracts import FileProvenance
-from app.modules.pipeline.models.profiles import SilverActivation, SilverSourceProfile
+from app.modules.pipeline.models.profiles import (
+    SilverActivation,
+    SilverDomainOwner,
+    SilverProfileApproval,
+    SilverProfileRevision,
+    SilverSourceProfile,
+)
 from app.modules.pipeline.repositories.silver import SILVER_TABLES, SilverRepository
 from app.modules.pipeline.repositories.silver_storage import LocalSilverStore
 from app.modules.pipeline.routers import profiles as profiles_router
@@ -46,7 +52,16 @@ def environment(tmp_path, monkeypatch):
         f"sqlite:///{tmp_path / 'management.db'}",
         execution_options={"schema_translate_map": {"app": None}},
     )
-    for model in (SourceSystem, DataLayer, Dataset, DataSource, SilverSourceProfile):
+    for model in (
+        SourceSystem,
+        DataLayer,
+        Dataset,
+        DataSource,
+        SilverSourceProfile,
+        SilverProfileRevision,
+        SilverDomainOwner,
+        SilverProfileApproval,
+    ):
         table = cast("Table", model.__table__)
         if model is DataSource:
             # SQLite dùng bản tương đương của giá trị mặc định JSON PostgreSQL.
@@ -100,7 +115,8 @@ def environment(tmp_path, monkeypatch):
     app.include_router(snapshots_router.router)
     app.include_router(datasets_router.router)
     monkeypatch.setattr(
-        "app.modules.pipeline.repositories.management_db.create_engine", lambda *_args, **_kwargs: engine
+        "app.modules.pipeline.repositories.management_db.create_engine",
+        lambda *_args, **_kwargs: engine,
     )
     user = {"sub": "1", "roles": ["DATA_ADMIN"]}
     app.dependency_overrides[get_current_user] = lambda: user
@@ -237,7 +253,7 @@ def test_snapshot_read_and_activation_are_verified_and_audited(environment, tmp_
         assert row["previous_snapshot_id"] == second.snapshot_id
         assert row["activated_by"] == "1"
     # File đã bị thay đổi không được dùng để chọn phiên bản hiện hành.
-    object_path = next((tmp_path / "silver").rglob("*manifest*.json"))
+    object_path = next(store.root.rglob("*manifest*.json"))
     object_path.write_text("{}", encoding="utf-8")
     bad_id = first.snapshot_id if first.snapshot_id in str(object_path) else second.snapshot_id
     assert (

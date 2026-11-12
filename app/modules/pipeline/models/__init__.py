@@ -19,7 +19,13 @@ from app.modules.pipeline.models.identity import (
     CrosswalkRelease,
     IdentityCrosswalk,
 )
-from app.modules.pipeline.models.profiles import SilverActivation, SilverSourceProfile
+from app.modules.pipeline.models.profiles import (
+    SilverActivation,
+    SilverDomainOwner,
+    SilverProfileApproval,
+    SilverProfileRevision,
+    SilverSourceProfile,
+)
 from app.modules.pipeline.models.silver import SilverHead, SilverRun, SilverSnapshot
 
 __all__ = [
@@ -36,7 +42,10 @@ __all__ = [
     "DataProcessingRun",
     "IdentityCrosswalk",
     "SilverActivation",
+    "SilverDomainOwner",
     "SilverHead",
+    "SilverProfileApproval",
+    "SilverProfileRevision",
     "SilverRun",
     "SilverSnapshot",
     "SilverSourceProfile",

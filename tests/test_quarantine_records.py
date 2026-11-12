@@ -15,6 +15,25 @@ from app.modules.pipeline.cleaning.pipeline import CleaningPipeline
 from tests.fixtures.cleaning import _demo_cleaning_task
 
 
+def test_mapping_quarantine_keeps_pinned_mapping_version():
+    from app.modules.pipeline.standardization.schema_mapping import MappingIssue
+    from tests.test_identity_standardization import setup, typed
+
+    types, identity = setup()
+    standardized = identity.standardize(typed(types))
+    standardized = replace(
+        standardized,
+        accepted=(),
+        rejected_locators=("record:0",),
+        mapping_issues=(
+            MappingIssue("SOURCE_FIELD_MISSING", "error", "record:0", "position_code"),
+        ),
+    )
+    [issue] = quarantine.collect_standardization_issues(standardized)["record:0"]
+    assert issue["rule_version"] == standardized.key.mapping_version
+    assert issue["stage"] == "SCHEMA_MAPPING"
+
+
 def test_records_keep_original_position_and_group_rules_for_same_row():
     task = _demo_cleaning_task("hr")
     original = replace(task.batch, records=({**task.batch.records[0], "id": ""},))
