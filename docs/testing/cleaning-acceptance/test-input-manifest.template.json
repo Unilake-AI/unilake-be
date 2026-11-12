@@ -1,0 +1,55 @@
+{
+  "package_id": "replace-with-test-package-name",
+  "purpose": "live-backend-acceptance",
+  "approval_status": "NEEDS_DOMAIN_OWNER_APPROVAL",
+  "data_origin": "synthetic-or-consistently-anonymized",
+  "environment": {
+    "api_base_url": "http://127.0.0.1:8000/api/v1",
+    "dedicated_test_database_confirmed": false,
+    "machine_ram_gib": null,
+    "machine_cpu_cores": null,
+    "target_files_per_hour": null,
+    "target_completion_seconds": null,
+    "concurrent_requests": 1
+  },
+  "files": [
+    {
+      "relative_path": "domains/academic/course/S0-clean/course.csv",
+      "domain": "academic",
+      "entity": "course",
+      "scenario": "clean-smoke",
+      "format": "CSV",
+      "parser_options": {"encoding": "utf-8", "delimiter": ","},
+      "rows_excluding_header": null,
+      "bytes": null,
+      "sha256": null,
+      "generator_seed": null,
+      "profile_id": null,
+      "profile_revision": null,
+      "profile_fingerprint": null,
+      "source_system_id": null,
+      "data_source_id": null,
+      "dataset_id": null,
+      "crosswalk_release": null,
+      "parent_entities_required": [],
+      "snapshot_or_delta": "TO_BE_CONFIRMED",
+      "expected": {
+        "ingestion_status": "SUCCESS",
+        "records_passed": null,
+        "records_quarantined": 0,
+        "records_collapsed": 0,
+        "records_published": null,
+        "publication_status": "TO_BE_CONFIRMED_AFTER_PROFILE_REVIEW",
+        "issues_by_locator": []
+      }
+    }
+  ],
+  "instructions": [
+    "This JSON is a preparation sidecar, not a SourceProfile or an API request.",
+    "Copy a file entry for each domain/entity/scenario; replace examples with actual source names.",
+    "Fill null fields from measured files and the actual test environment; do not guess IDs or counts.",
+    "Do not store passwords, access tokens, or raw personal data in this manifest.",
+    "Keep original source basename in separate scenario directories when reusing one source profile.",
+    "Expected errors must reference the locator returned by the configured parser and reviewed rules."
+  ]
+}

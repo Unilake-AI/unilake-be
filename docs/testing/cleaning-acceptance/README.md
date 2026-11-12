@@ -1,5 +1,9 @@
 # Kiểm thử chất lượng Cleaning theo mã nguồn
 
+Chạy dịch vụ thật không cần FE: [Hướng dẫn BE live và bộ file cần chuẩn bị](D:/Caps1/unilake-be/docs/testing/cleaning-acceptance/live-backend-guide.md).
+
+Báo cáo đầy đủ về yêu cầu, thay đổi code, bằng chứng và điều kiện nghiệm thu: [Báo cáo xử lý task](D:/Caps1/unilake-be/docs/testing/cleaning-acceptance/task-implementation-report.md).
+
 Ngày lập: 12/11/2026. Phạm vi gồm acceptance/regression cho Cleaning Sprint 4 và bổ sung kiểm soát phê duyệt, lịch sử rule, publication để chuẩn bị production. Không triển khai lại engine Cleaning. Xem [production readiness và hướng dẫn test lại](production-readiness.md).
 
 ## 1. Căn cứ và cách hiểu yêu cầu
