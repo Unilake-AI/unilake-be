@@ -212,6 +212,56 @@ def test_excel_numeric_values_are_validated_and_canonicalized_without_locale_gue
     assert result.normalized_values_by_field == {"credits": 1, "fee": 1}
 
 
+def test_primary_and_reference_ids_keep_source_values_and_reject_float_coercion():
+    schema = json.loads((ROOT / "docs/data-schema/hr_v1.schema.json").read_text())
+    id_profile = build_format_profile(
+        schema,
+        domain="hr",
+        entity="assignment",
+        version="test",
+        target_to_source={"assignment_id": "source_assignment", "employee_id": "source_employee"},
+    )
+    assert all(rule.preserve_source_id for rule in id_profile.rules)
+    result = apply_format_rules(
+        columns=["source_assignment", "source_employee"],
+        rows=[("007", "007"), ("7", 7), (7.0, "007"), ("8", Decimal("7"))],
+        locators=("record:1", "record:2", "record:3", "record:4"),
+        profile=id_profile,
+        batch_id="batch-1",
+        provenance=provenance(),
+    )
+    assert [record.values for record in result.passed] == [
+        {"source_assignment": "007", "source_employee": "007"},
+        {"source_assignment": "7", "source_employee": 7},
+    ]
+    assert [record.locator for record in result.quarantined] == ["record:3", "record:4"]
+    assert {issue.code for issue in result.issues} == {"SOURCE_ID_TYPE_ERROR"}
+    assert result.quarantined[0].values["source_assignment"] == 7.0
+    assert result.normalized_values_by_field == {}
+
+
+@pytest.mark.parametrize("field", ["assignment_id", "employee_id"])
+@pytest.mark.parametrize(
+    "options",
+    [
+        SourceFormatOptions(trim=True),
+        SourceFormatOptions(unicode_nfc=True),
+        SourceFormatOptions(aliases=(("007", "7"),)),
+    ],
+)
+def test_source_ids_cannot_be_changed_by_format_options(field, options):
+    schema = json.loads((ROOT / "docs/data-schema/hr_v1.schema.json").read_text())
+    with pytest.raises(ValueError, match=f"FORMAT_SOURCE_ID_OPTIONS_UNSAFE:{field}"):
+        build_format_profile(
+            schema,
+            domain="hr",
+            entity="assignment",
+            version="test",
+            target_to_source={field: "source_id"},
+            source_options={field: options},
+        )
+
+
 def test_only_explicitly_configured_aliases_and_trimming_are_applied():
     result = apply_format_rules(
         columns=["employee_code", "status", "fee", "start_date", "active"],

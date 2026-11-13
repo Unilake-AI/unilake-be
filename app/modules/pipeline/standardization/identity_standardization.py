@@ -223,8 +223,10 @@ class IdentityStandardizationService:
             issues.append(IdentityIssue(locator, field, code, "error", self.version))
 
         def resolve(namespace: str, entity: str, raw: object) -> int | None:
-            # Mã chỉ có nghĩa trong namespace + entity và thời gian hiệu lực crosswalk.
-            # Không đoán hai mã giống nhau ở hai hệ thống là cùng một đối tượng.
+            # Tra đúng mã trong bảng đối chiếu của nguồn và loại dữ liệu đang xử lý.
+            # Chỉ đổi "007" sang mã nội bộ 7 nếu bảng này đã ghi rõ quan hệ đó.
+            # Chưa có đối chiếu thì báo lỗi để kiểm tra, không tự bỏ số 0 ở đầu.
+            # Mã gốc vẫn nằm trong Bronze; vị trí dòng được giữ để truy lại khi cần.
             try:
                 key = source_key((raw,))
             except IdentityConfigurationError:

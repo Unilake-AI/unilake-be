@@ -12,12 +12,13 @@ from app.modules.ingestion.readers.csv_reader import CSVReader
 from app.modules.ingestion.readers.file_snapshot import read_file_snapshot
 from app.modules.pipeline.cleaning import quarantine
 from app.modules.pipeline.cleaning.pipeline import CleaningPipeline
+from app.modules.pipeline.standardization.identity_standardization import IdentityIssue
 from tests.fixtures.cleaning import _demo_cleaning_task
+from tests.test_identity_standardization import setup, typed
 
 
 def test_mapping_quarantine_keeps_pinned_mapping_version():
     from app.modules.pipeline.standardization.schema_mapping import MappingIssue
-    from tests.test_identity_standardization import setup, typed
 
     types, identity = setup()
     standardized = identity.standardize(typed(types))
@@ -52,8 +53,6 @@ def test_records_keep_original_position_and_group_rules_for_same_row():
 
 
 def test_save_quarantine_records_merges_standardization_issues_and_maps_source_fields():
-    from types import SimpleNamespace
-
     task = _demo_cleaning_task("hr")
     second_record = {**task.batch.records[0], "id": "2"}
     original = replace(
@@ -62,19 +61,23 @@ def test_save_quarantine_records_merges_standardization_issues_and_maps_source_f
         record_locators=("record:1", "record:2"),
     )
     cleaned = CleaningPipeline().clean(replace(task, batch=original))
-    standardized = SimpleNamespace(
+    types, identity = setup()
+    # Dùng đúng cấu trúc kết quả thật, rồi thay các lỗi cần kiểm tra ở hai dòng nguồn.
+    standardized = replace(
+        identity.standardize(typed(types)),
+        accepted=(),
         rejected_locators=("record:2",),
         mapping_issues=(),
         type_issues=(),
         issues=(
-            SimpleNamespace(
+            IdentityIssue(
                 locator="record:2",
                 field="position_id",
                 code="SOURCE_ID_UNMAPPED",
                 severity="error",
                 rule_version="s4-1",
             ),
-            SimpleNamespace(
+            IdentityIssue(
                 locator="record:2",
                 field="position_id,position_code",
                 code="CANONICAL_KEY_COLLISION",

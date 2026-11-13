@@ -1,4 +1,4 @@
-"""Source-profile acceptance matrix; synthetic data, no production policy approval."""
+"""Kiểm tra quy định của từng nguồn bằng dữ liệu giả lập, không coi là phê duyệt sử dụng thật."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import hashlib
 import json
 from contextlib import contextmanager
 from dataclasses import asdict, replace
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -69,8 +70,15 @@ def source_profile(domain, extension):
         field_mapping={name: f"src_{name}" for name in fields if not name.startswith("_")},
         dictionaries={name: {} for name, spec in fields.items() if "enum" in spec},
         crosswalk_release="acceptance-only",
-        effective_at="2026-11-12T00:00:00Z",
+        effective_at=datetime(2026, 11, 12, tzinfo=UTC),
     )
+
+
+def _next_fixture_id(value: object) -> str:
+    """Tạo mã khác cho tình huống kiểm thử từ mã số đã biết, không áp dụng cho dữ liệu thật."""
+    assert isinstance(value, str | int)
+    assert not isinstance(value, bool)
+    return str(int(value) + 1)
 
 
 @pytest.mark.parametrize("domain", DOMAINS)
@@ -106,7 +114,7 @@ def test_partial_keys_across_rejected_stages(record_property, domain, scenario, 
                 else str(valid[field]) + "X"
             )
         if domain == "academic":
-            invalid["course_code"] = "IT102"  # Preserve the declared course code pattern.
+            invalid["course_code"] = "IT102"  # Giữ đúng mẫu mã môn học đã khai báo.
     pairs = [("record:1", valid), ("record:2", invalid)]
     if reverse:
         pairs.reverse()
@@ -188,10 +196,12 @@ def test_source_profile_matrix(tmp_path, monkeypatch, record_property, domain, e
         row[name] = None
         expected.update(passed=0, quarantined=1, code="REQUIRED_VALUE_MISSING")
     elif scenario == "nullable_null":
+        assert nullable is not None
         row[nullable] = None
     elif scenario == "unknown_null_token":
         row[name] = "N/A"
     elif scenario == "configured_null_token":
+        assert nullable is not None
         row[nullable] = "N/A"
         profile = SourceProfile.model_validate(
             {**profile.model_dump(), "null_tokens": {nullable: ["", "N/A"]}}
@@ -200,9 +210,11 @@ def test_source_profile_matrix(tmp_path, monkeypatch, record_property, domain, e
         row[pk] = "not-an-integer"
         expected.update(passed=0, quarantined=1, code="INTEGER_VALUE_INVALID")
     elif scenario == "enum_unknown":
+        assert enum is not None
         row[enum["name"]] = "UNDECLARED"
         expected.update(passed=0, quarantined=1, code="ENUM_VALUE_INVALID")
     elif scenario == "enum_alias":
+        assert enum is not None
         row[enum["name"]] = "fixture-alias"
         profile = SourceProfile.model_validate(
             {
@@ -211,6 +223,7 @@ def test_source_profile_matrix(tmp_path, monkeypatch, record_property, domain, e
             }
         )
     elif scenario.startswith("range_"):
+        assert bounded is not None
         value = bounded["max"] if scenario in {"range_max", "range_above"} else bounded["min"]
         row[bounded["name"]] = str(
             value + (1 if scenario == "range_above" else -1 if scenario == "range_below" else 0)
@@ -236,14 +249,14 @@ def test_source_profile_matrix(tmp_path, monkeypatch, record_property, domain, e
         if scenario == "exact_enabled":
             expected.update(collapsed=1, code="EXACT_DUPLICATE_COLLAPSED")
         elif scenario == "no_fuzzy_merge":
-            rows[1][pk] = str(int(row[pk]) + 1)
+            rows[1][pk] = _next_fixture_id(row[pk])
             rows[1][unique] = {"admissions": "OTHER", "academic": "ZZ999", "hr": "ZZ"}[domain]
             expected.update(passed=2)
         else:
             if scenario == "key_conflict":
                 rows[1][name] = "different payload"
             if scenario == "business_key_conflict":
-                rows[1][pk] = str(int(row[pk]) + 1)
+                rows[1][pk] = _next_fixture_id(row[pk])
             expected.update(
                 passed=0,
                 quarantined=2,
@@ -252,7 +265,7 @@ def test_source_profile_matrix(tmp_path, monkeypatch, record_property, domain, e
                 else "DUPLICATE_KEY_COLLISION",
             )
     elif scenario == "mixed_rows":
-        rows.append({**row, pk: str(int(row[pk]) + 1), name: None})
+        rows.append({**row, pk: _next_fixture_id(row[pk]), name: None})
         expected.update(quarantined=1, code="REQUIRED_VALUE_MISSING")
     elif scenario in {
         "missing_column",
@@ -286,6 +299,7 @@ def test_source_profile_matrix(tmp_path, monkeypatch, record_property, domain, e
     else:
         workbook = Workbook()
         sheet = workbook.active
+        assert sheet is not None
         sheet.title = "Data"
         for values_row in [headers, *values]:
             sheet.append(values_row)
@@ -354,6 +368,9 @@ def test_source_profile_matrix(tmp_path, monkeypatch, record_property, domain, e
         _bind_profile(context, profile)
         task = _read_bronze(context, profile)
         result = CleaningPipeline().clean(task)
+        # Phải có bằng chứng nguồn trước khi ghi báo cáo hoặc kiểm tra phiên bản tệp.
+        assert result.batch.provenance is not None
+        assert task.batch.provenance is not None
         record_property("actual", json.dumps(asdict(result.report)))
         record_property("output_rows", json.dumps(result.batch.records))
         record_property("output_locators", json.dumps(result.batch.record_locators))
@@ -381,10 +398,12 @@ def test_source_profile_matrix(tmp_path, monkeypatch, record_property, domain, e
         if expected["code"]:
             assert expected["code"] in {i.code for i in result.report.issues}
         if scenario in {"nullable_null", "configured_null_token"}:
+            assert nullable is not None
             assert result.batch.records[0][profile.field_mapping[nullable]] is None
         if scenario == "unknown_null_token":
             assert result.batch.records[0][profile.field_mapping[name]] == "N/A"
         if scenario == "enum_alias":
+            assert enum is not None
             assert result.batch.records[0][profile.field_mapping[enum["name"]]] == enum["enum"][0]
         if scenario in {"key_conflict", "business_key_conflict"}:
             reversed_task = replace(
@@ -405,6 +424,7 @@ def test_source_profile_matrix(tmp_path, monkeypatch, record_property, domain, e
                 {**profile.model_dump(), "version": "acceptance-test-v2"}
             )
             rerun = CleaningPipeline().clean(_read_bronze(context, changed))
+            assert rerun.batch.provenance is not None
             assert changed.fingerprint != profile.fingerprint
             assert rerun.batch.processing_steps != result.batch.processing_steps
             assert rerun.batch.provenance.input_version == result.batch.provenance.input_version
@@ -471,7 +491,7 @@ def test_composite_key_conflict(record_property, domain, entity):
     second = dict(first)
     if len(schema["primary_key"]) == 1:
         pk = schema["primary_key"][0]
-        second[pk] = str(int(first[pk]) + 1)
+        second[pk] = _next_fixture_id(first[pk])
     else:
         second["institution"] = "different institution"
     record_property("domain", domain)

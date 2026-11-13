@@ -648,8 +648,9 @@ class TypeStandardizationService:
                                 isinstance(raw, bool) or not isinstance(raw, str | int)
                             ):
                                 raise ConversionError("SOURCE_ID_TYPE_ERROR")
-                            # Giữ nguyên mã nguồn cho S4 đối chiếu; ép "007" thành 7
-                            # ở bước này có thể làm mất thông tin nhận diện.
+                            # "007" là mã do nguồn cung cấp, khác với "7".
+                            # Giữ nguyên cả số 0 ở đầu và khoảng trắng nếu có.
+                            # Chỉ đổi sang mã của hệ thống sau khi tìm được đối chiếu rõ ràng.
                             pending[name] = deepcopy(raw)
                         continue
                     values[name] = convert_value(raw, spec, option)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 from app.infra.duckdb.query import EmptyGoldQueryExecutor
 from app.infra.llm import MockLLMClient
@@ -13,6 +14,16 @@ from app.infra.minio.client import upload_cleanup_client as upload_cleanup_clien
 from app.infra.minio.client import upload_reader_client as upload_reader_client
 from app.infra.minio.client import upload_writer_client as upload_writer_client
 from app.modules.nlq.service import NLQService
+
+if TYPE_CHECKING:
+    from app.modules.pipeline.contracts.cleaning import CleaningConnection
+
+
+def cleaning_connection(*, threads: int, memory_limit: str) -> CleaningConnection:
+    """Cấp kết nối riêng cho bộ làm sạch và để nơi gọi chịu trách nhiệm đóng kết nối."""
+    from app.infra.duckdb.cleaning import DuckDBCleaningConnection
+
+    return DuckDBCleaningConnection(threads=threads, memory_limit=memory_limit)
 
 
 @lru_cache(maxsize=1)

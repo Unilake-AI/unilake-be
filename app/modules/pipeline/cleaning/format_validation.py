@@ -1,4 +1,4 @@
-"""Normalize configured Bronze field formats and quarantine invalid records."""
+"""Chuẩn hóa các cột theo quy định, giữ nguyên mã nguồn và tách riêng dòng lỗi."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ IssueDisposition = Literal["NORMALIZED", "QUARANTINED"]
 
 @dataclass(frozen=True)
 class SourceFormatOptions:
-    """Source-specific transformations; none are inferred from sample values."""
+    """Các cách sửa đã khai báo cho nguồn; không tự đoán từ vài dòng dữ liệu."""
 
     trim: bool = False
     unicode_nfc: bool = False
@@ -41,7 +41,7 @@ class SourceFormatOptions:
 
 @dataclass(frozen=True)
 class FormatFieldRule:
-    """Validation and normalization policy for one parsed source column."""
+    """Quy định kiểm tra và chuẩn hóa cho một cột trong tệp nguồn."""
 
     field: str
     target_field: str
@@ -57,11 +57,13 @@ class FormatFieldRule:
     max_length: int | None = None
     precision: int | None = None
     scale: int | None = None
+    # Mã nhận diện phải giữ nguyên để tìm đúng đối tượng trong dữ liệu nguồn.
+    preserve_source_id: bool = False
 
 
 @dataclass(frozen=True)
 class FormatProfile:
-    """Versioned format policy bound to one domain/entity and source layout."""
+    """Bộ quy định có phiên bản, áp dụng cho một loại dữ liệu và cấu trúc tệp cụ thể."""
 
     domain: str
     entity: str
@@ -120,7 +122,7 @@ def build_format_profile(
     source_options: Mapping[str, SourceFormatOptions] | None = None,
     optional_source_fields: tuple[str, ...] = (),
 ) -> FormatProfile:
-    """Derive field constraints from a domain schema and explicit source mapping."""
+    """Tạo quy định kiểm tra từ cấu trúc đã khai báo và cách ghép cột nguồn với cột đích."""
     entities = schema.get("entities")
     if not isinstance(entities, Mapping):
         raise ValueError("FORMAT_SCHEMA_ENTITIES_REQUIRED")
@@ -218,6 +220,9 @@ def build_format_profile(
                 max_length=max_length,
                 precision=precision,
                 scale=scale,
+                # Dựa vào khai báo cột, không đoán cột mã qua tên hoặc giá trị mẫu.
+                preserve_source_id=target_field in entity_schema.get("primary_key", ())
+                or "references" in column,
             )
         )
     if not rules:
@@ -244,7 +249,7 @@ def clean_bronze_formats(
     expected_sha256: str,
     expected_rows: int,
 ) -> FormatResult:
-    """Read one pinned Bronze CSV/XLSX object and apply its format profile."""
+    """Đọc đúng phiên bản tệp Bronze đã chọn và áp dụng quy định kiểm tra định dạng."""
     _validate_context(
         request,
         profile,
@@ -290,7 +295,7 @@ def apply_format_rules(
     batch_id: str,
     provenance: FileProvenance,
 ) -> FormatResult:
-    """Normalize only explicitly configured formats and quarantine invalid rows."""
+    """Chỉ sửa theo quy định đã khai báo; tách riêng các dòng không đạt để kiểm tra lại."""
     _validate_profile(profile)
     if not isinstance(batch_id, str) or not batch_id.strip():
         raise ValueError("INVALID_BATCH_ID")
@@ -388,6 +393,9 @@ def apply_format_rules(
 def _normalize_and_validate(value: object, rule: FormatFieldRule) -> tuple[object, tuple[str, ...]]:
     changes: list[str] = []
     normalized = value
+    if rule.preserve_source_id and (isinstance(value, bool) or not isinstance(value, str | int)):
+        # Không tự đổi 7.0 thành 7 rồi coi đó là mã gốc. Dòng này cần được kiểm tra lại.
+        raise _InvalidFieldValueError("SOURCE_ID_TYPE_ERROR")
     if isinstance(normalized, str):
         if rule.options.unicode_nfc:
             nfc = unicodedata.normalize("NFC", normalized)
@@ -422,6 +430,8 @@ def _normalize_and_validate(value: object, rule: FormatFieldRule) -> tuple[objec
     if rule.value_kind == "integer":
         parsed = _parse_integer(normalized)
         _validate_numeric_range(parsed, rule)
+        # Kiểm tra cột số không có nghĩa là được bỏ số 0 ở đầu mã "007".
+        # Giữ nguyên chuỗi để bước đối chiếu sau đó phân biệt được "007" và "7".
         if isinstance(normalized, float | Decimal):
             normalized = int(parsed)
             changes.append("INTEGER_FORMAT_CANONICALIZED")
@@ -667,7 +677,7 @@ def _validate_profile(profile: FormatProfile) -> None:
         if rule.field in fields:
             raise ValueError("DUPLICATE_FORMAT_FIELD_RULE")
         fields.add(rule.field)
-        if type(rule.required_in_source) is not bool:
+        if type(rule.required_in_source) is not bool or type(rule.preserve_source_id) is not bool:
             raise ValueError("INVALID_FORMAT_RULE")
         if rule.value_kind not in (
             "string",
@@ -683,6 +693,15 @@ def _validate_profile(profile: FormatProfile) -> None:
             raise ValueError("INVALID_SOURCE_FORMAT_OPTIONS")
         if type(options.trim) is not bool or type(options.unicode_nfc) is not bool:
             raise ValueError("INVALID_FORMAT_OPTION_FLAG")
+        if rule.preserve_source_id and (
+            rule.value_kind not in {"string", "integer"}
+            or options.trim
+            or options.unicode_nfc
+            or options.aliases
+        ):
+            # Mã chỉ được đổi khi đã có bảng đối chiếu riêng cho nguồn đó.
+            # Báo rõ cấu hình không phù hợp, tránh làm sạch xong mới mất mã ban đầu.
+            raise ValueError(f"FORMAT_SOURCE_ID_OPTIONS_UNSAFE:{rule.target_field}")
         if not isinstance(options.decimal_separator, str) or options.decimal_separator not in {
             ".",
             ",",
