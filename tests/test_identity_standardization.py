@@ -263,6 +263,33 @@ def test_source_key_does_not_strip_or_lose_zeroes():
     assert source_key(("1", "23")) != source_key(("12", "3"))
 
 
+def test_leading_zero_id_requires_its_own_explicit_crosswalk():
+    crosswalk = CrosswalkSnapshot(
+        "source-ids-1",
+        (CrosswalkEntry("SYNTH", "position", ("7",), 7007, "Đã đối chiếu mã 7", AT),),
+    )
+    types, engine = setup(cw=crosswalk)
+    source = typed(types, {"position_id": "007"})
+    blocked = engine.standardize(source)
+    assert not blocked.accepted
+    assert {issue.code for issue in blocked.issues} == {"SOURCE_ID_UNMAPPED"}
+    assert (
+        engine.standardize(typed(types, {"position_id": "7"})).accepted[0].values["position_id"]
+        == 7007
+    )
+
+    # Chỉ chấp nhận mã nội bộ khi đã có đối chiếu riêng cho đúng mã "007".
+    explicit = CrosswalkSnapshot(
+        "source-ids-2",
+        (*crosswalk.entries, CrosswalkEntry("SYNTH", "position", ("007",), 7, "Đã xác minh", AT)),
+    )
+    _, approved = setup(cw=explicit)
+    result = approved.standardize(source)
+    assert result.accepted[0].values["position_id"] == 7
+    assert source.accepted[0].pending_s4["position_id"] == "007"
+    assert result.accepted[0].locator == source.accepted[0].locator
+
+
 def test_same_identity_across_sources_requires_explicit_crosswalk():
     types, engine = setup()
     entry = CrosswalkEntry("SECOND", "position", ("007",), 10102, "explicit-fixture-match", AT)

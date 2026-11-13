@@ -147,15 +147,16 @@ def test_profile_fails_closed_and_fingerprints_changes(tmp_path):
 @pytest.mark.parametrize("extension", ["csv", "xlsx", "xlsm"])
 @pytest.mark.parametrize("invalid", [False, True])
 @pytest.mark.parametrize("job_type", ["EXECUTION_V1", "UPLOAD_V1"])
+@pytest.mark.parametrize("raw_id", ["9", "007"])
 def test_file_to_cleaning_to_production_parquet(
-    tmp_path, monkeypatch, extension, invalid, job_type
+    tmp_path, monkeypatch, extension, invalid, job_type, raw_id
 ):
     payload = definition()
     payload["source_table"] = f"positions.{extension}"
     payload["source_type"] = "CSV" if extension == "csv" else "EXCEL"
     profile = SourceProfile.model_validate(payload)
     columns = list(profile.field_mapping)
-    rows = [["9", "NV", "Chuyên viên", "Nhân viên"]]
+    rows = [[raw_id, "NV", "Chuyên viên", "Nhân viên"]]
     if invalid:
         rows.append(["10", "", "Thiếu mã chức vụ", "Nhân viên"])
     path = tmp_path / profile.source_table
@@ -227,7 +228,7 @@ def test_file_to_cleaning_to_production_parquet(
             CrosswalkEntry(
                 "17",
                 "position",
-                ("9",),
+                (raw_id,),
                 7009,
                 "Đối chiếu theo mã nguồn",
                 datetime(2020, 1, 1, tzinfo=UTC),
@@ -257,6 +258,10 @@ def test_file_to_cleaning_to_production_parquet(
     assert preview["records_read"] == len(rows)
     assert preview["records_quarantined"] == (1 if invalid else 0)
     assert len(preview["normalized_sample"]) == 1
+    # Đọc lại và làm sạch phải giữ mã gốc trước khi đổi sang mã nội bộ 7009.
+    cleaned = runner.CleaningPipeline().clean(runner._read_bronze(context, profile))
+    assert cleaned.batch.records[0]["position_id"] == raw_id
+    assert parsed.rows[0][0] == raw_id
     with engine.connect() as connection:
         assert connection.execute(select(CLEANING_RUNS)).first() is None
     assert SilverRepository(engine).head("production:institution") is None

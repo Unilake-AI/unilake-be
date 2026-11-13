@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.modules.pipeline.cleaning.duckdb_engine import DuckDBCleaningEngine
 from app.modules.pipeline.cleaning.pipeline import (
     CleaningNormalizationTask,
     CleaningPipeline,
@@ -18,6 +19,7 @@ __all__ = [
     "CleaningReport",
     "CleaningSilverPipeline",
     "CleaningTask",
+    "DuckDBCleaningEngine",
     "NormalizationTask",
     "PipelineOrchestrator",
     "SilverPipeline",

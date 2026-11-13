@@ -71,6 +71,7 @@ class QuarantineSummary(BaseModel):
     by_owner_department: list[dict[str, Any]]
     by_error_code: list[dict[str, Any]]
 
+
 # Hàm query lấy danh sách hồ sơ cách ly với các bộ lọc
 def _record_query(filters: QuarantineFilters) -> Any:
     query = (
@@ -115,6 +116,7 @@ async def _execute(db: AsyncSession, query: Any) -> list[dict[str, Any]]:
             status_code=503,
         ) from None
 
+
 # Hàm query lấy chi tiết hồ sơ cách ly
 async def _get_record(record_id: UUID, db: DB) -> dict[str, Any]:
     query = (
@@ -133,6 +135,7 @@ async def _get_record(record_id: UUID, db: DB) -> dict[str, Any]:
             "Không tìm thấy hồ sơ cách ly", code="QUARANTINE_RECORD_NOT_FOUND", status_code=404
         )
     return rows[0]
+
 
 # Hàm lấy metadata của hồ sơ cách ly
 def _source_metadata(record: dict[str, Any]) -> dict[str, Any]:

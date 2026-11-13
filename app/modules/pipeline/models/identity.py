@@ -20,6 +20,14 @@ class CanonicalIdentity(Base):
     entity: Mapped[str] = mapped_column(String(80), nullable=False)
 
 
+# Lớp này để lưu trữ thông tin về các lần ghi vào bảng identity_crosswalk
+# namespace: tên nguồn dữ liệu
+# entity: tên thực thể (người/tổ chức)
+# source_key: khóa nguồn
+# canonical_id: id của thực thể trong bảng canonical_identity
+# evidence: bằng chứng
+# valid_from: ngày bắt đầu có hiệu lực
+# valid_to: ngày hết hiệu lực
 class IdentityCrosswalk(Base):
     __tablename__ = "identity_crosswalk"
     __table_args__ = ({"schema": "app"},)
@@ -34,6 +42,10 @@ class IdentityCrosswalk(Base):
     valid_to: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
 
+# lớp này để lưu trữ thông tin về các lần xuất bản crosswalk
+# version: phiên bản
+# fingerprint: dấu vân tay
+# payload: nội dung của crosswalk
 class CrosswalkRelease(Base):
     __tablename__ = "crosswalk_release"
     __table_args__ = ({"schema": "app"},)
