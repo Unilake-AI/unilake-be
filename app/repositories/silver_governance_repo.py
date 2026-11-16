@@ -24,6 +24,7 @@ from app.modules.pipeline.models.profiles import (
     SilverProfileRevision,
     SilverSourceProfile,
 )
+from app.modules.pipeline.repositories.object_metadata import configuration, metadata_lock
 from app.modules.pipeline.services.source_profiles import SourceProfile
 from app.modules.users.models import User
 
@@ -59,6 +60,12 @@ def require_manager(connection: Connection, user_id: str, domain: str) -> None:
 
 
 def lock_profile(connection: Connection, profile_id: str) -> dict[str, Any]:
+    if connection.dialect.name != "sqlite":
+        metadata_lock(connection, "configuration")
+        item = configuration(connection)["profiles"].get(profile_id)
+        if item is None:
+            reject("SILVER_REGISTERED_PROFILE_REQUIRED")
+        return dict(item)
     row = (
         connection.execute(
             select(SilverSourceProfile)
@@ -84,46 +91,57 @@ def approved_evidence(
     current = lock_profile(connection, profile_id)
     if current["fingerprint"] != fingerprint:
         reject("SILVER_PROFILE_REVISION_CONFLICT")
-    revision = (
-        connection.execute(
-            select(SilverProfileRevision).where(
-                SilverProfileRevision.profile_id == profile_id,
-                SilverProfileRevision.revision == current["revision"],
+    if connection.dialect.name != "sqlite":
+        revision = configuration(connection)["revisions"].get(f"{profile_id}:{current['revision']}")
+    else:
+        revision = (
+            connection.execute(
+                select(SilverProfileRevision).where(
+                    SilverProfileRevision.profile_id == profile_id,
+                    SilverProfileRevision.revision == current["revision"],
+                )
             )
+            .mappings()
+            .first()
         )
-        .mappings()
-        .first()
-    )
     if revision is None or revision["fingerprint"] != fingerprint:
         reject("SILVER_PROFILE_HISTORY_REQUIRED")
     profile = SourceProfile.model_validate(revision["definition"])
     if profile.fingerprint != fingerprint or current["definition"] != revision["definition"]:
         reject("SILVER_PROFILE_INTEGRITY_ERROR")
-    approval = (
-        connection.execute(
-            select(SilverProfileApproval)
-            .where(
-                SilverProfileApproval.profile_id == profile_id,
-                SilverProfileApproval.revision == current["revision"],
+    if connection.dialect.name != "sqlite":
+        approval = configuration(connection)["approvals"].get(f"{profile_id}:{current['revision']}")
+    else:
+        approval = (
+            connection.execute(
+                select(SilverProfileApproval)
+                .where(
+                    SilverProfileApproval.profile_id == profile_id,
+                    SilverProfileApproval.revision == current["revision"],
+                )
+                .with_for_update()
             )
-            .with_for_update()
+            .mappings()
+            .first()
         )
-        .mappings()
-        .first()
-    )
     if approval is None or approval["revoked_at"] is not None:
         reject("SILVER_PROFILE_APPROVAL_REQUIRED")
-    grant = (
-        connection.execute(
-            select(SilverDomainOwner)
-            .where(
-                SilverDomainOwner.grant_id == approval["grant_id"],
+    if connection.dialect.name != "sqlite":
+        grant = configuration(connection)["grants"].get(approval["grant_id"])
+        if grant is None:
+            reject("SILVER_DOMAIN_OWNER_REQUIRED", 403)
+    else:
+        grant = (
+            connection.execute(
+                select(SilverDomainOwner)
+                .where(
+                    SilverDomainOwner.grant_id == approval["grant_id"],
+                )
+                .with_for_update()
             )
-            .with_for_update()
+            .mappings()
+            .one()
         )
-        .mappings()
-        .one()
-    )
     if (
         grant["revoked_at"] is not None
         or grant["domain"] != profile.domain
@@ -259,6 +277,11 @@ def authorize_automatic_manifest(connection: Connection, manifest: dict[str, Any
 
 def recheck_approvals(connection: Connection, proofs: list[dict[str, Any]]) -> None:
     ordered = sorted(proofs, key=lambda item: item["profile_id"])
+    if connection.dialect.name != "sqlite":
+        metadata_lock(connection, "configuration")
+        for proof in ordered:
+            approved_evidence(connection, proof["profile_id"], proof["fingerprint"], expected=proof)
+        return
     # Lock ALL profiles before touching a shared owner grant; two profiles can
     # have the same owner and must not invert profile/grant lock order.
     for proof in ordered:

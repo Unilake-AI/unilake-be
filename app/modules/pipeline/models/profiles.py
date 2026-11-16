@@ -1,4 +1,4 @@
-"""Lưu cấu hình nguồn trong cơ sở dữ liệu để dùng lại sau khi triển khai."""
+"""Mô hình SQL cũ dành cho export và adapter SQLite; runtime lưu metadata trên MinIO."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from sqlalchemy import DateTime, ForeignKey, ForeignKeyConstraint, Integer, Stri
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.infra.db.base import Base
+from app.modules.pipeline.models.legacy_silver_base import LegacySilverBase as Base
 
 
 class SilverSourceProfile(Base):

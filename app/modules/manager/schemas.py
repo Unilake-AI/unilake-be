@@ -18,7 +18,8 @@ class ManagerContext(BaseModel):
     domains: list[staff_schemas.DomainChoice]
     departments: list[staff_schemas.DepartmentChoice]
     default_domain: str | None
-    needs_department_assignment: bool
+    needs_department_assignment: bool = False
+    needs_department_configuration: bool = False
     data_layer: Literal["GOLD"] = "GOLD"
     note: str
 
@@ -67,6 +68,8 @@ class MetricPage(BaseModel):
 
 
 class GoldSource(BaseModel):
+    database_sync_status: str | None = None
+    database_sync_error: str | None = None
     scope: str
     silver_snapshot_id: str
     job_id: str | None
@@ -103,12 +106,67 @@ class SourceStats(BaseModel):
     superseded: int = 0
 
 
+class DatabaseSyncStats(BaseModel):
+    total: int = 0
+    synced: int = 0
+    not_started: int = 0
+    queued: int = 0
+    running: int = 0
+    blocked: int = 0
+    failed: int = 0
+    superseded: int = 0
+
+
 class ManagerOverview(BaseModel):
     data_layer: Literal["GOLD"] = "GOLD"
     status: Literal["READY", "PARTIAL", "PENDING", "NO_DATA"]
     datasets: int
     sources: SourceStats
+    database_sync: DatabaseSyncStats = Field(default_factory=DatabaseSyncStats)
     last_updated_at: datetime | None
     kpis: MetricPage
     issues: staff_schemas.IssueStats
     note: str = "Số bản ghi theo từng nguồn Gold; không cộng thành số người duy nhất."
+
+
+class RecordFilters(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    dataset_id: int | None = Field(default=None, gt=0)
+    search: str | None = Field(default=None, min_length=1, max_length=100)
+    status: str | None = Field(default=None, min_length=1, max_length=30)
+    limit: int = Field(default=20, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+
+
+class RecordType(BaseModel):
+    entity: str
+    primary_key: str
+    fields: list[str]
+    search_fields: list[str]
+    status_field: str | None
+
+
+class RecordSource(BaseModel):
+    dataset_id: int
+    dataset_name: str
+    gold_job_id: str
+    silver_snapshot_id: str
+    published_at: datetime
+    synced_at: datetime
+
+
+class ManagerRecord(BaseModel):
+    record_id: int
+    values: dict[str, Any]
+    source: RecordSource
+
+
+class RecordPage(BaseModel):
+    data_layer: Literal["GOLD"] = "GOLD"
+    domain: Domain
+    entity: str
+    items: list[ManagerRecord]
+    total: int
+    limit: int
+    offset: int

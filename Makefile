@@ -27,30 +27,25 @@ gold-worker:
 	$(PYTHON) -m app.gold_worker
 
 .PHONY: db-notifications-upgrade
-db-notifications-upgrade:
-	docker compose exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -f -' < infra/postgres/migrations/20261116_notifications.sql
+db-notifications-upgrade: db-upgrade
 
 .PHONY: db-silver-default-upgrade
-db-silver-default-upgrade:
-	docker compose exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -f -' < infra/postgres/migrations/20261116_silver_default_automation.sql
+db-silver-default-upgrade: db-upgrade
 
-db-gold-upgrade:
-	docker compose exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -f -' < infra/postgres/migrations/20261116_gold_pipeline.sql
+db-gold-upgrade: db-upgrade
 
-db-auto-upgrade:
-	docker compose exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -f -' < infra/postgres/migrations/20261115_auto_silver_pipeline.sql
+db-auto-upgrade: db-upgrade
 test:
 	pytest
 lint:
 	ruff check app tests
 
 db-upgrade:
-	docker compose exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -f /opt/migrations/upgrade.psql'
+	$(PYTHON) -m app.modules.pipeline.services.database_upgrade
 db-current:
 	docker compose exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "SELECT migration_name,applied_at FROM app.schema_migration ORDER BY migration_name"'
 db-migrate:
 	alembic revision --autogenerate -m "$(MSG)"
 
 .PHONY: db-catalog-upgrade
-db-catalog-upgrade:
-	docker compose exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -f -' < infra/postgres/migrations/20261103_catalog_metadata.sql
+db-catalog-upgrade: db-upgrade

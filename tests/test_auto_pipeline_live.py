@@ -36,6 +36,7 @@ from app.modules.ingestion.services.worker import run_once as ingest_once
 from app.modules.pipeline.repositories.auto_pipeline import AutoPipelineRepository
 from app.modules.pipeline.repositories.identity import CrosswalkRepository
 from app.modules.pipeline.repositories.management_db import management_engine
+from app.modules.pipeline.repositories.object_metadata import ObjectMetadata, edit_configuration
 from app.modules.pipeline.repositories.silver import SilverRepository
 from app.modules.pipeline.repositories.silver_storage import MinioSilverStore
 from app.modules.pipeline.routers.auto_pipeline import router as auto_router
@@ -145,16 +146,23 @@ def system(monkeypatch):
         payload = definition()
         payload.update(scope=scope)
         profile = SourceProfile.model_validate(payload)
-        with engine.begin() as connection:
-            connection.execute(
-                text(
-                    "INSERT INTO app.silver_source_profile(profile_id,definition,fingerprint,revision,updated_by,updated_at) VALUES ('live',CAST(:definition AS jsonb),:fingerprint,1,'live-admin',now())"
-                ),
-                {
-                    "definition": json.dumps(profile.model_dump(mode="json")),
-                    "fingerprint": profile.fingerprint,
-                },
-            )
+        with engine.begin() as connection, edit_configuration(connection) as state:
+            state["profiles"]["live"] = {
+                "profile_id": "live",
+                "definition": profile.model_dump(mode="json"),
+                "fingerprint": profile.fingerprint,
+                "revision": 1,
+                "updated_by": "live-admin",
+                "updated_at": datetime.now(UTC),
+            }
+            state["revisions"]["live:1"] = {
+                "profile_id": "live",
+                "revision": 1,
+                "definition": profile.model_dump(mode="json"),
+                "fingerprint": profile.fingerprint,
+                "created_by": "live-admin",
+                "created_at": datetime.now(UTC),
+            }
         app = FastAPI()
         app.add_exception_handler(AppException, app_exception_handler)
         app.include_router(ingestion_router)
@@ -237,6 +245,17 @@ def system(monkeypatch):
     finally:
         # Chỉ xóa đúng phiên bản file của các job trong database kiểm thử này.
         storage = admin_storage()
+        control_prefix = ObjectMetadata(engine).prefix
+        for item in storage.list_objects(
+            settings.minio_bucket_silver,
+            prefix=control_prefix,
+            recursive=True,
+            include_version=True,
+        ):
+            if item.object_name:
+                storage.remove_object(
+                    settings.minio_bucket_silver, item.object_name, version_id=item.version_id
+                )
         with engine.connect() as connection:
             jobs = connection.execute(
                 text("SELECT upload_input,output,bronze_output FROM app.ingestion_job")
@@ -316,9 +335,7 @@ def test_manual_setup_reads_real_bronze_and_saves_only_after_preview(system):
     with system["engine"].connect() as connection:
         # Xem trước và lưu lựa chọn không tự chạy Silver, không bật lịch tự động.
         assert connection.execute(text("SELECT count(*) FROM app.cleaning_run")).scalar_one() == 0
-        assert (
-            connection.execute(text("SELECT count(*) FROM app.silver_snapshot")).scalar_one() == 0
-        )
+        assert len(system["publisher"].repository.snapshots(system["publisher"].scope)) == 0
         assert (
             connection.execute(text("SELECT count(*) FROM app.auto_pipeline_policy")).scalar_one()
             == 0
@@ -478,15 +495,9 @@ def test_upload_to_auto_silver_and_recovery(system, monkeypatch, mode):
             text("SELECT count(*) FROM app.auto_pipeline_attempt")
         ).scalar_one() == (2 if mode == "transient" else 1)
         if mode == "all_bad":
-            assert (
-                connection.execute(text("SELECT count(*) FROM app.silver_snapshot")).scalar_one()
-                == 0
-            )
+            assert len(system["publisher"].repository.snapshots(system["publisher"].scope)) == 0
         else:
-            assert (
-                connection.execute(text("SELECT count(*) FROM app.silver_snapshot")).scalar_one()
-                == 1
-            )
+            assert len(system["publisher"].repository.snapshots(system["publisher"].scope)) == 1
             assert job["result"]["publication"]["scope"] == system["publisher"].scope
             assert job["result"]["publication"]["mode"] == "production"
             [record] = system["publisher"].read_active()["position"]

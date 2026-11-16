@@ -28,6 +28,7 @@ from app.modules.pipeline.contracts.identity import digest
 from app.modules.pipeline.models.identity import CrosswalkRelease
 from app.modules.pipeline.models.profiles import SilverSourceProfile
 from app.modules.pipeline.repositories.identity import CrosswalkRepository
+from app.modules.pipeline.repositories.object_metadata import configuration
 from app.modules.pipeline.services.profile_storage import save_profile
 from app.modules.pipeline.services.source_cleaning import (
     _job_context,
@@ -222,6 +223,8 @@ def _profile_id(context: dict[str, Any], identity_mode: str = "canonical") -> st
 
 def _current(engine: Engine, profile_id: str) -> dict[str, Any] | None:
     with engine.connect() as connection:
+        if connection.dialect.name != "sqlite":
+            return configuration(connection)["profiles"].get(profile_id)
         row = (
             connection.execute(
                 select(SilverSourceProfile).where(SilverSourceProfile.profile_id == profile_id)

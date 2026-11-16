@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import ForeignKey, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.infra.db.base import Base
+from app.modules.pipeline.models.legacy_silver_base import LegacySilverBase as Base
 
 
 class SilverRun(Base):

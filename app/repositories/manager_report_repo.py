@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.manager.schemas import (
     AnalyticsFilters,
+    DatabaseSyncStats,
     DatasetPage,
     GoldMetric,
     GoldSource,
@@ -37,19 +38,21 @@ if TYPE_CHECKING:
 # Bao gồm Silver chưa tạo Gold, không trả số liệu Gold cũ khi Silver đã đổi.
 SOURCES = """
 WITH sources AS (
-    SELECT h.scope,h.snapshot_id AS silver_snapshot_id,cr.dataset_id,cr.domain,
+    SELECT h.scope,h.silver_snapshot_id,cr.dataset_id,cr.domain,
            j.job_id,j.finished_at,j.error_code,
+           q.status AS database_sync_status,q.error_code AS database_sync_error,
            CASE WHEN j.status='SUCCEEDED' AND s.active_job_id=j.job_id THEN 'CURRENT'
                 WHEN j.job_id IS NULL THEN 'NOT_STARTED' ELSE j.status END AS sync_status
-    FROM app.silver_head h
+    FROM app.gold_scope h
     JOIN LATERAL (
         SELECT c.dataset_id,c.domain FROM app.cleaning_run c
-        WHERE c.silver_snapshot_id=h.snapshot_id
+        WHERE c.silver_snapshot_id=h.silver_snapshot_id
           AND c.publication_status IN ('PUBLISHED','PUBLISHED_WITH_QUARANTINE')
         ORDER BY c.finished_at DESC NULLS LAST,c.run_id LIMIT 1
     ) cr ON TRUE
-    LEFT JOIN app.gold_scope s ON s.scope=h.scope AND s.silver_snapshot_id=h.snapshot_id
+    LEFT JOIN app.gold_scope s ON s.scope=h.scope AND s.silver_snapshot_id=h.silver_snapshot_id
     LEFT JOIN app.gold_job j ON j.scope=s.scope AND j.generation=s.generation
+    LEFT JOIN app.gold_sync_job q ON q.gold_job_id=j.job_id
 )
 """
 
@@ -164,6 +167,26 @@ async def source_stats(
     ).mappings()
     counts = {row["sync_status"].lower(): row["count"] for row in rows}
     return SourceStats(total=sum(counts.values()), **counts)
+
+
+async def database_sync_stats(
+    db: AsyncSession, access: ManagerAccess, filters: ReportFilters
+) -> DatabaseSyncStats:
+    clause, params = dataset_scope(access, filters)
+    rows = (
+        await db.execute(
+            text(
+                SOURCES
+                + "SELECT coalesce(s.database_sync_status,'NOT_STARTED') AS status,count(*) AS count FROM sources s"
+                " JOIN app.dataset d ON d.dataset_id=s.dataset_id AND d.domain=s.domain WHERE "
+                + clause
+                + " GROUP BY coalesce(s.database_sync_status,'NOT_STARTED')"
+            ),
+            params,
+        )
+    ).mappings()
+    counts = {row["status"].lower(): row["count"] for row in rows}
+    return DatabaseSyncStats(total=sum(counts.values()), **counts)
 
 
 async def last_updated(

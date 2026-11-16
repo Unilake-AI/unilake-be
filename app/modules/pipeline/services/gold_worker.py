@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from app.core.config import settings
 from app.modules.pipeline.repositories.gold import GoldRepository
 from app.modules.pipeline.repositories.silver_storage import MinioSilverStore
+from app.modules.pipeline.services.gold_business_sync import run_once as sync_business_once
 from app.modules.pipeline.services.gold_pipeline import build_gold
 from app.modules.pipeline.services.silver_worker import classify_failure
 from app.providers import gold_writer_client
@@ -69,6 +70,7 @@ def main(engine: Engine, worker_id: str) -> None:
     while not stop.is_set():
         try:
             run_once(engine, worker_id)
+            sync_business_once(engine)
         except Exception as exc:
             logger.warning("Chưa nhận được việc Gold (%s)", type(exc).__name__)
         stop.wait(settings.gold_poll_seconds)

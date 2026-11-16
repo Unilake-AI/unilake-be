@@ -11,20 +11,14 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, Query
 from fastapi import Path as PathParam
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import insert, select, update
 from sqlalchemy.engine import Engine
 
 from app.core.config import settings
 from app.core.deps import require_role
 from app.core.exceptions import AppException
 from app.core.roles import RoleCode
-from app.modules.pipeline.models.profiles import (
-    SilverDomainOwner,
-    SilverProfileApproval,
-    SilverProfileRevision,
-    SilverSourceProfile,
-)
 from app.modules.pipeline.repositories.management_db import management_engine
+from app.modules.pipeline.repositories.object_metadata import configuration, edit_configuration
 from app.modules.pipeline.services.profile_storage import save_profile
 from app.modules.pipeline.services.source_profiles import SourceProfile
 from app.repositories.silver_governance_repo import (
@@ -90,10 +84,12 @@ def available_profiles(engine: Engine) -> dict[str, ProfileRead]:
             storage="file",
         )
     with engine.connect() as connection:
-        for row in connection.execute(select(SilverSourceProfile)).mappings():
-            result[row["profile_id"]] = ProfileRead(**dict(row), storage="database")
+        for row in configuration(connection)["profiles"].values():
+            result[row["profile_id"]] = ProfileRead(
+                **dict(row), storage="database" if connection.dialect.name == "sqlite" else "minio"
+            )
     for name, item in result.items():
-        if item.storage == "database":
+        if item.storage != "file":
             try:
                 with engine.begin() as connection:
                     approved_evidence(connection, name, item.fingerprint)
@@ -188,18 +184,19 @@ class RevokeRequest(BaseModel):
 @router.post("/owners/grants", status_code=201)
 def grant_owner(request: OwnerGrant, db: DB, admin: SystemAdmin) -> dict[str, str]:
     grant_id = str(uuid4())
-    with db.begin() as connection:
+    with db.begin() as connection, edit_configuration(connection) as state:
         require_manager(connection, str(request.user_id), request.domain)
-        connection.execute(
-            insert(SilverDomainOwner).values(
-                grant_id=grant_id,
-                domain=request.domain,
-                user_id=str(request.user_id),
-                granted_by=str(admin["sub"]),
-                granted_at=datetime.now(UTC),
-                reason=request.reason,
-            )
-        )
+        state["grants"][grant_id] = {
+            "grant_id": grant_id,
+            "domain": request.domain,
+            "user_id": str(request.user_id),
+            "granted_by": str(admin["sub"]),
+            "granted_at": datetime.now(UTC),
+            "reason": request.reason,
+            "revoked_by": None,
+            "revoked_at": None,
+            "revocation_reason": None,
+        }
     return {"grant_id": grant_id}
 
 
@@ -207,22 +204,15 @@ def grant_owner(request: OwnerGrant, db: DB, admin: SystemAdmin) -> dict[str, st
 def revoke_owner(
     grant_id: UUID, request: RevokeRequest, db: DB, admin: SystemAdmin
 ) -> dict[str, str]:
-    with db.begin() as connection:
-        changed = connection.execute(
-            update(SilverDomainOwner)
-            .where(
-                SilverDomainOwner.grant_id == str(grant_id),
-                SilverDomainOwner.revoked_at.is_(None),
-            )
-            .values(
-                revoked_by=str(admin["sub"]),
-                revoked_at=datetime.now(UTC),
-                revocation_reason=request.reason,
-            )
-            .returning(SilverDomainOwner.grant_id)
-        ).scalar_one_or_none()
-        if changed is None:
+    with db.begin() as connection, edit_configuration(connection) as state:
+        grant = state["grants"].get(str(grant_id))
+        if grant is None or grant["revoked_at"] is not None:
             reject("SILVER_OWNER_GRANT_NOT_ACTIVE")
+        grant.update(
+            revoked_by=str(admin["sub"]),
+            revoked_at=datetime.now(UTC),
+            revocation_reason=request.reason,
+        )
     return {"status": "REVOKED"}
 
 
@@ -232,26 +222,12 @@ def profile_history(profile_id: ProfileID, db: DB, reviewer: Reviewer) -> dict[s
         current = lock_profile(connection, profile_id)
         if not set(reviewer["roles"]) & {"ADMIN", "DATA_ADMIN"}:
             require_manager(connection, str(reviewer["sub"]), current["definition"]["domain"])
-        revisions = (
-            connection.execute(
-                select(SilverProfileRevision)
-                .where(
-                    SilverProfileRevision.profile_id == profile_id,
-                )
-                .order_by(SilverProfileRevision.revision)
-            )
-            .mappings()
-            .all()
+        state = configuration(connection)
+        revisions = sorted(
+            (r for r in state["revisions"].values() if r["profile_id"] == profile_id),
+            key=lambda r: r["revision"],
         )
-        approvals = (
-            connection.execute(
-                select(SilverProfileApproval).where(
-                    SilverProfileApproval.profile_id == profile_id,
-                )
-            )
-            .mappings()
-            .all()
-        )
+        approvals = [r for r in state["approvals"].values() if r["profile_id"] == profile_id]
     return {
         "revisions": [dict(row) for row in revisions],
         "approvals": [dict(row) for row in approvals],
@@ -264,8 +240,10 @@ def approve_profile(
     profile_id: ProfileID, request: ReviewRequest, db: DB, reviewer: Reviewer
 ) -> dict[str, str]:
     actor = str(reviewer["sub"])
-    with db.begin() as connection:
-        current = lock_profile(connection, profile_id)
+    with db.begin() as connection, edit_configuration(connection) as state:
+        current = state["profiles"].get(profile_id)
+        if current is None:
+            reject("SILVER_REGISTERED_PROFILE_REQUIRED")
         if (
             current["revision"] != request.expected_revision
             or current["fingerprint"] != request.expected_fingerprint
@@ -274,25 +252,10 @@ def approve_profile(
         if current["updated_by"] == actor:
             reject("SILVER_SELF_APPROVAL_FORBIDDEN", 403)
         require_manager(connection, actor, current["definition"]["domain"])
-        # Profile lock serializes approval, revocation and updates.
-        if connection.execute(
-            select(SilverProfileApproval.revision).where(
-                SilverProfileApproval.profile_id == profile_id,
-                SilverProfileApproval.revision == request.expected_revision,
-            )
-        ).first():
+        key = f"{profile_id}:{request.expected_revision}"
+        if key in state["approvals"]:
             reject("SILVER_REVISION_ALREADY_REVIEWED")
-        grant = (
-            connection.execute(
-                select(SilverDomainOwner)
-                .where(
-                    SilverDomainOwner.grant_id == str(request.grant_id),
-                )
-                .with_for_update()
-            )
-            .mappings()
-            .first()
-        )
+        grant = state["grants"].get(str(request.grant_id))
         if (
             grant is None
             or grant["revoked_at"] is not None
@@ -300,17 +263,18 @@ def approve_profile(
             or grant["domain"] != current["definition"]["domain"]
         ):
             reject("SILVER_DOMAIN_OWNER_REQUIRED", 403)
-        connection.execute(
-            insert(SilverProfileApproval).values(
-                profile_id=profile_id,
-                revision=request.expected_revision,
-                grant_id=str(request.grant_id),
-                approved_by=actor,
-                approved_at=datetime.now(UTC),
-                evidence=request.evidence,
-                allow_partial_publication=request.allow_partial_publication,
-            )
-        )
+        state["approvals"][key] = {
+            "profile_id": profile_id,
+            "revision": request.expected_revision,
+            "grant_id": str(request.grant_id),
+            "approved_by": actor,
+            "approved_at": datetime.now(UTC),
+            "evidence": request.evidence,
+            "allow_partial_publication": request.allow_partial_publication,
+            "revoked_by": None,
+            "revoked_at": None,
+            "revocation_reason": None,
+        }
     return {"status": "APPROVED"}
 
 
@@ -319,34 +283,18 @@ def revoke_approval(
     profile_id: ProfileID, revision: int, request: RevokeRequest, db: DB, reviewer: Reviewer
 ) -> dict[str, str]:
     actor = str(reviewer["sub"])
-    with db.begin() as connection:
-        current = lock_profile(connection, profile_id)
-        approval = (
-            connection.execute(
-                select(SilverProfileApproval)
-                .where(
-                    SilverProfileApproval.profile_id == profile_id,
-                    SilverProfileApproval.revision == revision,
-                )
-                .with_for_update()
-            )
-            .mappings()
-            .first()
-        )
+    with db.begin() as connection, edit_configuration(connection) as state:
+        current = state["profiles"].get(profile_id)
+        if current is None:
+            reject("SILVER_REGISTERED_PROFILE_REQUIRED")
+        approval = state["approvals"].get(f"{profile_id}:{revision}")
         if approval is None or approval["revoked_at"] is not None:
             reject("SILVER_APPROVAL_NOT_ACTIVE")
         if "ADMIN" not in reviewer["roles"]:
             require_manager(connection, actor, current["definition"]["domain"])
             if approval["approved_by"] != actor:
                 reject("SILVER_DOMAIN_OWNER_REQUIRED", 403)
-        connection.execute(
-            update(SilverProfileApproval)
-            .where(
-                SilverProfileApproval.profile_id == profile_id,
-                SilverProfileApproval.revision == revision,
-            )
-            .values(
-                revoked_by=actor, revoked_at=datetime.now(UTC), revocation_reason=request.reason
-            )
+        approval.update(
+            revoked_by=actor, revoked_at=datetime.now(UTC), revocation_reason=request.reason
         )
     return {"status": "REVOKED"}

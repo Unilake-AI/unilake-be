@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import insert, select, update
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
 
 from app.core.config import settings
 from app.core.deps import require_role
@@ -58,20 +58,28 @@ def list_snapshots(
 ) -> dict[str, Any]:
     profile = load_source_profile(db, settings.silver_profiles_path, profile_id)
     scope = f"production:{profile.scope}"
-    with db.connect() as connection:
-        rows = (
-            connection.execute(
-                select(
-                    SilverSnapshot.snapshot_id, SilverSnapshot.scope, SilverSnapshot.request_hash
+    if db.dialect.name == "sqlite":
+        with db.connect() as connection:
+            stored_rows = (
+                connection.execute(
+                    select(
+                        SilverSnapshot.snapshot_id,
+                        SilverSnapshot.scope,
+                        SilverSnapshot.request_hash,
+                    )
+                    .where(SilverSnapshot.scope == scope)
+                    .order_by(SilverSnapshot.snapshot_id)
+                    .limit(limit)
+                    .offset(offset)
                 )
-                .where(SilverSnapshot.scope == scope)
-                .order_by(SilverSnapshot.snapshot_id)
-                .limit(limit)
-                .offset(offset)
+                .mappings()
+                .all()
             )
-            .mappings()
-            .all()
-        )
+        rows = [dict(row) for row in stored_rows]
+    else:
+        rows = sorted(SilverRepository(db).snapshots(scope), key=lambda row: row["snapshot_id"])[
+            offset : offset + limit
+        ]
     return {
         "scope": scope,
         "active_snapshot_id": SilverRepository(db).head(scope),
@@ -144,34 +152,53 @@ def activate_snapshot(
             status_code=422,
         )
     expected = str(request.expected_current_snapshot) if request.expected_current_snapshot else None
-    with db.begin() as connection:
-        if approval_required():
-            authorize_manifest(connection, publisher.describe_snapshot(str(snapshot_id)))
-        condition = (
-            SilverHead.snapshot_id == expected if expected else SilverHead.snapshot_id.is_(None)
-        )
-        changed = connection.execute(
-            update(SilverHead)
-            .where(SilverHead.scope == publisher.scope, condition)
-            .values(snapshot_id=str(snapshot_id))
-            .returning(SilverHead.scope)
-        ).scalar_one_or_none()
-        if changed is None:
-            raise AppException(
-                "Phiên bản hiện hành đã thay đổi, hãy tải lại",
-                code="ACTIVE_SNAPSHOT_CHANGED",
-                status_code=409,
+    if db.dialect.name != "sqlite":
+
+        def check(connection: Connection, _snapshot: dict[str, Any]) -> None:
+            if approval_required():
+                authorize_manifest(connection, publisher.describe_snapshot(str(snapshot_id)))
+
+        try:
+            publisher.repository.activate(
+                str(snapshot_id), publisher.scope, expected, str(admin["sub"]), check
             )
-        connection.execute(
-            insert(SilverActivation).values(
-                activation_id=str(uuid4()),
-                scope=publisher.scope,
-                snapshot_id=str(snapshot_id),
-                previous_snapshot_id=expected,
-                activated_by=str(admin.get("sub", ""))[:100],
-                activated_at=datetime.now(UTC),
+        except ValueError as exc:
+            if str(exc) == "ACTIVE_SNAPSHOT_CHANGED":
+                raise AppException(
+                    "Phiên bản hiện hành đã thay đổi",
+                    code="ACTIVE_SNAPSHOT_CHANGED",
+                    status_code=409,
+                ) from exc
+            raise
+    else:
+        with db.begin() as connection:
+            if approval_required():
+                authorize_manifest(connection, publisher.describe_snapshot(str(snapshot_id)))
+            condition = (
+                SilverHead.snapshot_id == expected if expected else SilverHead.snapshot_id.is_(None)
             )
-        )
+            changed = connection.execute(
+                update(SilverHead)
+                .where(SilverHead.scope == publisher.scope, condition)
+                .values(snapshot_id=str(snapshot_id))
+                .returning(SilverHead.scope)
+            ).scalar_one_or_none()
+            if changed is None:
+                raise AppException(
+                    "Phiên bản hiện hành đã thay đổi, hãy tải lại",
+                    code="ACTIVE_SNAPSHOT_CHANGED",
+                    status_code=409,
+                )
+            connection.execute(
+                insert(SilverActivation).values(
+                    activation_id=str(uuid4()),
+                    scope=publisher.scope,
+                    snapshot_id=str(snapshot_id),
+                    previous_snapshot_id=expected,
+                    activated_by=str(admin.get("sub", ""))[:100],
+                    activated_at=datetime.now(UTC),
+                )
+            )
     return {
         "snapshot_id": str(snapshot_id),
         "scope": publisher.scope,

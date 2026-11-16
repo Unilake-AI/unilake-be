@@ -2995,6 +2995,56 @@
         }
       }
     },
+    "/api/v1/pipeline/gold/jobs/{job_id}/database-sync/retry": {
+      "post": {
+        "tags": [
+          "gold"
+        ],
+        "summary": "Thử lại đồng bộ bản ghi Gold vào DB",
+        "operationId": "retry_database_sync_api_v1_pipeline_gold_jobs__job_id__database_sync_retry_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Retry Database Sync Api V1 Pipeline Gold Jobs  Job Id  Database Sync Retry Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/pipeline/profiles": {
       "get": {
         "tags": [
@@ -7449,6 +7499,394 @@
         }
       }
     },
+    "/api/v1/manager/{domain}/record-types": {
+      "get": {
+        "tags": [
+          "manager"
+        ],
+        "summary": "Các loại dữ liệu nghiệp vụ của phòng",
+        "operationId": "record_types_api_v1_manager__domain__record_types_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "hr",
+                "academic",
+                "admissions"
+              ],
+              "type": "string",
+              "title": "Domain"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecordType"
+                  },
+                  "title": "Response Record Types Api V1 Manager  Domain  Record Types Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/manager/{domain}/records/{entity}": {
+      "get": {
+        "tags": [
+          "manager"
+        ],
+        "summary": "Danh sách dữ liệu nghiệp vụ đã đồng bộ từ Gold",
+        "operationId": "records_api_v1_manager__domain__records__entity__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "hr",
+                "academic",
+                "admissions"
+              ],
+              "type": "string",
+              "title": "Domain"
+            }
+          },
+          {
+            "name": "entity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50,
+              "title": "Entity"
+            }
+          },
+          {
+            "name": "dataset_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 30
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/manager/{domain}/records/{entity}/{record_id}": {
+      "get": {
+        "tags": [
+          "manager"
+        ],
+        "summary": "Chi tiết dữ liệu nghiệp vụ trong phạm vi phòng",
+        "operationId": "record_detail_api_v1_manager__domain__records__entity___record_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "hr",
+                "academic",
+                "admissions"
+              ],
+              "type": "string",
+              "title": "Domain"
+            }
+          },
+          {
+            "name": "entity",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50,
+              "title": "Entity"
+            }
+          },
+          {
+            "name": "record_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Record Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagerRecord"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/notifications": {
       "get": {
         "tags": [
@@ -9240,6 +9678,52 @@
         "title": "DataSourceUpdate",
         "description": "Payload cập nhật data source; tất cả field đều optional để hỗ trợ partial update."
       },
+      "DatabaseSyncStats": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          },
+          "synced": {
+            "type": "integer",
+            "title": "Synced",
+            "default": 0
+          },
+          "not_started": {
+            "type": "integer",
+            "title": "Not Started",
+            "default": 0
+          },
+          "queued": {
+            "type": "integer",
+            "title": "Queued",
+            "default": 0
+          },
+          "running": {
+            "type": "integer",
+            "title": "Running",
+            "default": 0
+          },
+          "blocked": {
+            "type": "integer",
+            "title": "Blocked",
+            "default": 0
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed",
+            "default": 0
+          },
+          "superseded": {
+            "type": "integer",
+            "title": "Superseded",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "DatabaseSyncStats"
+      },
       "DatasetCreate": {
         "properties": {
           "dataset_code": {
@@ -9783,6 +10267,28 @@
       },
       "GoldSource": {
         "properties": {
+          "database_sync_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Database Sync Status"
+          },
+          "database_sync_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Database Sync Error"
+          },
           "scope": {
             "type": "string",
             "title": "Scope"
@@ -11345,7 +11851,13 @@
           },
           "needs_department_assignment": {
             "type": "boolean",
-            "title": "Needs Department Assignment"
+            "title": "Needs Department Assignment",
+            "default": false
+          },
+          "needs_department_configuration": {
+            "type": "boolean",
+            "title": "Needs Department Configuration",
+            "default": false
           },
           "data_layer": {
             "type": "string",
@@ -11365,7 +11877,6 @@
           "domains",
           "departments",
           "default_domain",
-          "needs_department_assignment",
           "note"
         ],
         "title": "ManagerContext"
@@ -11448,6 +11959,9 @@
           "sources": {
             "$ref": "#/components/schemas/SourceStats"
           },
+          "database_sync": {
+            "$ref": "#/components/schemas/DatabaseSyncStats"
+          },
           "last_updated_at": {
             "anyOf": [
               {
@@ -11482,6 +11996,29 @@
           "issues"
         ],
         "title": "ManagerOverview"
+      },
+      "ManagerRecord": {
+        "properties": {
+          "record_id": {
+            "type": "integer",
+            "title": "Record Id"
+          },
+          "values": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Values"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RecordSource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record_id",
+          "values",
+          "source"
+        ],
+        "title": "ManagerRecord"
       },
       "ManualCleaningRequest": {
         "properties": {
@@ -12173,6 +12710,144 @@
           "by_error_code"
         ],
         "title": "QuarantineSummary"
+      },
+      "RecordPage": {
+        "properties": {
+          "data_layer": {
+            "type": "string",
+            "const": "GOLD",
+            "title": "Data Layer",
+            "default": "GOLD"
+          },
+          "domain": {
+            "type": "string",
+            "enum": [
+              "hr",
+              "academic",
+              "admissions"
+            ],
+            "title": "Domain"
+          },
+          "entity": {
+            "type": "string",
+            "title": "Entity"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ManagerRecord"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain",
+          "entity",
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "RecordPage"
+      },
+      "RecordSource": {
+        "properties": {
+          "dataset_id": {
+            "type": "integer",
+            "title": "Dataset Id"
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "gold_job_id": {
+            "type": "string",
+            "title": "Gold Job Id"
+          },
+          "silver_snapshot_id": {
+            "type": "string",
+            "title": "Silver Snapshot Id"
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Published At"
+          },
+          "synced_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Synced At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "dataset_name",
+          "gold_job_id",
+          "silver_snapshot_id",
+          "published_at",
+          "synced_at"
+        ],
+        "title": "RecordSource"
+      },
+      "RecordType": {
+        "properties": {
+          "entity": {
+            "type": "string",
+            "title": "Entity"
+          },
+          "primary_key": {
+            "type": "string",
+            "title": "Primary Key"
+          },
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fields"
+          },
+          "search_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Search Fields"
+          },
+          "status_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Field"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity",
+          "primary_key",
+          "fields",
+          "search_fields",
+          "status_field"
+        ],
+        "title": "RecordType"
       },
       "RefreshRequest": {
         "properties": {

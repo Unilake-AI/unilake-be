@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import unicodedata
 from contextlib import suppress
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
@@ -437,6 +438,22 @@ def run_manual_cleaning(
             },
         )
         cleaning = _read_bronze(context, profile)
+        business_fields: dict[str, dict[str, dict[str, str]]] = {}
+        if profile.entity in {"employee", "student", "applicant"}:
+            for locator, record in zip(
+                cleaning.batch.record_locators, cleaning.batch.records, strict=True
+            ):
+                names = [
+                    value
+                    for name, value in record.items()
+                    if re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_") == "full_name"
+                ]
+                if len(names) == 1 and isinstance(names[0], str):
+                    name = unicodedata.normalize("NFC", names[0].strip())
+                    if name and len(name) <= 200 and "\x00" not in name:
+                        business_fields.setdefault(profile.entity, {})[locator] = {
+                            "full_name": name
+                        }
         cleaned = CleaningPipeline().clean(cleaning)
         report = cleaned.report
 
@@ -671,6 +688,7 @@ def run_manual_cleaning(
             mode="production",
             profile_approvals=approvals,
             automatic_recipe=automatic_recipe,
+            business_fields=business_fields,
         )
         # Lựa chọn "active" dùng bộ dữ liệu hiện hành; mã cụ thể dùng đúng bộ dữ liệu đó.
         # Nếu không chọn bộ dữ liệu trước đó thì công bố một bộ mới độc lập.
@@ -708,6 +726,7 @@ def run_manual_cleaning(
                 scope=scope,
                 mode="production",
                 profile_approvals=approvals,
+                business_fields=business_fields,
             )
         # Chuyển đúng các bản ghi đã qua làm sạch + chuẩn hóa và được thống kê trong báo cáo.
         # [SỬA - Vấn đề 1 & 2] Nếu có dòng bị cách ly, truyền kèm quarantine_report để merge giữ dữ liệu cũ

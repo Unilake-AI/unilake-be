@@ -1,4 +1,4 @@
-"""Role và phân công hiện hành cùng xác định phạm vi trưởng phòng."""
+"""Role manager hiện hành xác định trực tiếp phòng phụ trách."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from app.core.exceptions import AppException
 from app.core.roles import MANAGER_SCOPES
 from app.modules.manager.schemas import ManagerContext
 from app.modules.staff.contracts import schemas as staff_schemas
-from app.repositories.department_access_repo import active_department_choices, active_roles
+from app.repositories.department_access_repo import active_departments, active_roles
 
 DOMAIN_NAMES = {"hr": "Nhân sự", "academic": "Đào tạo", "admissions": "Tuyển sinh"}
 
@@ -20,13 +20,13 @@ DOMAIN_NAMES = {"hr": "Nhân sự", "academic": "Đào tạo", "admissions": "Tu
 @dataclass(frozen=True)
 class ManagerAccess:
     context: ManagerContext
-    # Ghép đúng lĩnh vực với phòng đang được phân công, tránh quyền chéo khi nhiều role.
+    # Ghép lĩnh vực/phòng theo role, không ghép chéo quyền khi có nhiều role.
     scopes: tuple[tuple[str, int], ...]
 
     def require_scope(self, domain: str | None = None) -> None:
         if not self.scopes or (domain is not None and domain not in dict(self.scopes)):
             raise AppException(
-                "Cần role manager và phân công đang hiệu lực tại phòng phụ trách lĩnh vực này",
+                "Cần role manager phù hợp và phòng phụ trách đang hoạt động",
                 code="MANAGER_SCOPE_REQUIRED",
                 status_code=403,
             )
@@ -41,7 +41,7 @@ async def manager_access(db: AsyncSession, user: dict[str, Any]) -> ManagerAcces
             raise AppException(
                 "Chỉ trưởng phòng được xem báo cáo này", code="FORBIDDEN", status_code=403
             )
-        departments = await active_department_choices(db, user_id)
+        departments = await active_departments(db)
     except SQLAlchemyError:
         raise AppException(
             "Không thể đọc quyền quản lý phòng ban", code="MANAGER_UNAVAILABLE", status_code=503
@@ -67,8 +67,9 @@ async def manager_access(db: AsyncSession, user: dict[str, Any]) -> ManagerAcces
                 if row["department_id"] in allowed_ids
             ],
             default_domain=next(iter(managers.values()))[0] if len(managers) == 1 else None,
-            needs_department_assignment=len({domain for domain, _ in scopes}) < len(managers),
-            note="Gold chỉ đọc từ dataset đang hoạt động thuộc phòng sở hữu được phân công. PNS → hr, PDT → academic, PTS → admissions. Dataset chưa gán phòng sở hữu không được hiển thị.",
+            needs_department_assignment=False,
+            needs_department_configuration=len({domain for domain, _ in scopes}) < len(managers),
+            note="Gold chỉ đọc từ dataset đang hoạt động thuộc phòng phụ trách theo role. PNS → hr, PDT → academic, PTS → admissions. Dataset chưa gán phòng sở hữu không được hiển thị.",
         ),
         scopes,
     )

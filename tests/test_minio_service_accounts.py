@@ -37,7 +37,7 @@ def test_policy_has_only_bucket_scoped_permissions(role: str, bucket: str) -> No
     assert not any("Delete" in a or "admin" in a or "*" in a for a in actions)
     assert ("s3:PutObject" in actions) == (role in {"writer", "silver-writer"})
     assert ("s3:GetObjectVersion" in actions) == (role in {"verifier", "reader", "silver-writer"})
-    assert ("s3:ListBucket" in actions) == (role == "reader")
+    assert ("s3:ListBucket" in actions) == (role in {"reader", "silver-writer"})
     if role == "writer":
         denied = {a for s in policy["Statement"] if s["Effect"] == "Deny" for a in s["Action"]}
         assert denied == {
@@ -50,6 +50,12 @@ def test_policy_has_only_bucket_scoped_permissions(role: str, bucket: str) -> No
         denied = {a for s in policy["Statement"] if s["Effect"] == "Deny" for a in s["Action"]}
         assert denied == {"s3:PutObject*", "s3:DeleteObject*", "s3:AbortMultipartUpload"}
     if role == "silver-writer":
+        listing = next(
+            s
+            for s in policy["Statement"]
+            if s["Effect"] == "Allow" and "s3:ListBucket" in s["Action"]
+        )
+        assert listing["Condition"] == {"StringLike": {"s3:prefix": ["silver/control/v1/*"]}}
         denied = {a for s in policy["Statement"] if s["Effect"] == "Deny" for a in s["Action"]}
         assert denied == {"s3:DeleteObject", "s3:DeleteObjectVersion"}
 

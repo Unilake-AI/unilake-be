@@ -9,6 +9,8 @@ from uuid import uuid4
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
+from app.modules.pipeline.repositories.object_metadata import record_heartbeat
+
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection, Engine
 
@@ -143,14 +145,17 @@ class AutoPipelineRepository:
 
     def heartbeat(self, worker_id: str, job: dict[str, Any] | None, seconds: int) -> bool:
         with self.engine.begin() as connection:
-            connection.execute(
-                text("""
-                INSERT INTO app.silver_worker_heartbeat(worker_id,current_job_id,last_heartbeat_at)
-                VALUES (:worker,:id,now()) ON CONFLICT(worker_id) DO UPDATE
-                SET current_job_id=EXCLUDED.current_job_id,last_heartbeat_at=EXCLUDED.last_heartbeat_at
-            """),
-                {"worker": worker_id, "id": job["job_id"] if job else None},
-            )
+            if connection.dialect.name != "sqlite":
+                record_heartbeat(self.engine, worker_id, job["job_id"] if job else None)
+            else:
+                connection.execute(
+                    text("""
+                    INSERT INTO app.silver_worker_heartbeat(worker_id,current_job_id,last_heartbeat_at)
+                    VALUES (:worker,:id,now()) ON CONFLICT(worker_id) DO UPDATE
+                    SET current_job_id=EXCLUDED.current_job_id,last_heartbeat_at=EXCLUDED.last_heartbeat_at
+                """),
+                    {"worker": worker_id, "id": job["job_id"] if job else None},
+                )
             if job is None:
                 return True
             return bool(

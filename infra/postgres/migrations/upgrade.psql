@@ -103,13 +103,17 @@ INSERT INTO app.schema_migration (migration_name) VALUES ('20261116_runtime_refe
 \ir 20261116_silver_default_automation.sql
 INSERT INTO app.schema_migration (migration_name) VALUES ('20261116_silver_default_automation.sql') ON CONFLICT DO NOTHING;
 
+\echo Applying 20261116_storage_model_v2.sql
+\ir 20261116_storage_model_v2.sql
+INSERT INTO app.schema_migration (migration_name) VALUES ('20261116_storage_model_v2.sql') ON CONFLICT DO NOTHING;
+
 -- Không báo hoàn tất khi mới chỉ có bảng metadata nhưng thiếu nền tảng pipeline.
 DO $$
 DECLARE relation_name text;
 BEGIN
     FOREACH relation_name IN ARRAY ARRAY[
         'app.canonical_identity', 'app.identity_crosswalk', 'app.crosswalk_release',
-        'app.silver_run', 'app.silver_snapshot', 'app.silver_head', 'app.silver_activation',
+        'app.gold_sync_job','app.gold_record_identity',
         'app.auto_pipeline_job', 'app.cleaning_run', 'app.gold_job', 'app.gold_scope',
         'app.gold_attempt', 'app.gold_worker', 'gold.aggregate', 'gold.current_metrics',
         'app.notification_read', 'app.catalog_metadata'
@@ -118,11 +122,14 @@ BEGIN
             RAISE EXCEPTION 'SCHEMA_NOT_READY: missing %', relation_name;
         END IF;
     END LOOP;
+    IF EXISTS(SELECT 1 FROM pg_tables WHERE schemaname='app' AND left(tablename,7)='silver_') THEN
+        RAISE EXCEPTION 'SCHEMA_NOT_READY: legacy Silver tables remain';
+    END IF;
     IF (SELECT count(*) FROM app.data_layer WHERE layer_code IN ('BRONZE','SILVER','GOLD')) <> 3 THEN
         RAISE EXCEPTION 'SCHEMA_NOT_READY: missing data layers';
     END IF;
     IF to_regprocedure('app.enqueue_default_silver(bigint)') IS NULL
-       OR to_regprocedure('app.enqueue_gold(text)') IS NULL THEN
+       OR to_regprocedure('app.enqueue_gold_object(text,text,jsonb)') IS NULL THEN
         RAISE EXCEPTION 'SCHEMA_NOT_READY: missing pipeline functions';
     END IF;
 END $$;
