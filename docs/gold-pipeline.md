@@ -5,7 +5,7 @@ Gold tạo dữ liệu tổng hợp phục vụ báo cáo từ **Silver đã cô
 ## Luồng hoạt động
 
 1. STAFF nạp file. Ingestion kiểm tra, lưu Bronze và ghi kết quả tiếp nhận.
-2. Silver được xử lý thủ công hoặc bởi Silver Worker. Luồng tự chạy Bronze → Silver vẫn cần bật cấu hình cho bộ dữ liệu theo [hướng dẫn Auto Silver](auto-silver-pipeline.md).
+2. Silver được xử lý thủ công hoặc bởi Silver Worker. Bronze → Silver mặc định tự chạy, không cần chọn dataset/profile theo [hướng dẫn Auto Silver](auto-silver-pipeline.md).
 3. Cuối giao dịch công bố Silver, PostgreSQL tự tạo một việc Gold. Nếu công bố Silver bị hủy, việc Gold cũng không được tạo. Không cần gọi thêm API Gold cho mỗi file mới.
 4. Gold Worker nhận việc từ PostgreSQL, giữ cố định phiên bản Silver nguồn và phiên bản quy định tổng hợp.
 5. Worker kiểm tra bản kê Silver, mã kiểm tra nội dung, phiên bản object, số dòng và nguồn gốc của từng bảng. Bản thử, nguồn không rõ hoặc phạm vi trộn nhiều bộ dữ liệu/lĩnh vực sẽ bị từ chối.
@@ -64,7 +64,7 @@ Tất cả đường dẫn dưới đây có tiền tố `/api/v1`. Dùng Bearer
 | `GET /pipeline/gold/jobs/{job_id}/report` | Tải toàn bộ số liệu của phiên bản dưới dạng CSV UTF-8 |
 | `GET /pipeline/gold/workers` | DATA_ADMIN/ADMIN xem thời điểm bộ xử lý còn hoạt động |
 
-Nhân viên và quản lý chỉ đọc Gold của lĩnh vực được xác định từ vai trò trên máy chủ. Gửi `domain` khác không mở rộng quyền. ADMIN, DATA_ADMIN và VIEWER được xem số liệu tổng hợp ba lĩnh vực; chỉ ADMIN/DATA_ADMIN tạo việc/chạy lại/xem worker. Các API đọc không trả token giữ quyền xử lý.
+Nhân viên và quản lý chỉ đọc Gold của lĩnh vực được xác định từ vai trò trên máy chủ. Với lĩnh vực của manager, backend kiểm tra thêm phân công phòng phụ trách đang hiệu lực và `owner_department_id` của dataset; dataset chưa gán phòng không được hiển thị. Gửi `domain` khác không mở rộng quyền. ADMIN, DATA_ADMIN và VIEWER được xem số liệu tổng hợp ba lĩnh vực; chỉ ADMIN/DATA_ADMIN tạo việc/chạy lại/xem worker. Các API đọc không trả token giữ quyền xử lý. Màn hình manager dùng [API Manager](api/manager-api.md) cho tổng quan, biểu đồ và yêu cầu sửa dữ liệu.
 
 UI quản trị nằm ở `/data/gold`, có lọc lĩnh vực, phân trang, lịch sử, chi tiết nguồn Silver, xác nhận chạy lại, tải CSV và trạng thái worker. API đọc đã sẵn cho các màn hình báo cáo phòng ban; chưa thay thế toàn bộ dashboard của từng vai trò.
 
@@ -81,7 +81,7 @@ docker compose up -d --build gold-worker
 
 `prepare` chỉ chạy một lần để tạo `.env.gold-worker.local`, quyền file 0600; không đưa file này lên Git. Nếu đã có file, bỏ qua bước `prepare`. `apply` cấp hoặc đồng bộ quyền cho chính tài khoản đã chuẩn bị, không xuất mật khẩu. Tài khoản chỉ đọc `silver/production/*` và ghi/đọc `gold/production/*`; không được đọc Bronze hoặc xóa object.
 
-`make dev` tiếp tục chạy API trong Terminal và các worker trong Docker, nay có thêm `gold-worker`. Chạy worker riêng ngoài Docker bằng `make gold-worker`. Database mới tự áp dụng cấu trúc qua `infra/postgres/init/05-gold-pipeline.sh`; database đang có cần `make db-gold-upgrade`.
+`make dev` tiếp tục chạy API trong Terminal và các worker trong Docker, nay có thêm `gold-worker`. Chạy worker riêng ngoài Docker bằng `make gold-worker`. Database mới tự áp dụng chuỗi đầy đủ qua `infra/postgres/init/04-auto-pipeline.sh` và `migrations/upgrade.psql`; database đang có dùng `make db-upgrade` để bảo đảm đủ nền Silver trước Gold. `make db-gold-upgrade` chỉ dành cho DB đã có đủ nền Silver.
 
 ```bash
 docker compose logs -f gold-worker

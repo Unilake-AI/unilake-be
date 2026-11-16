@@ -5,7 +5,7 @@ File này gom các lệnh thường dùng để cập nhật PostgreSQL local v�
 Chạy các lệnh từ thư mục gốc project:
 
 ```bash
-cd /Users/nguyenson/UniDataLake_AI
+cd /Users/nguyenson/Unilake-BE
 ```
 
 ## 1. Khởi động PostgreSQL local
@@ -22,6 +22,16 @@ docker compose exec -T postgres pg_isready -U unilake -d unilake
 ```
 
 ## 2. Cập nhật schema vào DB local
+
+Ưu tiên chạy chuỗi đầy đủ (bao gồm Silver, Gold và danh mục tầng dữ liệu):
+
+```bash
+make db-upgrade
+make db-current
+```
+
+Xem [database-migrations.md](database-migrations.md). Lệnh chỉ chạy `02-schema.sql` bên dưới không đủ để khởi tạo pipeline.
+
 
 Lệnh này chạy file schema hiện tại vào database `unilake`.
 

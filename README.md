@@ -29,7 +29,7 @@ Repository này bao gồm API FastAPI, ingestion worker và pipeline chuẩn hó
 | Truy vấn ngôn ngữ tự nhiên (NLQ) | Tiếp nhận câu hỏi và xử lý luồng truy vấn | Đang sử dụng LLM mô phỏng và bộ thực thi trả kết quả rỗng |
 | Dashboard, lịch sử truy vấn, quản lý người dùng | Cấu trúc module | Chưa có endpoint nghiệp vụ |
 
-Silver được cấu hình theo từng nguồn qua API `/pipeline/profiles`, lưu trong PostgreSQL. Cấu hình có sẵn trong `config/silver/profiles.json` (mặc định trống) vẫn được hỗ trợ. Các phép tính nghiệp vụ và bộ 39 quy định trong tài liệu cũ không còn là điều kiện bắt buộc để công bố Silver. Cấu trúc, kiểu dữ liệu, khóa và nguồn gốc vẫn được kiểm tra. NLQ hiện được cấu hình cố định với `MockLLMClient` và `EmptyGoldQueryExecutor` trong `app/providers.py`; thay đổi `LLM_PROVIDER` chưa kích hoạt kết nối LLM thực tế.
+Silver mặc định tự chạy sau khi Bronze thành công, tự xác định cấu trúc từ file thật, không cần bật theo từng dataset. API `/pipeline/profiles` tiếp tục hỗ trợ quy tắc riêng khi cần. Cấu hình có sẵn trong `config/silver/profiles.json` (mặc định trống) vẫn được hỗ trợ. Các phép tính nghiệp vụ và bộ 39 quy định trong tài liệu cũ không còn là điều kiện bắt buộc để công bố Silver. Cấu trúc, kiểu dữ liệu, khóa và nguồn gốc vẫn được kiểm tra. NLQ hiện được cấu hình cố định với `MockLLMClient` và `EmptyGoldQueryExecutor` trong `app/providers.py`; thay đổi `LLM_PROVIDER` chưa kích hoạt kết nối LLM thực tế.
 
 ## Kiến trúc và công nghệ
 
@@ -300,7 +300,11 @@ ghi đè mật khẩu hoặc trạng thái của các tài khoản này. Tài kh
 
 `DATA_ADMIN` có thêm quyền `query.execute`. Sáu role phòng ban được khai báo quyền
 xem dataset, catalog, dashboard, thực thi và xem lịch sử truy vấn. Hiện manager
-và staff có cùng tập quyền; backend chưa thực thi giới hạn dữ liệu theo phòng ban.
+và staff có cùng tập quyền khai báo. [API Manager](docs/api/manager-api.md) đọc báo cáo
+Gold hiện hành và giới hạn theo role, phân công phòng ban còn hiệu lực và phòng sở hữu dataset.
+Các đường đọc Gold cũ cũng kiểm tra phạm vi này cho lĩnh vực của manager.
+Chuông [thông báo xử lý lỗi](docs/api/notifications-api.md) phục vụ ADMIN/DATA_ADMIN,
+manager và STAFF, có số chưa đọc và liên kết trực tiếp tới yêu cầu được cấp quyền.
 Bảng `role_permission` là cấu hình quyền; các endpoint hiện chưa kiểm tra đầy đủ
 bảng này. Xem trạng thái triển khai từng phân hệ ở phần phạm vi chức năng.
 
@@ -310,7 +314,7 @@ DDL, dữ liệu khởi tạo và SQL migration được quản lý trong `infra
 | --- | --- |
 | Khởi tạo database mới | Compose chạy init script khi tạo volume PostgreSQL |
 | Cập nhật database hiện có | Áp dụng thay đổi schema và seed theo [tài liệu database](docs/database.md) và [hướng dẫn đồng bộ local](docs/db-local-sync.md) |
-| Sử dụng Alembic | Đã có cấu hình nhưng chưa có revision; `alembic upgrade head` chưa thay thế DDL và SQL migration hiện tại |
+| Sử dụng Alembic | Đã có cấu hình nhưng chưa có revision; `make db-upgrade` chạy chuỗi SQL chính thức; `alembic upgrade head` không nâng cấp các bảng pipeline |
 
 Giữ nguyên volume PostgreSQL khi cập nhật schema để bảo toàn dữ liệu.
 
@@ -394,3 +398,5 @@ Schema và profile trong `docs/` và `data/standardization/` là tài nguyên c�
 | Mở rộng hệ thống | [Hướng dẫn mở rộng domain](docs/domain-extension-guide.md) |
 
 Một số tài liệu kế thừa sử dụng cấu trúc monorepo với đường dẫn `backend/` hoặc `PYTHONPATH=backend`. Khi áp dụng cho repository này, chạy từ thư mục gốc và điều chỉnh các tiền tố đường dẫn tương ứng.
+
+Hướng dẫn sửa/nâng cấp DB hiện có và khởi tạo Silver → Gold: [Database migrations](docs/database-migrations.md).

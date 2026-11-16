@@ -385,16 +385,34 @@ def run_manual_cleaning(
         if auto_context and profile.fingerprint != auto_context["policy"]["profile_fingerprint"]:
             raise ValueError("AUTO_PIPELINE_PROFILE_MISMATCH")
         approvals: list[dict[str, Any]] = []
-        if approval_required():
+        automatic_recipe = None
+        if auto_context and auto_context["policy"].get("mode") == "automatic":
+            from app.modules.pipeline.contracts.automation import AUTOMATIC_RECIPE_VERSION
+
+            if (
+                auto_context["policy"].get("recipe_version") != AUTOMATIC_RECIPE_VERSION
+                or profile.version != AUTOMATIC_RECIPE_VERSION
+                or profile.identity_mode != "source"
+            ):
+                raise ValueError("AUTO_PIPELINE_RECIPE_MISMATCH")
+            automatic_recipe = {
+                "job_id": auto_context["job_id"],
+                "recipe_version": AUTOMATIC_RECIPE_VERSION,
+                "profile_fingerprint": profile.fingerprint,
+            }
+        requires_owner = approval_required() and automatic_recipe is None
+        if requires_owner:
             with engine.begin() as connection:
                 approvals.append(approved_evidence(connection, profile_id, profile.fingerprint))
         context = _job_context(engine, ingestion_job_id)
         if auto_context:
             # Chạy lại chỉ được đọc đúng bản Bronze đã xếp hàng, không lấy file mới hơn.
             with engine.begin() as connection:
-                AutoPipelineRepository.fence(
+                frozen_job = AutoPipelineRepository.fence(
                     connection, auto_context["job_id"], auto_context["lease_token"]
                 )
+                if frozen_job["policy"] != auto_context["policy"]:
+                    raise ValueError("AUTO_PIPELINE_PROFILE_MISMATCH")
             if context["output"] != auto_context["bronze_input"]:
                 raise ValueError("AUTO_PIPELINE_BRONZE_MISMATCH")
         _bind_profile(context, profile)
@@ -490,6 +508,8 @@ def run_manual_cleaning(
             "profile_fingerprint": profile.fingerprint,
             "profile_approval": approvals[0]
             if approvals
+            else {"status": "SYSTEM_RECIPE_VERIFIED", **automatic_recipe}
+            if automatic_recipe
             else {"status": "NEEDS_DOMAIN_OWNER_APPROVAL"},
         }
         no_source_key = (
@@ -502,7 +522,7 @@ def run_manual_cleaning(
                 "status": "BLOCKED",
                 "reason": "SOURCE_PRIMARY_KEY_REQUIRED_FOR_PARTIAL_PUBLICATION",
             }
-        elif total_quarantined and approval_required():
+        elif total_quarantined and requires_owner:
             result["partial_key_check"] = partial_key_evidence(
                 cleaning, set(cleaned.quarantined_locators) | std_rejected
             )
@@ -581,7 +601,7 @@ def run_manual_cleaning(
                 AutoPipelineRepository.fence(
                     connection, auto_context["job_id"], auto_context["lease_token"]
                 )
-            if approval_required():
+            if requires_owner:
                 if connection is None:
                     with engine.begin() as transaction:
                         record_publication(transaction, snapshot_id)
@@ -650,6 +670,7 @@ def run_manual_cleaning(
             scope=scope,
             mode="production",
             profile_approvals=approvals,
+            automatic_recipe=automatic_recipe,
         )
         # Lựa chọn "active" dùng bộ dữ liệu hiện hành; mã cụ thể dùng đúng bộ dữ liệu đó.
         # Nếu không chọn bộ dữ liệu trước đó thì công bố một bộ mới độc lập.
@@ -658,7 +679,7 @@ def run_manual_cleaning(
             if base_snapshot == "active"
             else base_snapshot
         )
-        if approval_required():
+        if requires_owner:
             if base:
                 inherited = (
                     publisher.describe_snapshot(base).get("governance", {}).get("profile_approvals")

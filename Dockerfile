@@ -62,6 +62,8 @@ COPY --from=builder /opt/venv /opt/venv
 # Sao chép mã nguồn ứng dụng, migration và cấu hình
 COPY app ./app
 COPY config ./config
+COPY docs/data-schema ./docs/data-schema
+COPY docs/standardization/silver-schemas ./docs/standardization/silver-schemas
 COPY alembic ./alembic
 COPY alembic.ini pyproject.toml ./
 

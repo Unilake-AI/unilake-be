@@ -6,7 +6,7 @@ Tài liệu này tập hợp luồng đang có và phương án cần thống nh
 
 **Cập nhật sau rà soát:** đã triển khai phần STAFF đặt tên bộ dữ liệu mới và tải file trong một yêu cầu. Backend tự cấp mã và xác định lĩnh vực theo quyền; không cần nhập ID kỹ thuật. Phân quyền theo từng đơn vị con vẫn cần đối chiếu theo API cụ thể.
 
-**Cập nhật 15/11/2026:** đã có cấu hình tự chạy theo dataset, hàng đợi PostgreSQL và Silver Worker riêng. Khi được quản trị bật, Ingestion `SUCCESS` tự tạo việc làm sạch/chuẩn hóa/công bố Silver. Xem [luồng Auto Silver, API và điều kiện chạy](auto-silver-pipeline.md); hệ thống không tự đoán profile cho dataset chưa cấu hình.
+**Cập nhật 16/11/2026:** Ingestion `SUCCESS` mặc định tự tạo việc Silver; worker tự đọc cấu trúc thật theo quy tắc hệ thống, không cần chọn/bật dataset hoặc profile. Cấu hình riêng vẫn được giữ như override. Xem [luồng Auto Silver](auto-silver-pipeline.md). Các mô tả opt-in trong phần lịch sử bên dưới đã được thay thế bởi luồng này.
 
 **Cập nhật API STAFF:** đã thêm thông tin quyền/lựa chọn cho UI, chi tiết và tìm bộ dữ liệu, lọc lịch sử cá nhân, thống kê yêu cầu, upload bản sửa trong yêu cầu và hỗ trợ gửi xác nhận từ job `UPLOAD_V1`. Xem [hướng dẫn STAFF](staff-api.md) về toàn bộ luồng và điều kiện phân công đơn vị.
 

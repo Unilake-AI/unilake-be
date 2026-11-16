@@ -13,8 +13,10 @@ from app.modules.datasources.datasets_router import router as datasets_router
 from app.modules.datasources.router import router as datasources_router
 from app.modules.governance.router import router as governance_router
 from app.modules.ingestion.router import router as ingestion_router
+from app.modules.manager.router import router as manager_router
 from app.modules.nlq.dependencies import get_nlq_service
 from app.modules.nlq.router import router as nlq_router
+from app.modules.notifications.router import router as notifications_router
 from app.modules.pipeline.routers import (
     cleaning_runs_router,
     cleaning_setup_router,
@@ -65,6 +67,8 @@ def create_app() -> FastAPI:
     application.include_router(dashboard_router, prefix=api_prefix)
     application.include_router(query_history_router, prefix=api_prefix)
     application.include_router(staff_router, prefix=api_prefix)
+    application.include_router(manager_router, prefix=api_prefix)
+    application.include_router(notifications_router, prefix=api_prefix)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,

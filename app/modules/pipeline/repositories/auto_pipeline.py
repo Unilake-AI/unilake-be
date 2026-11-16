@@ -88,9 +88,12 @@ class AutoPipelineRepository:
                     text("""
                     UPDATE app.auto_pipeline_job j SET status='CANCELLED',
                         error_code='AUTO_PIPELINE_POLICY_CHANGED', finished_at=now()
-                    WHERE j.status IN ('QUEUED','RETRY_WAIT') AND NOT EXISTS (
+                    WHERE j.status IN ('QUEUED','RETRY_WAIT') AND (
+                        (j.policy->>'mode'='automatic' AND EXISTS (
+                            SELECT 1 FROM app.auto_pipeline_policy p WHERE p.dataset_id=j.dataset_id AND NOT p.enabled))
+                        OR (coalesce(j.policy->>'mode','custom')<>'automatic' AND NOT EXISTS (
                         SELECT 1 FROM app.auto_pipeline_policy p WHERE p.dataset_id=j.dataset_id
-                            AND p.enabled AND p.revision=(j.policy->>'revision')::int)
+                            AND p.enabled AND p.revision=(j.policy->>'revision')::int)))
                 """)
                 )
                 row = (

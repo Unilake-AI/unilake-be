@@ -18,6 +18,11 @@ class RoleCode(StrEnum):
 
 
 DATA_WRITE_ROLES = frozenset({RoleCode.ADMIN, RoleCode.DATA_ADMIN})
+MANAGER_SCOPES = {
+    RoleCode.HR_MANAGER: ("hr", "PNS"),
+    RoleCode.ACADEMIC_MANAGER: ("academic", "PDT"),
+    RoleCode.ADMISSIONS_MANAGER: ("admissions", "PTS"),
+}
 # Quyền đọc này vẫn được các phân hệ danh mục dùng. Ingestion dùng phạm vi hẹp hơn
 # vì trạng thái job có thể cho biết dữ liệu của phòng ban đang được xử lý.
 DATA_READ_ROLES = DATA_WRITE_ROLES | {RoleCode.VIEWER}

@@ -26,6 +26,7 @@ router = APIRouter(
     dependencies=[Depends(require_role(RoleCode.DATA_ADMIN))],
     responses={
         **COMMON_ERROR_RESPONSES,
+        503: {"model": ErrorResponse, "description": "Chưa áp dụng migration Data Catalog."},
         409: {"model": ErrorResponse, "description": "Bộ dữ liệu đã có trong danh mục."},
     },
 )

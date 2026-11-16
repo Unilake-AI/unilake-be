@@ -228,7 +228,7 @@ async def resolution_job(
     )
 
 
-def _issue_query(
+def visible_issue_query(
     *,
     is_admin: bool,
     departments: frozenset[int],
@@ -273,7 +273,7 @@ async def get_issue(
     user_id: int,
     lock: bool = False,
 ) -> dict[str, Any] | None:
-    query = _issue_query(
+    query = visible_issue_query(
         is_admin=is_admin, departments=departments, domains=domains, user_id=user_id
     ).where(DATA_QUALITY_ISSUES.c.issue_id == issue_id)
     # Chỉ một thao tác được đổi trạng thái yêu cầu tại một thời điểm.
@@ -344,7 +344,7 @@ async def list_issues(
 ) -> list[dict[str, Any]]:
     columns = DATA_QUALITY_ISSUES.c
     query = (
-        _issue_query(**scope)
+        visible_issue_query(**scope)
         .order_by(columns.updated_at.desc(), columns.issue_id.desc())
         .limit(limit)
         .offset(offset)
@@ -353,7 +353,7 @@ async def list_issues(
 
 
 async def issue_stats(db: AsyncSession, **scope: Any) -> dict[str, int]:
-    items = _issue_query(**scope).subquery()
+    items = visible_issue_query(**scope).subquery()
     query = select(
         func.count().label("total"),
         func.count().filter(items.c.status == "ASSIGNED").label("assigned"),

@@ -36,6 +36,7 @@ from app.modules.pipeline.repositories.silver_storage import LocalSilverStore
 from app.modules.pipeline.routers import profiles as profiles_router
 from app.modules.pipeline.routers import snapshots as snapshots_router
 from app.modules.pipeline.silver.publication import SilverPublicationService
+from app.modules.users.models import Department
 from app.repositories.silver_profile_repo import load_source_profile
 from tests.test_silver_publication import normalized
 from tests.test_source_cleaning import definition
@@ -53,6 +54,7 @@ def environment(tmp_path, monkeypatch):
         execution_options={"schema_translate_map": {"app": None}},
     )
     for model in (
+        Department,
         SourceSystem,
         DataLayer,
         Dataset,
@@ -294,7 +296,11 @@ def test_dataset_creation_validates_source_and_selects_bronze(environment):
     client, _, _ = environment
     db = AsyncMock()
     db.get.return_value = SourceSystem(source_system_id=17, is_active=True)
-    db.scalar.return_value = DataLayer(data_layer_id=1, layer_code="BRONZE")
+    db.scalar.side_effect = [
+        DataLayer(data_layer_id=1, layer_code="BRONZE"),
+        7,
+        DataLayer(data_layer_id=1, layer_code="BRONZE"),
+    ]
 
     def add(dataset):
         dataset.dataset_id = 32
@@ -310,6 +316,7 @@ def test_dataset_creation_validates_source_and_selects_bronze(environment):
     }
     response = client.post("/datasets", json=payload)
     assert response.status_code == 201, response.text
+    assert response.json()["owner_department_id"] == 7
     assert response.json()["data_layer_id"] == 1
     assert response.json()["status"] == "ACTIVE"
     db.get.return_value = None
