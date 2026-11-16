@@ -19,14 +19,20 @@ from app.modules.manager.access import ManagerAccess, manager_access
 from app.modules.manager.schemas import (
     AnalyticsFilters,
     DatasetPage,
+    Domain,
     ManagerContext,
     ManagerDataset,
     ManagerIssueFilters,
     ManagerOverview,
+    ManagerRecord,
     MetricPage,
+    RecordFilters,
+    RecordPage,
+    RecordType,
     ReportFilters,
 )
 from app.modules.staff.contracts import schemas as staff_schemas
+from app.repositories import manager_records_repo as records_repository
 from app.repositories import manager_report_repo as repository
 
 router = APIRouter(prefix="/manager", tags=["manager"], responses=COMMON_ERROR_RESPONSES)
@@ -85,6 +91,7 @@ async def overview(
         status=status,
         datasets=page.total,
         sources=sources,
+        database_sync=await repository.database_sync_stats(db, manager, filters),
         last_updated_at=await repository.last_updated(db, manager, filters),
         kpis=kpis,
         issues=stats,
@@ -137,3 +144,51 @@ async def issue_detail(issue_id: UUID, db: DB, manager: Manager) -> staff_schema
             "Không tìm thấy yêu cầu xử lý", code="QUALITY_ISSUE_NOT_FOUND", status_code=404
         )
     return result
+
+
+@router.get(
+    "/{domain}/record-types",
+    response_model=list[RecordType],
+    summary="Các loại dữ liệu nghiệp vụ của phòng",
+)
+async def record_types(domain: Domain, manager: Manager) -> list[RecordType]:
+    return records_repository.record_types(manager, domain)
+
+
+@router.get(
+    "/{domain}/records/{entity}",
+    response_model=RecordPage,
+    summary="Danh sách dữ liệu nghiệp vụ đã đồng bộ từ Gold",
+)
+async def records(
+    domain: Domain,
+    entity: Annotated[str, Path(min_length=1, max_length=50)],
+    db: DB,
+    manager: Manager,
+    filters: Annotated[RecordFilters, Query()],
+) -> RecordPage:
+    return await records_repository.records(db, manager, domain, entity, filters)
+
+
+@router.get(
+    "/{domain}/records/{entity}/{record_id}",
+    response_model=ManagerRecord,
+    summary="Chi tiết dữ liệu nghiệp vụ trong phạm vi phòng",
+)
+async def record_detail(
+    domain: Domain,
+    entity: Annotated[str, Path(min_length=1, max_length=50)],
+    record_id: Annotated[int, Path(gt=0)],
+    db: DB,
+    manager: Manager,
+) -> ManagerRecord:
+    page = await records_repository.records(
+        db, manager, domain, entity, RecordFilters(limit=1), record_id=record_id
+    )
+    if not page.items:
+        raise AppException(
+            "Không tìm thấy bản ghi trong phạm vi được xem",
+            code="MANAGER_RECORD_NOT_FOUND",
+            status_code=404,
+        )
+    return page.items[0]

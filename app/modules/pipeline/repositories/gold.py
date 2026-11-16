@@ -39,9 +39,8 @@ class GoldRepository:
             )
             row = (
                 conn.execute(
-                    text("""SELECT j.*,snap.manifest_ref AS silver_manifest_ref
+                    text("""SELECT j.*
                 FROM app.gold_job j JOIN app.gold_scope s ON s.scope=j.scope AND s.generation=j.generation
-                JOIN app.silver_snapshot snap ON snap.snapshot_id=j.silver_snapshot_id
                 WHERE j.status IN ('QUEUED','RETRY_WAIT') AND j.next_attempt_at<=now()
                 ORDER BY j.created_at,j.job_id FOR UPDATE OF j SKIP LOCKED LIMIT 1""")
                 )
@@ -116,7 +115,8 @@ class GoldRepository:
         with self.engine.begin() as conn:
             # Cùng thứ tự khóa với việc đổi Silver và tạo việc Gold để tránh chờ nhau vòng tròn.
             head = conn.execute(
-                text("SELECT snapshot_id FROM app.silver_head WHERE scope=:scope FOR SHARE"), job
+                text("SELECT silver_snapshot_id FROM app.gold_scope WHERE scope=:scope FOR UPDATE"),
+                job,
             ).scalar_one()
             generation = conn.execute(
                 text("SELECT generation FROM app.gold_scope WHERE scope=:scope FOR UPDATE"), job

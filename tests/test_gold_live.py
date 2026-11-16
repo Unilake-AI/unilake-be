@@ -16,6 +16,7 @@ from app.core.deps import get_current_user
 from app.infra.minio.bronze import client as admin_storage
 from app.main import app
 from app.modules.pipeline.repositories.gold import GoldRepository
+from app.modules.pipeline.repositories.silver import SilverRepository, object_name
 from app.modules.pipeline.repositories.silver_storage import ObjectRef, checksum
 from app.modules.pipeline.routers.gold import gold_engine
 from app.modules.pipeline.services import gold_worker, silver_worker
@@ -58,33 +59,31 @@ def published(system, tmp_path):
         with engine.connect() as conn:
             tx = conn.begin()
             conn.execute(
-                text(
-                    "INSERT INTO app.silver_run(run_id,scope,request_hash,status) VALUES(:id,:scope,:hash,'PUBLISHED')"
-                ),
-                args,
-            )
-            conn.execute(
-                text(
-                    "INSERT INTO app.silver_snapshot(snapshot_id,scope,request_hash,manifest_ref) VALUES(:id,:scope,:hash,:ref)"
-                ),
-                args,
-            )
-            conn.execute(
-                text(
-                    "INSERT INTO app.silver_head(scope,snapshot_id) VALUES(:scope,:id) ON CONFLICT(scope) DO UPDATE SET snapshot_id=EXCLUDED.snapshot_id"
-                ),
-                args,
-            )
-            conn.execute(
                 text("""INSERT INTO app.cleaning_run(run_id,ingestion_job_id,dataset_id,domain,entity,requested_by,
                 session,bronze_version,cleaning_status,publication_status,records_published,silver_snapshot_id,started_at,finished_at)
                 VALUES(:id,:upload,31,'hr','employee','1','production','bronze-test','COMPLETED','PUBLISHED',2,:id,now(),now())"""),
                 args,
             )
+            conn.execute(
+                text("SELECT app.enqueue_gold_object(:scope,:id,CAST(:ref AS jsonb))"), args
+            )
             if rollback:
                 tx.rollback()
             else:
                 tx.commit()
+        if not rollback:
+            repository = SilverRepository(engine)
+            state = repository._state(scope)
+            state["head"] = args["id"]
+            state["snapshots"][args["id"]] = {
+                "snapshot_id": args["id"],
+                "scope": scope,
+                "request_hash": args["hash"],
+                "manifest_ref": args["ref"],
+                "status": "PUBLISHED",
+            }
+            repository._write(state)
+            repository.store.write(object_name("versions", args["id"]), {"scope": scope})
         return job, silver, gold
 
     yield engine, publish
@@ -99,8 +98,21 @@ def test_commit_enqueues_once_rollback_never_enqueues(published):
         assert conn.execute(text("SELECT count(*) FROM app.gold_job")).scalar_one() == 0
     source, _, _ = publish()
     with engine.begin() as conn:
-        first = conn.execute(text("SELECT app.enqueue_gold(:scope)"), source).scalar_one()
-        assert conn.execute(text("SELECT app.enqueue_gold(:scope)"), source).scalar_one() == first
+        first = conn.execute(
+            text(
+                "SELECT app.enqueue_gold_object(:scope,:silver_snapshot_id,CAST(:silver_manifest_ref AS jsonb))"
+            ),
+            source,
+        ).scalar_one()
+        assert (
+            conn.execute(
+                text(
+                    "SELECT app.enqueue_gold_object(:scope,:silver_snapshot_id,CAST(:silver_manifest_ref AS jsonb))"
+                ),
+                source,
+            ).scalar_one()
+            == first
+        )
         assert conn.execute(text("SELECT count(*) FROM app.gold_job")).scalar_one() == 1
 
 
@@ -331,14 +343,14 @@ def test_manager_reads_current_gold_with_dataset_ownership_and_pagination(publis
                 ),
                 {"employee": employee},
             )
-        assert client.get("/api/v1/manager/context").json()["needs_department_assignment"]
-        assert client.get("/api/v1/manager/overview").status_code == 403
-        assert client.get("/api/v1/notifications").json()["items"] == []
+        assert not client.get("/api/v1/manager/context").json()["needs_department_assignment"]
+        assert client.get("/api/v1/manager/overview").status_code == 200
+        assert len(client.get("/api/v1/notifications").json()["items"]) == 1
         assert (
             client.post("/api/v1/notifications/read", json={"event_ids": [event_id]}).status_code
-            == 404
+            == 204
         )
-        assert client.get("/api/v1/pipeline/gold/metrics").json() == []
+        assert len(client.get("/api/v1/pipeline/gold/metrics").json()) == 2
     finally:
         app.dependency_overrides.pop(get_db, None)
         app.dependency_overrides.pop(get_current_user, None)
@@ -366,7 +378,9 @@ def test_new_silver_fences_stale_worker_and_rollback_hides_old_gold(published):
     assert build_gold(new, new_silver, new_gold, repository)
     with engine.begin() as conn:
         conn.execute(
-            text("UPDATE app.silver_head SET snapshot_id=:silver_snapshot_id WHERE scope=:scope"),
+            text(
+                "SELECT app.enqueue_gold_object(:scope,:silver_snapshot_id,CAST(:silver_manifest_ref AS jsonb))"
+            ),
             source,
         )
     with engine.connect() as conn:
@@ -450,3 +464,41 @@ def test_actual_upload_bronze_silver_gold_with_scoped_minio(system):
             storage.remove_object(
                 settings.minio_bucket_gold, item.object_name, version_id=item.version_id
             )
+
+
+def test_database_sync_retry_requires_admin_and_current_blocked_gold(published):
+    engine, publish = published
+    source, silver, gold = publish()
+    repository = GoldRepository(engine)
+    job = repository.claim("retry-business-test")
+    assert job is not None
+    assert build_gold(job, silver, gold, repository)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE app.gold_sync_job SET status='BLOCKED',error_code='GOLD_SYNC_REQUIRED_FIELD',error_report='{}'::jsonb WHERE gold_job_id=:job_id"
+            ),
+            job,
+        )
+    app.dependency_overrides[gold_engine] = lambda: engine
+    user = {"sub": "1", "roles": ["HR_STAFF"]}
+    app.dependency_overrides[get_current_user] = lambda: user
+    path = f"/api/v1/pipeline/gold/jobs/{job['job_id']}/database-sync/retry"
+    with TestClient(app) as client:
+        assert client.post(path).status_code == 403
+        user["roles"] = ["DATA_ADMIN"]
+        assert client.post(path).status_code == 202
+        assert client.post(path).status_code == 409
+        with engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT status,error_code,error_report FROM app.gold_sync_job WHERE gold_job_id=:job_id"
+                ),
+                job,
+            ).one()
+            assert row == ("QUEUED", None, None)
+            conn.execute(
+                text("UPDATE app.gold_sync_job SET status='BLOCKED' WHERE gold_job_id=:job_id"), job
+            )
+        publish(scope=source["scope"])
+        assert client.post(path).status_code == 409

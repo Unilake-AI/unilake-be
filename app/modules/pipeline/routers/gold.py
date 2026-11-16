@@ -6,10 +6,8 @@ import csv
 import io
 import json
 from collections.abc import Generator
-from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
@@ -22,6 +20,7 @@ from app.core.deps import require_role
 from app.core.exceptions import AppException
 from app.core.roles import DATA_WRITE_ROLES, MANAGER_SCOPES, RoleCode
 from app.modules.pipeline.repositories.management_db import management_engine
+from app.modules.pipeline.repositories.silver import SilverRepository
 from app.modules.pipeline.services.gold_engine import DIMENSIONS, RECIPE_VERSION
 
 router = APIRouter(prefix="/pipeline/gold", tags=["gold"])
@@ -70,10 +69,6 @@ def access(
     if manager_scopes and DATA_WRITE_ROLES.isdisjoint(roles) and RoleCode.VIEWER not in roles:
         # Các đường đọc Gold cũ cũng phải giữ cùng ranh giới với màn hình manager.
         # Role STAFF của lĩnh vực khác vẫn giữ quyền vốn có của lĩnh vực đó.
-        params.update(
-            manager_user_id=user.get("sub", "0"),
-            manager_today=datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date(),
-        )
         pairs = []
         for index, (name, code) in enumerate(manager_scopes):
             pairs.append(
@@ -85,14 +80,8 @@ def access(
         clause += (
             f" AND (NOT ({alias}.domain=ANY(:manager_domains)) OR EXISTS ("
             "SELECT 1 FROM app.dataset md JOIN app.department dep ON dep.department_id=md.owner_department_id "
-            "JOIN app.assignment a ON a.department_id=dep.department_id "
-            "JOIN app.employee e ON e.employee_id=a.employee_id "
-            "JOIN app.app_user u ON u.employee_id=e.employee_id "
             f"WHERE md.dataset_id={alias}.dataset_id AND md.domain={alias}.domain "
-            "AND md.status='ACTIVE' AND dep.status='ACTIVE' AND u.is_active=TRUE "
-            "AND u.app_user_id=CAST(:manager_user_id AS bigint) "
-            "AND upper(e.employee_status)='ACTIVE' AND upper(a.assignment_status)='ACTIVE' "
-            "AND a.start_date<=:manager_today AND (a.end_date IS NULL OR a.end_date>=:manager_today) "
+            "AND md.status='ACTIVE' AND dep.status='ACTIVE' "
             "AND (" + " OR ".join(pairs) + ")))"
         )
     return clause, params
@@ -121,17 +110,19 @@ def sources(
         rows = (
             conn.execute(
                 text(
-                    """SELECT h.scope,h.snapshot_id AS silver_snapshot_id,
+                    """SELECT h.scope,h.silver_snapshot_id,
             cr.dataset_id,cr.domain,d.dataset_name,j.job_id,j.status,j.error_code,j.finished_at,
+            q.status AS database_sync_status,q.error_code AS database_sync_error,
             CASE WHEN j.status='SUCCEEDED' AND s.active_job_id=j.job_id THEN 'CURRENT'
                  WHEN j.job_id IS NULL THEN 'NOT_STARTED' ELSE j.status END AS sync_status
-            FROM app.silver_head h
-            JOIN LATERAL (SELECT * FROM app.cleaning_run c WHERE c.silver_snapshot_id=h.snapshot_id
+            FROM app.gold_scope h
+            JOIN LATERAL (SELECT * FROM app.cleaning_run c WHERE c.silver_snapshot_id=h.silver_snapshot_id
               AND c.publication_status IN ('PUBLISHED','PUBLISHED_WITH_QUARANTINE')
               ORDER BY c.finished_at DESC NULLS LAST,c.run_id LIMIT 1) cr ON TRUE
             JOIN app.dataset d ON d.dataset_id=cr.dataset_id
-            LEFT JOIN app.gold_scope s ON s.scope=h.scope AND s.silver_snapshot_id=h.snapshot_id
+            LEFT JOIN app.gold_scope s ON s.scope=h.scope AND s.silver_snapshot_id=h.silver_snapshot_id
             LEFT JOIN app.gold_job j ON j.scope=s.scope AND j.generation=s.generation
+            LEFT JOIN app.gold_sync_job q ON q.gold_job_id=j.job_id
             WHERE """
                     + clause
                     + " ORDER BY cr.finished_at DESC NULLS LAST,h.scope LIMIT :limit OFFSET :offset"
@@ -153,7 +144,7 @@ class RefreshRequest(BaseModel):
 def refresh(request: RefreshRequest, db: DB, _user: Admin) -> dict[str, Any]:
     with db.begin() as conn:
         scope = conn.execute(
-            text("SELECT scope FROM app.silver_head WHERE snapshot_id=:id FOR UPDATE"),
+            text("SELECT scope FROM app.gold_scope WHERE silver_snapshot_id=:id FOR UPDATE"),
             {"id": str(request.silver_snapshot_id)},
         ).scalar_one_or_none()
         if scope is None:
@@ -162,8 +153,14 @@ def refresh(request: RefreshRequest, db: DB, _user: Admin) -> dict[str, Any]:
                 code="GOLD_SILVER_HEAD_CHANGED",
                 status_code=409,
             )
+        snapshot = SilverRepository(db).snapshot(str(request.silver_snapshot_id), scope)
         job_id = conn.execute(
-            text("SELECT app.enqueue_gold(:scope)"), {"scope": scope}
+            text("SELECT app.enqueue_gold_object(:scope,:snapshot,CAST(:manifest AS jsonb))"),
+            {
+                "scope": scope,
+                "snapshot": str(request.silver_snapshot_id),
+                "manifest": snapshot["manifest_ref"],
+            },
         ).scalar_one()
         if job_id is None:
             raise AppException(
@@ -198,8 +195,10 @@ def jobs(
             conn.execute(
                 text(
                     """SELECT j.job_id,j.scope,j.silver_snapshot_id,j.generation,j.recipe_version,
-            j.status,j.attempt_number,j.created_at,j.finished_at,j.error_code,j.dataset_id,j.domain
-            FROM app.gold_job j JOIN app.gold_scope s USING(scope) WHERE """
+            j.status,j.attempt_number,j.created_at,j.finished_at,j.error_code,j.dataset_id,j.domain,
+            q.status AS database_sync_status,q.error_code AS database_sync_error,q.result AS database_sync_result
+            FROM app.gold_job j JOIN app.gold_scope s USING(scope)
+            LEFT JOIN app.gold_sync_job q ON q.gold_job_id=j.job_id WHERE """
                     + clause
                     + " AND (CAST(:dataset AS bigint) IS NULL OR j.dataset_id=:dataset) AND (CAST(:status AS text) IS NULL OR j.status=:status) ORDER BY j.created_at DESC,j.job_id LIMIT :limit OFFSET :offset"
                 ),
@@ -222,7 +221,10 @@ def read_job(db: Engine, user: dict[str, Any], job_id: str) -> dict[str, Any]:
     with db.connect() as conn:
         row = (
             conn.execute(
-                text("SELECT j.* FROM app.gold_job j WHERE j.job_id=:id AND " + clause),
+                text(
+                    "SELECT j.*,q.status AS database_sync_status,q.error_code AS database_sync_error,q.error_report AS database_sync_report,q.result AS database_sync_result FROM app.gold_job j LEFT JOIN app.gold_sync_job q ON q.gold_job_id=j.job_id WHERE j.job_id=:id AND "
+                    + clause
+                ),
                 {**params, "id": job_id},
             )
             .mappings()
@@ -250,9 +252,9 @@ def retry(job_id: UUID, db: DB, user: Admin) -> dict[str, Any]:
             conn.execute(
                 text("""UPDATE app.gold_job j SET status='QUEUED',next_attempt_at=now(),
             error_code=NULL,finished_at=NULL,max_attempts=attempt_number+3
-            FROM app.gold_scope s,app.silver_head h
-            WHERE j.job_id=:id AND j.scope=s.scope AND h.scope=s.scope
-            AND j.generation=s.generation AND h.snapshot_id=j.silver_snapshot_id
+            FROM app.gold_scope s
+            WHERE j.job_id=:id AND j.scope=s.scope
+            AND j.generation=s.generation AND s.silver_snapshot_id=j.silver_snapshot_id
             AND j.status='FAILED' RETURNING j.job_id,j.status"""),
                 {"id": str(job_id)},
             )
@@ -353,3 +355,31 @@ def attempts(job_id: UUID, db: DB, user: Reader) -> list[dict[str, Any]]:
                 {"id": str(job_id)},
             ).mappings()
         ]
+
+
+@router.post(
+    "/jobs/{job_id}/database-sync/retry",
+    status_code=202,
+    summary="Thử lại đồng bộ bản ghi Gold vào DB",
+)
+def retry_database_sync(job_id: UUID, db: DB, user: Admin) -> dict[str, Any]:
+    read_job(db, user, str(job_id))
+    with db.begin() as conn:
+        row = (
+            conn.execute(
+                text("""UPDATE app.gold_sync_job q SET status='QUEUED',next_attempt_at=now(),finished_at=NULL,error_code=NULL,error_report=NULL
+        FROM app.gold_job j,app.gold_scope s WHERE q.gold_job_id=j.job_id AND j.scope=s.scope
+        AND s.active_job_id=j.job_id AND s.generation=j.generation AND q.gold_job_id=:id
+        AND q.status IN ('FAILED','BLOCKED') RETURNING q.gold_job_id,q.status"""),
+                {"id": str(job_id)},
+            )
+            .mappings()
+            .first()
+        )
+    if row is None:
+        raise AppException(
+            "Chỉ thử lại Gold hiện hành đang lỗi hoặc bị chặn",
+            code="GOLD_SYNC_RETRY_CONFLICT",
+            status_code=409,
+        )
+    return {"job_id": row["gold_job_id"], "status": row["status"]}

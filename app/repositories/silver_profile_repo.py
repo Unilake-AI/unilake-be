@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.core.exceptions import AppException
 from app.modules.datasources.models import DataLayer, Dataset, DataSource, SourceSystem
 from app.modules.pipeline.models.profiles import SilverSourceProfile
+from app.modules.pipeline.repositories.object_metadata import configuration
 from app.modules.pipeline.services.source_profiles import SourceProfile, load_profile
 
 if TYPE_CHECKING:
@@ -17,6 +18,11 @@ if TYPE_CHECKING:
 
 def load_source_profile(engine: Engine, path: str, profile_id: str) -> SourceProfile:
     with engine.connect() as connection:
+        if connection.dialect.name != "sqlite":
+            row = configuration(connection)["profiles"].get(profile_id)
+            if row is not None:
+                return SourceProfile.model_validate(row["definition"])
+            return load_profile(path, profile_id)
         definition = connection.execute(
             select(SilverSourceProfile.definition).where(
                 SilverSourceProfile.profile_id == profile_id

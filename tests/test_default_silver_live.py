@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from copy import deepcopy
 from pathlib import Path
@@ -82,7 +83,7 @@ def test_no_policy_no_crosswalk_upload_publishes_actual_silver_and_gold(
     if production:
         monkeypatch.setattr(settings, "app_env", "production")
     profile, job = process(system, job_id)
-    assert job["status"] == "SUCCESS", job
+    assert job["status"] == "SUCCESS", json.dumps(job, default=str, ensure_ascii=False)
     assert profile.entity == "position"
     assert profile.identity_mode == "source"
     publisher = SilverPublicationService(
@@ -138,7 +139,7 @@ def test_repeat_file_schema_change_replaces_one_head_and_preserves_identifiers(a
     )
     system["ingestion"]()
     profile, job = process(system, first)
-    assert job["status"] == "SUCCESS", job
+    assert job["status"] == "SUCCESS", json.dumps(job, default=str, ensure_ascii=False)
     assert "email" not in profile.field_mapping
     old = job["result"]["publication"]["snapshot_id"]
     second = system["upload"]("tracking_code,note\n007,mới\n")
@@ -158,15 +159,9 @@ def test_repeat_file_schema_change_replaces_one_head_and_preserves_identifiers(a
     assert rows[0]["note"] == "mới"
     assert "amount" not in rows[0]
     assert "email" not in rows[0]
-    with system["engine"].connect() as conn:
-        assert conn.execute(text("SELECT count(*) FROM app.silver_head")).scalar_one() == 1
-        assert (
-            conn.execute(
-                text("SELECT snapshot_id FROM app.silver_snapshot WHERE snapshot_id=:id"),
-                {"id": old},
-            ).scalar_one()
-            == old
-        )
+    repository = SilverRepository(system["engine"])
+    assert repository.head("production:" + profile.scope) != old
+    assert repository.snapshot(old, "production:" + profile.scope)["snapshot_id"] == old
 
 
 def test_bad_file_is_quarantined_automatically_without_replacing_previous_good_data(automatic):
@@ -209,7 +204,7 @@ def test_multiple_files_same_dataset_get_independent_scopes(automatic):
     assert first["status"] == second["status"] == "SUCCESS"
     assert profile.scope != other.scope
     with system["engine"].connect() as conn:
-        assert conn.execute(text("SELECT count(*) FROM app.silver_head")).scalar_one() == 2
+        assert conn.execute(text("SELECT count(*) FROM app.gold_scope")).scalar_one() == 2
 
 
 def test_upgrade_enqueues_only_latest_unprocessed_bronze_and_is_idempotent(automatic):
@@ -284,3 +279,75 @@ def test_admin_monitors_staff_upload_before_bronze_through_published_silver(auto
     assert get(search="no-file-matches").json()["items"] == []
     system["user"]["roles"] = ["HR_STAFF"]
     assert get(ingestion_job_id=job_id).status_code == 403
+
+
+def test_gold_details_sync_real_business_records_without_silver_tables(automatic):
+    from app.modules.pipeline.services import gold_business_sync
+
+    system = automatic
+    files = [
+        (
+            "department_id,department_code,department_name,department_type,parent_department_id,status,created_at\n099,PNS,Phòng Nhân sự,Office,,Active,2026-01-01T00:00:00Z\n",
+            "department",
+        ),
+        (
+            "position_id,position_code,position_name,position_level\nP1,TP,Trưởng phòng,Management\n",
+            "position",
+        ),
+        (
+            "employee_id,employee_code,full_name,gender,hire_date,employee_status,date_of_birth\n007,NV0007,Nguyễn An,Male,2020-01-01,Active,1990-01-01\n",
+            "employee",
+        ),
+        (
+            "assignment_id,employee_id,department_id,position_id,start_date,end_date,is_primary,assignment_status\nA01,007,099,P1,2026-01-01,,false,Active\n",
+            "assignment",
+        ),
+    ]
+    for content, entity in files:
+        job_id = system["upload"](content)
+        system["ingestion"]()
+        profile, job = process(system, job_id)
+        assert job["status"] == "SUCCESS", json.dumps(job, default=str, ensure_ascii=False)
+        assert profile.entity == entity
+        if entity == "employee":
+            publisher = SilverPublicationService(
+                repository=SilverRepository(system["engine"]),
+                storage=MinioSilverStore(silver_writer_client(), settings.minio_bucket_silver),
+                contracts=profile.contracts,
+                scope=profile.scope,
+            )
+            snapshot = job["result"]["publication"]["snapshot_id"]
+            assert "full_name" not in publisher.read_snapshot(snapshot)[entity][0]
+            assert "business_object" in publisher.describe_snapshot(snapshot)["entities"][entity]
+        assert gold_worker.run_once(system["engine"], "gold-business-live")
+        assert gold_business_sync.run_once(system["engine"])
+        with system["engine"].connect() as connection:
+            synced = connection.execute(
+                text(
+                    "SELECT q.status,q.error_code,q.error_report FROM app.gold_sync_job q JOIN app.gold_job j ON j.job_id=q.gold_job_id WHERE j.silver_snapshot_id=:snapshot"
+                ),
+                {"snapshot": job["result"]["publication"]["snapshot_id"]},
+            ).one()
+            assert synced[0] == "SYNCED", synced
+    with system["engine"].connect() as connection:
+        assert (
+            connection.execute(
+                text(
+                    "SELECT count(*) FROM pg_tables WHERE schemaname='app' AND left(tablename,7)='silver_'"
+                )
+            ).scalar_one()
+            == 0
+        )
+        person = connection.execute(
+            text("SELECT employee_id,full_name FROM app.employee WHERE employee_code='NV0007'")
+        ).one()
+        assert person[1] == "Nguyễn An"
+        assigned = connection.execute(
+            text(
+                "SELECT a.employee_id,d.department_code,p.position_code FROM app.assignment a JOIN app.department d USING(department_id) JOIN app.position p USING(position_id)"
+            )
+        ).one()
+        assert assigned == (person[0], "PNS", "TP")
+        assert (
+            connection.execute(text("SELECT count(*) FROM gold.current_metrics")).scalar_one() > 0
+        )

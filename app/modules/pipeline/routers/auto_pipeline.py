@@ -16,6 +16,7 @@ from app.core.roles import DATA_WRITE_ROLES, UPLOAD_STAFF_DOMAINS, UPLOAD_WRITE_
 from app.modules.pipeline.contracts.automation import AUTOMATIC_RECIPE_VERSION
 from app.modules.pipeline.repositories.flow_monitor import list_flows
 from app.modules.pipeline.repositories.management_db import management_engine
+from app.modules.pipeline.repositories.object_metadata import worker_heartbeats
 from app.modules.pipeline.services.auto_pipeline import configure
 from app.modules.pipeline.services.flow_monitor import FlowPage
 
@@ -39,11 +40,7 @@ def overview(db: DB, _user: Admin) -> dict[str, Any]:
         paused = connection.execute(
             text("SELECT count(*) FROM app.auto_pipeline_policy WHERE NOT enabled")
         ).scalar_one()
-        healthy = connection.execute(
-            text(
-                "SELECT count(*) FROM app.silver_worker_heartbeat WHERE last_heartbeat_at>now()-interval '45 seconds'"
-            )
-        ).scalar_one()
+        healthy = sum(1 for row in worker_heartbeats(db) if row["healthy"])
     return {
         "automatic_enabled": readiness,
         "recipe_version": AUTOMATIC_RECIPE_VERSION,
@@ -238,12 +235,4 @@ def retry(job_id: UUID, db: DB, user: Admin) -> dict[str, Any]:
 
 @router.get("/workers", summary="Xem các Silver Worker và thời điểm liên lạc gần nhất")
 def workers(db: DB, _user: Admin) -> list[dict[str, Any]]:
-    with db.connect() as connection:
-        return [
-            dict(row)
-            for row in connection.execute(
-                text(
-                    "SELECT *,last_heartbeat_at>now()-interval '45 seconds' AS healthy FROM app.silver_worker_heartbeat ORDER BY last_heartbeat_at DESC,worker_id"
-                )
-            ).mappings()
-        ]
+    return worker_heartbeats(db)

@@ -9,8 +9,12 @@ from copy import deepcopy
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from io import BytesIO
 from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
+
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from app.core.exceptions import AppException
 from app.modules.governance.contracts import LineageEvidence, SnapshotLineage
@@ -99,6 +103,7 @@ class SilverPublicationService:
     policy_json: str
     schema_fingerprint: str
     business_gate: BusinessGate | None
+    business_fields: dict[str, dict[str, dict[str, str]]]
 
     def __init__(
         self,
@@ -111,6 +116,7 @@ class SilverPublicationService:
         business_gate: BusinessGate | None = None,
         profile_approvals: list[dict[str, Any]] | None = None,
         automatic_recipe: dict[str, Any] | None = None,
+        business_fields: dict[str, dict[str, dict[str, str]]] | None = None,
     ) -> None:
         if (
             mode not in {"production", "test"}
@@ -158,6 +164,7 @@ class SilverPublicationService:
                 sort_keys=True,
             ),
             "business_gate": business_gate,
+            "business_fields": deepcopy(business_fields or {}),
         }.items():
             object.__setattr__(self, name, value)
 
@@ -376,7 +383,7 @@ class SilverPublicationService:
             # Dữ liệu cũ chưa qua làm sạch vẫn được nhận diện như trước.
             if result.processing_steps:
                 inputs[-1]["processing_steps"] = result.processing_steps
-        request = {
+        request: dict[str, Any] = {
             "scope": self.scope,
             "parent": base_snapshot,
             "schema": self.schema_fingerprint,
@@ -385,6 +392,11 @@ class SilverPublicationService:
         }
         if quarantine_report is not None:
             request["quarantine_report_sha256"] = quarantine_report.sha256
+        if self.business_fields:
+            request["gold_business_export"] = {
+                "version": "gold-business-fields-v1",
+                "fingerprint": checksum(packed(self.business_fields)),
+            }
         request_hash = checksum(packed(request))
         # Yêu cầu không thay đổi thì dùng lại bộ dữ liệu đã công bố.
         # Không thay bộ dữ liệu hiện hành bằng bộ cũ khi người dùng gửi lại yêu cầu cũ.
@@ -431,6 +443,7 @@ class SilverPublicationService:
             updates: dict[str, list[dict[str, object]]] = {}
             lineage: dict[str, list[dict[str, Any]]] = {}
             processed_at = datetime.now(UTC)
+            exported_fields: dict[str, dict[str, dict[str, str]]] = {}
             for result in results:
                 entity = result.key.entity
                 if (
@@ -508,6 +521,11 @@ class SilverPublicationService:
                             }
                         )
                     )
+                    extra = self.business_fields.get(entity, {}).get(row.locator, {})
+                    if set(extra) - {"full_name"}:
+                        raise SilverError("GOLD_BUSINESS_FIELDS_NOT_ALLOWED")
+                    if extra:
+                        exported_fields.setdefault(entity, {})[record_id] = extra
                     records.append(
                         {
                             **row.values,
@@ -578,11 +596,41 @@ class SilverPublicationService:
                 ref = self.storage.put(f"{prefix}/{entity}-{checksum(data)}.parquet", data)
                 if read_parquet(self.storage.get(ref), specs[entity], len(records)) != records:
                     raise SilverError("PARQUET_READBACK_MISMATCH")
+                previous_artifact = entities.get(entity, {})
+                extras = {}
+                if previous_artifact.get("business_object"):
+                    previous_table = pq.read_table(
+                        BytesIO(self.storage.get(ObjectRef(**previous_artifact["business_object"])))
+                    )
+                    extras = {
+                        str(row["_source_record_id"]): {"full_name": row["full_name"]}
+                        for row in previous_table.to_pylist()
+                        if row.get("full_name") is not None
+                    }
+                extras.update(exported_fields.get(entity, {}))
                 entities[entity] = {
                     "object": asdict(ref),
                     "rows": len(records),
                     "lineage": lineage[entity],
                 }
+                if extras:
+                    schema = arrow_schema(specs[entity])
+                    if "full_name" not in schema.names:
+                        schema = schema.append(pa.field("full_name", pa.string()))
+                    operational_rows = [
+                        {**row, **extras.get(str(row["_source_record_id"]), {})} for row in records
+                    ]
+                    operational_table = pa.Table.from_pylist(operational_rows, schema=schema)
+                    output = BytesIO()
+                    pq.write_table(operational_table, output, compression="zstd")
+                    operational_data = output.getvalue()
+                    operational_ref = self.storage.put(
+                        f"{prefix}/{entity}-business-{checksum(operational_data)}.parquet",
+                        operational_data,
+                    )
+                    self.storage.get(operational_ref)
+                    entities[entity]["business_object"] = asdict(operational_ref)
+                    entities[entity]["business_recipe"] = "gold-business-fields-v1"
             manifest["dataset_lineage"] = silver_lineage(
                 run_id=run_id,
                 scope=self.scope,

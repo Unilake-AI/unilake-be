@@ -64,7 +64,7 @@ def notification_query(actor: quality_issues.IssueActor, roles: set[str]) -> Any
         manager = (
             select(DATA_QUALITY_ISSUES, Department.department_name)
             .join(Department, Department.department_id == c.department_id)
-            .where(c.department_id.in_(actor.departments), or_(*pairs) if pairs else false())
+            .where(Department.status == "ACTIVE", or_(*pairs) if pairs else false())
         )
         visible = union(staff, manager).subquery()
     e, r = DATA_QUALITY_ISSUE_EVENTS.c, READS.c

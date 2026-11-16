@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.exceptions import AppException
 from app.modules.pipeline.models.profiles import SilverProfileRevision, SilverSourceProfile
+from app.modules.pipeline.repositories.object_metadata import edit_configuration
 from app.repositories.silver_profile_repo import validate_profile_source
 
 if TYPE_CHECKING:
@@ -27,6 +28,34 @@ def save_profile(
         "updated_by": actor[:100],
         "updated_at": datetime.now(UTC),
     }
+    if db.dialect.name != "sqlite":
+        with db.begin() as connection, edit_configuration(connection) as state:
+            current = state["profiles"].get(name)
+            if revision is None and current is not None:
+                raise AppException(
+                    "Mã cấu hình đã tồn tại", code="SILVER_PROFILE_CONFLICT", status_code=409
+                )
+            if revision is not None and (current is None or current["revision"] != revision):
+                raise AppException(
+                    "Cấu hình đã thay đổi", code="SILVER_PROFILE_REVISION_CONFLICT", status_code=409
+                )
+            new_revision = (revision or 0) + 1
+            state["profiles"][name] = {"profile_id": name, "revision": new_revision, **values}
+            state["revisions"][f"{name}:{new_revision}"] = {
+                "profile_id": name,
+                "revision": new_revision,
+                "definition": values["definition"],
+                "fingerprint": values["fingerprint"],
+                "created_by": actor,
+                "created_at": values["updated_at"],
+            }
+        return {
+            "profile_id": name,
+            "definition": definition,
+            "fingerprint": definition.fingerprint,
+            "revision": new_revision,
+            "storage": "minio",
+        }
     try:
         with db.begin() as connection:
             if revision is None:

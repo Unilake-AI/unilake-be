@@ -11,7 +11,8 @@ Gold tạo dữ liệu tổng hợp phục vụ báo cáo từ **Silver đã cô
 5. Worker kiểm tra bản kê Silver, mã kiểm tra nội dung, phiên bản object, số dòng và nguồn gốc của từng bảng. Bản thử, nguồn không rõ hoặc phạm vi trộn nhiều bộ dữ liệu/lĩnh vực sẽ bị từ chối.
 6. DuckDB tổng hợp dữ liệu, giữ nguyên mã như `007` và `7`. Giá trị trống được ghi nhận thành nhóm thiếu thông tin; không tự điền hoặc đoán giá trị.
 7. Ghi Parquet và bản kê Gold vào MinIO, đọc lại để kiểm tra. Sau đó, trong cùng giao dịch PostgreSQL: lưu số liệu báo cáo, chuyển bản Gold hiện hành, hoàn tất lượt xử lý và ghi nguồn gốc Silver → Gold.
-8. UI đọc số liệu hiện hành, theo dõi lịch sử và tải báo cáo CSV. File hoặc lần chạy còn dang dở không được coi là Gold đã công bố.
+8. Sau công bố Gold, `gold_sync_job` xếp hàng tự động. Worker tạo Parquet Gold chi tiết dưới `gold/production/<scopehash>/<job_id>/business/`, đọc lại và kiểm chứng rồi mới upsert vào các bảng nghiệp vụ trong một transaction. Bản Gold đã bị thay thế không được ghi DB. Bước này độc lập với tổng hợp, nên phải xem thêm `database_sync_status`.
+9. UI đọc số liệu hiện hành, theo dõi lịch sử, trạng thái ghi DB và tải báo cáo CSV. File hoặc lần chạy còn dang dở không được coi là Gold đã công bố.
 
 ## Gold bản đầu tổng hợp gì?
 
@@ -64,7 +65,7 @@ Tất cả đường dẫn dưới đây có tiền tố `/api/v1`. Dùng Bearer
 | `GET /pipeline/gold/jobs/{job_id}/report` | Tải toàn bộ số liệu của phiên bản dưới dạng CSV UTF-8 |
 | `GET /pipeline/gold/workers` | DATA_ADMIN/ADMIN xem thời điểm bộ xử lý còn hoạt động |
 
-Nhân viên và quản lý chỉ đọc Gold của lĩnh vực được xác định từ vai trò trên máy chủ. Với lĩnh vực của manager, backend kiểm tra thêm phân công phòng phụ trách đang hiệu lực và `owner_department_id` của dataset; dataset chưa gán phòng không được hiển thị. Gửi `domain` khác không mở rộng quyền. ADMIN, DATA_ADMIN và VIEWER được xem số liệu tổng hợp ba lĩnh vực; chỉ ADMIN/DATA_ADMIN tạo việc/chạy lại/xem worker. Các API đọc không trả token giữ quyền xử lý. Màn hình manager dùng [API Manager](api/manager-api.md) cho tổng quan, biểu đồ và yêu cầu sửa dữ liệu.
+Nhân viên và quản lý chỉ đọc Gold của lĩnh vực được xác định từ vai trò trên máy chủ. Với lĩnh vực của manager, backend dùng role để xác định mã phòng phụ trách đang hoạt động và kiểm tra `owner_department_id` của dataset; dataset chưa gán phòng không được hiển thị. Gửi `domain` khác không mở rộng quyền. ADMIN, DATA_ADMIN và VIEWER được xem số liệu tổng hợp ba lĩnh vực; chỉ ADMIN/DATA_ADMIN tạo việc/chạy lại/xem worker. Các API đọc không trả token giữ quyền xử lý. Màn hình manager dùng [API Manager](api/manager-api.md) cho tổng quan, biểu đồ và yêu cầu sửa dữ liệu.
 
 UI quản trị nằm ở `/data/gold`, có lọc lĩnh vực, phân trang, lịch sử, chi tiết nguồn Silver, xác nhận chạy lại, tải CSV và trạng thái worker. API đọc đã sẵn cho các màn hình báo cáo phòng ban; chưa thay thế toàn bộ dashboard của từng vai trò.
 
@@ -103,3 +104,13 @@ GOLD_LIVE_TEST=1 .venv/bin/pytest tests/test_gold_live.py --no-cov
 ```
 
 Kiểm thử hạ tầng tạo database riêng và chỉ dọn object của chính lượt thử: tải file thật vào Bronze, chạy Silver Worker, tự tạo Gold, chạy Gold Worker, đọc lại Parquet/số liệu PostgreSQL, tải CSV, kiểm tra phạm vi STAFF, hủy giao dịch, đổi/quay lại Silver, worker hết thời hạn và chạy lại không mất lịch sử.
+
+## Đồng bộ dữ liệu chi tiết vào PostgreSQL
+
+`gold-business-records-v1` hỗ trợ các bảng nghiệp vụ đã liệt kê trong `gold_business_sync_repo.MODELS`, gồm phòng ban, chức vụ, nhân viên, phân công, học phần, chương trình, sinh viên và các quan hệ liên quan. Không cho phép ghi bảng tài khoản, vai trò hoặc quyền. Bảng `app.gold_record_identity` ánh xạ namespace nguồn + loại thực thể + khóa nguồn sang PK thật của ứng dụng; mã `007` khác `7`, không dùng ID nguồn tùy ý làm FK DB. Mã nghiệp vụ trùng giữa hai nguồn đã quản lý bị chặn để tránh ghi đè nhầm hồ sơ.
+
+Silver phục vụ phân tích tiếp tục loại các trường cá nhân theo hợp đồng. Với employee/student/applicant mới xử lý, họ tên hợp lệ từ đúng Bronze gốc được giữ trong object chi tiết nghiệp vụ riêng; bản kê chỉ dẫn object này cho Gold. Dữ liệu phân tích/xem trước không tự thêm họ tên. Không suy ra ngày sinh từ năm sinh, không tự đặt tên hoặc tạo chức vụ còn thiếu.
+
+Trạng thái đồng bộ: QUEUED, RUNNING, SYNCED, BLOCKED, FAILED, SUPERSEDED. `BLOCKED` trả mã lỗi, thực thể và trường bị thiếu, không trả bản ghi cá nhân. Sau khi bổ sung dữ liệu liên kết cùng namespace, các lượt BLOCKED cùng lĩnh vực được xếp lại tự động. Data Admin cũng có thể gọi `POST /api/v1/pipeline/gold/jobs/{job_id}/database-sync/retry` cho bản Gold hiện hành đang BLOCKED/FAILED. API jobs/sources trả `database_sync_status` và `database_sync_error`; chi tiết trả thêm `database_sync_report` và số dòng theo bảng trong `database_sync_result`.
+
+Đồng bộ là upsert, không xóa hồ sơ chỉ vì vắng trong một file. File không nhận diện được thực thể cần ánh xạ; riêng cấu trúc ghi danh phẳng đầy đủ đã khai báo được tách danh mục học phần, không tự tạo sinh viên/lớp chưa đủ dữ liệu. Dữ liệu nghiệp vụ ở DB là kết quả sau Gold; dữ liệu Silver và toàn bộ metadata Silver nằm trên MinIO.

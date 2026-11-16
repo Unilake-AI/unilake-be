@@ -165,8 +165,9 @@ def test_staff_scope_and_multi_role_workspace_do_not_mix_departments(environment
     ] == [3]
     assert client.get("/notifications").json()["total"] == 2
     state["actor"] = IssueActor(11, False, frozenset(), frozenset({"hr", "academic"}))
-    assert client.get("/notifications").json()["items"] == []
-    assert client.post("/notifications/read", json={"event_ids": [1]}).status_code == 404
+    assert [item["event_id"] for item in client.get("/notifications").json()["items"]] == [1]
+    assert client.get("/notifications?workspace=STAFF").json()["items"] == []
+    assert client.post("/notifications/read", json={"event_ids": [1]}).status_code == 204
 
 
 @pytest.mark.parametrize(

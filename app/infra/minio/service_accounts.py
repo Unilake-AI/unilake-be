@@ -82,6 +82,14 @@ def policy_for(role: str, bucket: str) -> dict[str, Any]:
     elif role == "silver-writer":
         policy["Statement"].append(
             {
+                "Effect": "Allow",
+                "Action": ["s3:ListBucket"],
+                "Resource": [bucket_arn],
+                "Condition": {"StringLike": {"s3:prefix": ["silver/control/v1/*"]}},
+            }
+        )
+        policy["Statement"].append(
+            {
                 "Effect": "Deny",
                 "Action": ["s3:DeleteObject", "s3:DeleteObjectVersion"],
                 "Resource": [objects],
