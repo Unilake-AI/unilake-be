@@ -1,0 +1,327 @@
+{
+  "generated_at": "2026-11-12",
+  "data_origin": "deterministic synthetic; no personnel records copied",
+  "schema_source": "Live PostgreSQL information_schema and pg_constraint, app schema, 2026-11-12",
+  "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+  "files": [
+    {
+      "path": "smoke/csv/department.csv",
+      "entity": "department",
+      "records": 21,
+      "bytes": 1473,
+      "sha256": "7e0a08531976ca085d3b0c0b2acfd9c0e55bd65645f418d6abaafb0a2893367f",
+      "tier": "smoke",
+      "format": "CSV",
+      "source_table": "department.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "smoke"
+    },
+    {
+      "path": "smoke/csv/position.csv",
+      "entity": "position",
+      "records": 2,
+      "bytes": 130,
+      "sha256": "8c255d9282af3620ced767d6c36e8608a0825460c271cb19e8289e673885f011",
+      "tier": "smoke",
+      "format": "CSV",
+      "source_table": "position.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "smoke"
+    },
+    {
+      "path": "smoke/csv/qualification.csv",
+      "entity": "qualification",
+      "records": 3,
+      "bytes": 174,
+      "sha256": "22c42886b28a7479af9a2019fcf0dcd5554e52f809645d155e8279d5603906cb",
+      "tier": "smoke",
+      "format": "CSV",
+      "source_table": "qualification.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "smoke"
+    },
+    {
+      "path": "smoke/csv/employee.csv",
+      "entity": "employee",
+      "records": 5000,
+      "bytes": 517882,
+      "sha256": "e755faf939cae7beece9285b44cc53cd1d2b5200980ecb7ef235001a3b089c31",
+      "tier": "smoke",
+      "format": "CSV",
+      "source_table": "employee.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "smoke"
+    },
+    {
+      "path": "smoke/csv/assignment.csv",
+      "entity": "assignment",
+      "records": 10000,
+      "bytes": 437782,
+      "sha256": "0a45c47e1379b4d34eaa4360a8cacaa0d80826b1e92a4ef1ca6052b1d7ece441",
+      "tier": "smoke",
+      "format": "CSV",
+      "source_table": "assignment.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "smoke"
+    },
+    {
+      "path": "smoke/csv/employee_qualification.csv",
+      "entity": "employee_qualification",
+      "records": 10000,
+      "bytes": 457842,
+      "sha256": "87e4905498c3439c916f384587f30605951489979a9cea1f07c764aa1048b4fe",
+      "tier": "smoke",
+      "format": "CSV",
+      "source_table": "employee_qualification.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "smoke"
+    },
+    {
+      "path": "load/csv/department.csv",
+      "entity": "department",
+      "records": 21,
+      "bytes": 1473,
+      "sha256": "7e0a08531976ca085d3b0c0b2acfd9c0e55bd65645f418d6abaafb0a2893367f",
+      "tier": "load",
+      "format": "CSV",
+      "source_table": "department.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "load"
+    },
+    {
+      "path": "load/csv/position.csv",
+      "entity": "position",
+      "records": 2,
+      "bytes": 130,
+      "sha256": "8c255d9282af3620ced767d6c36e8608a0825460c271cb19e8289e673885f011",
+      "tier": "load",
+      "format": "CSV",
+      "source_table": "position.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "load"
+    },
+    {
+      "path": "load/csv/qualification.csv",
+      "entity": "qualification",
+      "records": 3,
+      "bytes": 174,
+      "sha256": "22c42886b28a7479af9a2019fcf0dcd5554e52f809645d155e8279d5603906cb",
+      "tier": "load",
+      "format": "CSV",
+      "source_table": "qualification.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "load"
+    },
+    {
+      "path": "load/csv/employee.csv",
+      "entity": "employee",
+      "records": 100000,
+      "bytes": 10777886,
+      "sha256": "dd23a8114fa15e5f696ddc71653e9d2bf585737365884eeaa3607d8a6ea9056f",
+      "tier": "load",
+      "format": "CSV",
+      "source_table": "employee.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "DB-compatible codes NV + 6 digits; draft NV[0-9]{4} does NOT match; source profile review required",
+      "parent_bundle": "load"
+    },
+    {
+      "path": "load/csv/assignment.csv",
+      "entity": "assignment",
+      "records": 200000,
+      "bytes": 9286787,
+      "sha256": "d65742dfa0371ccd4a9cf851ccabc89cb6b1c2ddc319788bac33313f69264058",
+      "tier": "load",
+      "format": "CSV",
+      "source_table": "assignment.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "load"
+    },
+    {
+      "path": "load/csv/employee_qualification.csv",
+      "entity": "employee_qualification",
+      "records": 200000,
+      "bytes": 9377846,
+      "sha256": "fdbcf9aaf50ca480511f641857089d49301f43b7a93ee1aae860fffd0317a5e4",
+      "tier": "load",
+      "format": "CSV",
+      "source_table": "employee_qualification.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "load"
+    },
+    {
+      "path": "load/csv-equivalent-xlsx/employee.csv",
+      "entity": "employee",
+      "records": 20000,
+      "bytes": 2137884,
+      "sha256": "5d46fd963dababa9dfc615ac683292761ad23e3dd22e779382ff6a373ab32abf",
+      "tier": "load",
+      "format": "CSV",
+      "source_table": "employee.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "DB-compatible codes NV + 6 digits; draft NV[0-9]{4} does NOT match; source profile review required",
+      "parent_bundle": "load"
+    },
+    {
+      "path": "load/csv-equivalent-xlsx/assignment.csv",
+      "entity": "assignment",
+      "records": 50000,
+      "bytes": 2271784,
+      "sha256": "1d6727f31fe5dc1859d57d0468c4f423e7e98f2147e70496095beac8ae619e79",
+      "tier": "load",
+      "format": "CSV",
+      "source_table": "assignment.csv",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "load"
+    },
+    {
+      "path": "smoke/xlsx/employee.xlsx",
+      "entity": "employee",
+      "records": 5000,
+      "bytes": 238260,
+      "sha256": "9e4b52989438c5decc65eb4c54c396bae40738aa979bc270d1b4b74bb1ce5d73",
+      "tier": "smoke",
+      "format": "XLSX",
+      "source_table": "employee.xlsx",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "smoke"
+    },
+    {
+      "path": "load/xlsx/employee.xlsx",
+      "entity": "employee",
+      "records": 20000,
+      "bytes": 938234,
+      "sha256": "5d28758137c29b1802350e0aa79bca4bedfe36bb1ebe61a37b4f5ef3f0dfa2b7",
+      "tier": "load",
+      "format": "XLSX",
+      "source_table": "employee.xlsx",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "DB-compatible codes NV + 6 digits; draft NV[0-9]{4} does NOT match; source profile review required",
+      "parent_bundle": "load"
+    },
+    {
+      "path": "load/xlsx/assignment.xlsx",
+      "entity": "assignment",
+      "records": 50000,
+      "bytes": 1655117,
+      "sha256": "1314a18aaa5602d623cd93e61e1cf8634051df593425e5123e85393e13c755a4",
+      "tier": "load",
+      "format": "XLSX",
+      "source_table": "assignment.xlsx",
+      "approval": "NEEDS_DOMAIN_OWNER_APPROVAL",
+      "rule_note": "Values chosen compatible with current illustrative HR enums; not production approval",
+      "parent_bundle": "load"
+    }
+  ],
+  "validation": {
+    "status": "PASS",
+    "results": [
+      {
+        "file": "smoke\\csv\\department.csv",
+        "records": 21,
+        "checks": "header, required, types, length, enums, declared range, PK, UNIQUE, FK, dates",
+        "result": "PASS"
+      },
+      {
+        "file": "smoke\\csv\\position.csv",
+        "records": 2,
+        "checks": "header, required, types, length, enums, declared range, PK, UNIQUE, FK, dates",
+        "result": "PASS"
+      },
+      {
+        "file": "smoke\\csv\\qualification.csv",
+        "records": 3,
+        "checks": "header, required, types, length, enums, declared range, PK, UNIQUE, FK, dates",
+        "result": "PASS"
+      },
+      {
+        "file": "smoke\\csv\\employee.csv",
+        "records": 5000,
+        "checks": "header, required, types, length, enums, declared range, PK, UNIQUE, FK, dates",
+        "result": "PASS"
+      },
+      {
+        "file": "smoke\\csv\\assignment.csv",
+        "records": 10000,
+        "checks": "header, required, types, length, enums, declared range, PK, UNIQUE, FK, dates",
+        "result": "PASS"
+      },
+      {
+        "file": "smoke\\csv\\employee_qualification.csv",
+        "records": 10000,
+        "checks": "header, required, types, length, enums, declared range, PK, UNIQUE, FK, dates",
+        "result": "PASS"
+      },
+      {
+        "file": "load\\csv\\department.csv",
+        "records": 21,
+        "checks": "header, required, types, length, enums, declared range, PK, UNIQUE, FK, dates",
+        "result": "PASS"
+      },
+      {
+        "file": "load\\csv\\position.csv",
+        "records": 2,
+        "checks": "header, required, types, length, enums, declared range, PK, UNIQUE, FK, dates",
+        "result": "PASS"
+      },
+      {
+        "file": "load\\csv\\qualification.csv",
+        "records": 3,
+        "checks": "header, required, types, length, enums, declared range, PK, UNIQUE, FK, dates",
+        "result": "PASS"
+      },
+      {
+        "file": "load\\csv\\employee.csv",
+        "records": 100000,
+        "checks": "header, required, types, length, enums, declared range, PK, UNIQUE, FK, dates",
+        "result": "PASS"
+      },
+      {
+        "file": "load\\csv\\assignment.csv",
+        "records": 200000,
+        "checks": "header, required, types, length, enums, declared range, PK, UNIQUE, FK, dates",
+        "result": "PASS"
+      },
+      {
+        "file": "load\\csv\\employee_qualification.csv",
+        "records": 200000,
+        "checks": "header, required, types, length, enums, declared range, PK, UNIQUE, FK, dates",
+        "result": "PASS"
+      },
+      {
+        "file": "smoke/xlsx/employee.xlsx",
+        "records": 5000,
+        "checks": "all rows equal paired CSV after typed-date/boolean normalization; zero formulas",
+        "result": "PASS"
+      },
+      {
+        "file": "load/xlsx/employee.xlsx",
+        "records": 20000,
+        "checks": "all rows equal paired CSV after typed-date/boolean normalization; zero formulas",
+        "result": "PASS"
+      },
+      {
+        "file": "load/xlsx/assignment.xlsx",
+        "records": 50000,
+        "checks": "all rows equal paired CSV after typed-date/boolean normalization; zero formulas",
+        "result": "PASS"
+      }
+    ],
+    "production_policy_approval": false,
+    "live_ingestion_tested": false,
+    "limitation": "Large employee codes deliberately exceed illustrative NV+4digit pattern; DB schema does not impose that regex. Review source profile before Silver."
+  }
+}

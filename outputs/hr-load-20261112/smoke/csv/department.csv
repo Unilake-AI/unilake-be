@@ -1,0 +1,22 @@
+department_id,department_code,department_name,department_type,parent_department_id,status,created_at
+1,UNI,Trường giả lập,University,,Active,2015-01-01 00:00:00
+2,PAA,Phòng giả lập 1,Office,1,Active,2015-01-01 00:00:00
+3,PAB,Phòng giả lập 2,Office,1,Active,2015-01-01 00:00:00
+4,PAC,Phòng giả lập 3,Office,1,Active,2015-01-01 00:00:00
+5,PAD,Phòng giả lập 4,Office,1,Active,2015-01-01 00:00:00
+6,PAE,Phòng giả lập 5,Office,1,Active,2015-01-01 00:00:00
+7,PAF,Phòng giả lập 6,Office,1,Active,2015-01-01 00:00:00
+8,PAG,Phòng giả lập 7,Office,1,Active,2015-01-01 00:00:00
+9,PAH,Phòng giả lập 8,Office,1,Active,2015-01-01 00:00:00
+10,PAI,Phòng giả lập 9,Office,1,Active,2015-01-01 00:00:00
+11,PAJ,Phòng giả lập 10,Office,1,Active,2015-01-01 00:00:00
+12,PAK,Phòng giả lập 11,Office,1,Active,2015-01-01 00:00:00
+13,PAL,Phòng giả lập 12,Office,1,Active,2015-01-01 00:00:00
+14,PAM,Phòng giả lập 13,Office,1,Active,2015-01-01 00:00:00
+15,PAN,Phòng giả lập 14,Office,1,Active,2015-01-01 00:00:00
+16,PAO,Phòng giả lập 15,Office,1,Active,2015-01-01 00:00:00
+17,PAP,Phòng giả lập 16,Office,1,Active,2015-01-01 00:00:00
+18,PAQ,Phòng giả lập 17,Office,1,Active,2015-01-01 00:00:00
+19,PAR,Phòng giả lập 18,Office,1,Active,2015-01-01 00:00:00
+20,PAS,Phòng giả lập 19,Office,1,Active,2015-01-01 00:00:00
+21,PAT,Phòng giả lập 20,Office,1,Active,2015-01-01 00:00:00
