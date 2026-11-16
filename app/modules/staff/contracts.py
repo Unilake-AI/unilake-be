@@ -5,3 +5,4 @@ from __future__ import annotations
 from app.modules.staff import schemas as schemas
 from app.modules.staff.services import datasets as datasets
 from app.modules.staff.services import quality_issues as quality_issues
+from app.modules.staff.services import upload_returns as upload_returns

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
             ".env.silver-backend.local",
             ".env.source-reader.local",
             ".env.upload-backend.local",
+            ".env.gold-worker.local",
         ),
         env_file_encoding="utf-8",
         case_sensitive=False,
@@ -97,6 +98,10 @@ class Settings(BaseSettings):
     )
     worker_heartbeat_seconds: int = Field(default=10, gt=0, alias="WORKER_HEARTBEAT_SECONDS")
     worker_health_stale_seconds: int = Field(default=45, gt=0, alias="WORKER_HEALTH_STALE_SECONDS")
+    silver_worker_id: str = Field(default_factory=socket.gethostname, alias="SILVER_WORKER_ID")
+    silver_poll_seconds: int = Field(default=2, ge=1, alias="SILVER_POLL_SECONDS")
+    silver_heartbeat_seconds: int = Field(default=10, ge=1, alias="SILVER_HEARTBEAT_SECONDS")
+    silver_lease_seconds: int = Field(default=120, ge=30, alias="SILVER_LEASE_SECONDS")
     ingestion_retry_max_attempts: int = Field(default=3, ge=1, alias="INGESTION_RETRY_MAX_ATTEMPTS")
     ingestion_retry_first_delay_seconds: int = Field(
         default=10, gt=0, alias="INGESTION_RETRY_FIRST_DELAY_SECONDS"
@@ -109,6 +114,10 @@ class Settings(BaseSettings):
     )
 
     minio_bucket_gold: str = Field(default="gold", alias="MINIO_BUCKET_GOLD")
+    gold_writer_access_key: str = Field(default="", alias="GOLD_WRITER_ACCESS_KEY")
+    gold_writer_secret_key: str = Field(default="", alias="GOLD_WRITER_SECRET_KEY", repr=False)
+    gold_worker_id: str = Field(default_factory=socket.gethostname, alias="GOLD_WORKER_ID")
+    gold_poll_seconds: int = Field(default=2, ge=1, alias="GOLD_POLL_SECONDS")
 
     # MỚI: DuckDB
     duckdb_path: str = Field(default=":memory:", alias="DUCKDB_PATH")

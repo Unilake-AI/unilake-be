@@ -13,7 +13,6 @@ from fastapi import Path as PathParam
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import insert, select, update
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
 from app.core.deps import require_role
@@ -26,6 +25,7 @@ from app.modules.pipeline.models.profiles import (
     SilverSourceProfile,
 )
 from app.modules.pipeline.repositories.management_db import management_engine
+from app.modules.pipeline.services.profile_storage import save_profile
 from app.modules.pipeline.services.source_profiles import SourceProfile
 from app.repositories.silver_governance_repo import (
     approved_evidence,
@@ -33,7 +33,6 @@ from app.repositories.silver_governance_repo import (
     reject,
     require_manager,
 )
-from app.repositories.silver_profile_repo import validate_profile_source
 
 router = APIRouter(prefix="/pipeline/profiles", tags=["silver-profiles"])
 DB = Annotated[Engine, Depends(management_engine)]
@@ -110,9 +109,16 @@ def list_profiles(
     _admin: Admin,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
+    dataset_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> list[ProfileRead]:
     profiles = available_profiles(db)
-    return [profiles[name] for name in sorted(profiles)][offset : offset + limit]
+    # Lọc trước khi chia trang để giao diện chỉ chọn cách xử lý thuộc đúng bộ dữ liệu.
+    matched = [
+        profiles[name]
+        for name in sorted(profiles)
+        if dataset_id is None or profiles[name].definition.dataset_id == dataset_id
+    ]
+    return matched[offset : offset + limit]
 
 
 @router.get(
@@ -130,58 +136,7 @@ def get_profile(profile_id: ProfileID, db: DB, _admin: Admin) -> ProfileRead:
 def _save(
     db: Engine, name: str, definition: SourceProfile, actor: str, revision: int | None
 ) -> ProfileRead:
-    validate_profile_source(db, definition)
-    values = {
-        "definition": definition.model_dump(mode="json"),
-        "fingerprint": definition.fingerprint,
-        "updated_by": actor[:100],
-        "updated_at": datetime.now(UTC),
-    }
-    try:
-        with db.begin() as connection:
-            if revision is None:
-                connection.execute(
-                    insert(SilverSourceProfile).values(profile_id=name, revision=1, **values)
-                )
-                new_revision = 1
-            else:
-                changed = connection.execute(
-                    update(SilverSourceProfile)
-                    .where(
-                        SilverSourceProfile.profile_id == name,
-                        SilverSourceProfile.revision == revision,
-                    )
-                    .values(revision=revision + 1, **values)
-                    .returning(SilverSourceProfile.profile_id)
-                ).scalar_one_or_none()
-                if changed is None:
-                    raise AppException(
-                        "Cấu hình đã thay đổi, hãy tải lại trước khi sửa",
-                        code="SILVER_PROFILE_REVISION_CONFLICT",
-                        status_code=409,
-                    )
-                new_revision = revision + 1
-            connection.execute(
-                insert(SilverProfileRevision).values(
-                    profile_id=name,
-                    revision=new_revision,
-                    definition=values["definition"],
-                    fingerprint=values["fingerprint"],
-                    created_by=actor,
-                    created_at=values["updated_at"],
-                )
-            )
-    except IntegrityError:
-        raise AppException(
-            "Mã cấu hình đã tồn tại", code="SILVER_PROFILE_CONFLICT", status_code=409
-        ) from None
-    return ProfileRead(
-        profile_id=name,
-        definition=definition,
-        fingerprint=definition.fingerprint,
-        revision=new_revision,
-        storage="database",
-    )
+    return ProfileRead(**save_profile(db, name, definition, actor, revision))
 
 
 @router.post("", response_model=ProfileRead, status_code=201, summary="Tạo cấu hình nguồn Silver")

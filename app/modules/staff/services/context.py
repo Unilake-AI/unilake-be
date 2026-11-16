@@ -16,6 +16,7 @@ from app.repositories.department_access_repo import (
     active_department_choices,
     active_roles,
 )
+from app.repositories.quality_issue_repo import has_uploader_returns
 
 DOMAIN_NAMES = {"hr": "Nhân sự", "academic": "Đào tạo", "admissions": "Tuyển sinh"}
 
@@ -43,6 +44,7 @@ async def get_context(
             domains = set(DOMAIN_NAMES)
         departments = await active_department_choices(db, user_id)
         username = await account_username(db, user_id)
+        returned_uploads = await has_uploader_returns(db, user_id, domains) if domains else False
     except SQLAlchemyError:
         raise AppException(
             "Không thể đọc quyền tài khoản", code="STAFF_CONTEXT_UNAVAILABLE", status_code=503
@@ -58,14 +60,17 @@ async def get_context(
         departments=[DepartmentChoice(**row) for row in departments],
         can_upload=True,
         can_resolve_issues=bool(
-            departments and any(role in roles for role in UPLOAD_STAFF_DOMAINS)
+            (departments or returned_uploads)
+            and any(role in roles for role in UPLOAD_STAFF_DOMAINS)
         ),
         can_manage_silver=is_admin,
-        needs_department_assignment=not is_admin and not departments,
+        needs_department_assignment=not is_admin and not departments and not returned_uploads,
         accepted_extensions=[".csv", ".xlsx", ".xlsm"],
         max_file_bytes=settings.upload_max_bytes,
         max_records=settings.upload_max_records,
-        note="Cần phân công phòng ban đang hiệu lực để nhận và báo sửa dữ liệu"
+        note="Bạn có thể sửa file do mình nạp đã được quản trị duyệt trả về"
+        if returned_uploads and not departments
+        else "Cần phân công phòng ban đang hiệu lực hoặc được duyệt trả lại file mình đã nạp"
         if not departments
         else "Chỉ người được giao mới được báo đã sửa",
     )

@@ -60,6 +60,8 @@ class CleaningPreviewRequest(BaseModel):
 # [SỬA - Vấn đề 1] Bảng thông báo lỗi tiếng Việt thân thiện cho người dùng cuối (non-tech),
 # tách biệt với mã lỗi nội bộ để dễ hiển thị trên giao diện.
 _CLEANING_ERROR_MESSAGES: dict[str, str] = {
+    "CROSSWALK_VERSION_NOT_FOUND": "Không tìm thấy bản đối chiếu mã đã chọn. Hãy tải lại danh sách",
+    "CROSSWALK_FINGERPRINT_MISMATCH": "Bản đối chiếu mã không còn khớp nội dung đã lưu. Hãy kiểm tra lại",
     "INVALID_INGESTION_JOB_ID": "Mã lần tải dữ liệu không hợp lệ",
     "INVALID_MANUAL_CLEANING_OPTIONS": "Tùy chọn xử lý dữ liệu không hợp lệ",
     "SOURCE_OR_DATASET_INACTIVE": "Nguồn dữ liệu hoặc bộ dữ liệu này đang tạm ngưng hoạt động",

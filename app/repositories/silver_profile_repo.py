@@ -71,3 +71,14 @@ def validate_profile_source(engine: Engine, profile: SourceProfile) -> None:
             code="SILVER_PROFILE_SOURCE_MISMATCH",
             status_code=422,
         )
+
+
+def active_reference_sources(engine: Engine) -> list[dict[str, str]]:
+    """Trả tên các hệ thống đang hoạt động để người phụ trách chọn nơi chứa mã liên kết."""
+    with engine.connect() as connection:
+        rows = connection.execute(
+            select(SourceSystem.source_system_id, SourceSystem.source_name)
+            .where(SourceSystem.is_active.is_(True))
+            .order_by(SourceSystem.source_name)
+        ).all()
+    return [{"namespace": str(system_id), "label": name} for system_id, name in rows]

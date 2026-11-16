@@ -125,10 +125,27 @@
           "title": "Reference Namespaces",
           "type": "object"
         },
-        "crosswalk_release": {
-          "minLength": 1,
-          "title": "Crosswalk Release",
+        "identity_mode": {
+          "default": "canonical",
+          "enum": [
+            "canonical",
+            "source"
+          ],
+          "title": "Identity Mode",
           "type": "string"
+        },
+        "crosswalk_release": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Crosswalk Release"
         },
         "effective_at": {
           "format": "date-time",
@@ -162,7 +179,6 @@
         "source_schema",
         "contracts",
         "field_mapping",
-        "crosswalk_release",
         "effective_at"
       ],
       "title": "SourceProfile",

@@ -23,6 +23,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
       - ./infra/postgres/seed:/opt/seed/scripts:ro
+      - ./infra/postgres/migrations:/opt/migrations:ro
       - ./docs/data-schema:/opt/seed/ddl:ro
       - ./data/samples:/opt/seed/data:ro
     networks:
@@ -201,6 +202,67 @@ services:
     healthcheck:
       test:
         ["CMD-SHELL", "python -c \"import os,time; raise SystemExit(0 if time.time()-os.path.getmtime('/tmp/unilake_ingestion_worker_heartbeat') < int(os.getenv('WORKER_HEALTH_STALE_SECONDS', '45')) else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Bộ xử lý Silver dùng hàng đợi PostgreSQL và quyền đọc Bronze, ghi Silver.
+  silver-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        REQUIREMENTS_FILE: requirements-silver-worker.txt
+    restart: unless-stopped
+    command: python -m app.silver_worker
+    environment: *backend-environment
+    env_file:
+      - path: .env.silver-backend.local
+        required: false
+      - path: .env.source-reader.local
+        required: false
+    volumes:
+      - .:/app
+      - ./data:/data:ro
+    networks:
+      - unilake-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os,time; raise SystemExit(0 if time.time()-os.path.getmtime('/tmp/unilake_silver_worker_heartbeat') < int(os.getenv('WORKER_HEALTH_STALE_SECONDS', '45')) else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Gold chỉ đọc Silver đã công bố và ghi bảng tổng hợp phục vụ báo cáo.
+  gold-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        REQUIREMENTS_FILE: requirements-silver-worker.txt
+    restart: unless-stopped
+    command: python -m app.gold_worker
+    environment: *backend-environment
+    env_file:
+      - path: .env.gold-worker.local
+        required: false
+    volumes:
+      - .:/app
+    networks:
+      - unilake-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os,time; raise SystemExit(0 if time.time()-os.path.getmtime('/tmp/unilake_gold_worker_heartbeat') < 45 else 1)\""]
       interval: 15s
       timeout: 5s
       retries: 3

@@ -195,8 +195,19 @@ def test_untrusted_bronze_provenance_stops_cleaning_before_any_report():
     assert not reports.reports
 
 
-def test_cleaning_silver_pipeline_passes_only_cleaned_batch_to_standardization():
+def test_cleaning_silver_pipeline_passes_only_cleaned_batch_to_standardization(monkeypatch):
+    from app.modules.pipeline.standardization.duckdb_engine import DuckDBStandardizationEngine
+
     observed = {}
+
+    # Kiểm thử này kiểm tra việc bàn giao dữ liệu đã sạch, không kiểm tra nội bộ engine.
+    # Tính tương đương của engine thật được kiểm tra riêng trên toàn bộ cấu trúc Silver.
+    def standardize(_self, batch, mapping, identity, **options):
+        mapped = mapping.map_batch(batch)
+        typed = identity.types.standardize(mapped, **options)
+        return identity.standardize(typed)
+
+    monkeypatch.setattr(DuckDBStandardizationEngine, "standardize", standardize)
 
     class Mapping:
         def map_batch(self, bronze_batch):

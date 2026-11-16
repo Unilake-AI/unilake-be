@@ -52,7 +52,9 @@ def silver_lineage(
                         fingerprint=batch["conversion_fingerprint"],
                     ),
                     TransformationEvidence(
-                        name="IDENTITY_NORMALIZATION",
+                        name="SOURCE_IDENTIFIER_PRESERVATION"
+                        if "crosswalk_version" in batch and batch["crosswalk_version"] is None
+                        else "IDENTITY_NORMALIZATION",
                         version=batch["identity_version"],
                         fingerprint=batch["configuration_fingerprint"],
                     ),

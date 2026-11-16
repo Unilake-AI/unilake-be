@@ -552,7 +552,7 @@ class DuckDBCleaningEngine:
                     value = row[field_positions[field]]
                     keys.append(
                         None
-                        if _is_incomplete_key_value(value)
+                        if _is_incomplete_key_value(value) and not profile.source_rows
                         else classes[index].setdefault(value, len(classes[index]))
                     )
                 key_rows.append(tuple(keys))
@@ -599,7 +599,9 @@ class DuckDBCleaningEngine:
             quarantined_indices: set[int] = set()
             collapse_groups: list[tuple[DuplicateKeyRule, tuple[int, ...]]] = []
             issues: list[DuplicateIssue] = []
-            primary_rule = next(rule for rule in profile.key_rules if rule.kind == "PRIMARY_KEY")
+            primary_rule = next(
+                (rule for rule in profile.key_rules if rule.kind == "PRIMARY_KEY"), None
+            )
 
             for rule, indices in (
                 group for rule_groups in duplicate_groups.values() for group in rule_groups
@@ -607,9 +609,29 @@ class DuckDBCleaningEngine:
                 identical_payload = all(
                     records[index] == records[indices[0]] for index in indices[1:]
                 )
-                same_primary_key = _same_key_group(
+                same_primary_key = primary_rule is not None and _same_key_group(
                     indices, rows, field_positions, primary_rule.fields
                 )
+                if rule.kind == "EXACT_ROW":
+                    if profile.collapse_exact_primary_key_duplicates:
+                        collapse_groups.append((rule, indices))
+                    else:
+                        # Chưa có lựa chọn gộp thì chỉ ghi nhận, không loại dòng của nguồn.
+                        for index in indices:
+                            issues.append(
+                                DuplicateIssue(
+                                    rule.rule_id,
+                                    profile.version,
+                                    profile.domain,
+                                    profile.entity,
+                                    "EXACT_DUPLICATE_DETECTED",
+                                    "PRESERVED",
+                                    locators[index],
+                                    locators[indices[0] if index != indices[0] else indices[1]],
+                                    rule.fields,
+                                )
+                            )
+                    continue
                 if (
                     rule.kind == "PRIMARY_KEY"
                     and identical_payload

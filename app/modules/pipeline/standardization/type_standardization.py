@@ -227,7 +227,15 @@ def _validate_contract(contract: Mapping[str, Any], key: MappingKey) -> dict[str
             types = prop.get("type")
             if types != logical and types not in ([logical, "null"], ["null", logical]):
                 raise ConversionConfigurationError("PHYSICAL_LOGICAL_TYPE_MISMATCH")
-            if name in keys and (_nullable(prop) or logical != "integer"):
+            source_ids = spec.get("x-identity-mode") == "source"
+            if name in keys and (
+                _nullable(prop)
+                or (
+                    (physical not in {"utf8", "text"} and not varchar_match)
+                    if source_ids
+                    else logical != "integer"
+                )
+            ):
                 raise ConversionConfigurationError("INVALID_PRIMARY_KEY")
             if "pattern" in prop:
                 if not isinstance(prop["pattern"], str):
@@ -624,6 +632,11 @@ class TypeStandardizationService:
                         if name not in row.values:
                             raise ConversionError("REQUIRED_SOURCE_FIELD_MISSING")
                         raw = row.values[name]
+                    if spec.get("x-source-identifier") and raw is not None:
+                        # Mã nguồn được lưu dưới dạng chữ; "007" vẫn khác "7".
+                        if isinstance(raw, bool) or not isinstance(raw, str | int):
+                            raise ConversionError("SOURCE_ID_TYPE_ERROR")
+                        raw = str(raw)
                     if (
                         name in self.spec["x-primary-key"]
                         or "x-references" in spec

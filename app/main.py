@@ -17,12 +17,15 @@ from app.modules.nlq.dependencies import get_nlq_service
 from app.modules.nlq.router import router as nlq_router
 from app.modules.pipeline.routers import (
     cleaning_runs_router,
+    cleaning_setup_router,
     data_quality_issues_router,
     pipeline_router,
     profiles_router,
     quarantine_records_router,
     snapshots_router,
 )
+from app.modules.pipeline.routers.auto_pipeline import router as auto_pipeline_router
+from app.modules.pipeline.routers.gold import router as gold_router
 from app.modules.query_history.router import router as query_history_router
 from app.modules.staff.router import router as staff_router
 from app.modules.users.router import router as users_router
@@ -49,9 +52,12 @@ def create_app() -> FastAPI:
     application.include_router(datasets_router, prefix=api_prefix)
     application.include_router(ingestion_router, prefix=api_prefix)
     application.include_router(pipeline_router, prefix=api_prefix)
+    application.include_router(auto_pipeline_router, prefix=api_prefix)
+    application.include_router(gold_router, prefix=api_prefix)
     application.include_router(profiles_router, prefix=api_prefix)
     application.include_router(snapshots_router, prefix=api_prefix)
     application.include_router(cleaning_runs_router, prefix=api_prefix)
+    application.include_router(cleaning_setup_router, prefix=api_prefix)
     application.include_router(quarantine_records_router, prefix=api_prefix)
     application.include_router(data_quality_issues_router, prefix=api_prefix)
     application.include_router(governance_router, prefix=api_prefix)

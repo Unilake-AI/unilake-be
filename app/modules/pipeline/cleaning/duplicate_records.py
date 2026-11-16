@@ -16,8 +16,8 @@ if TYPE_CHECKING:
     from app.modules.ingestion.contracts import FileProvenance
     from app.modules.ingestion.contracts.readers import ReadRequest
 
-DuplicateKeyKind = Literal["PRIMARY_KEY", "UNIQUE", "COMPOSITE_UNIQUE", "BUSINESS_KEY"]
-DuplicateDisposition = Literal["COLLAPSED", "QUARANTINED"]
+DuplicateKeyKind = Literal["PRIMARY_KEY", "UNIQUE", "COMPOSITE_UNIQUE", "BUSINESS_KEY", "EXACT_ROW"]
+DuplicateDisposition = Literal["COLLAPSED", "QUARANTINED", "PRESERVED"]
 
 
 @dataclass(frozen=True)
@@ -39,6 +39,7 @@ class DuplicateProfile:
     required_source_columns: tuple[str, ...]
     key_rules: tuple[DuplicateKeyRule, ...]
     collapse_exact_primary_key_duplicates: bool = False
+    source_rows: bool = False
 
 
 @dataclass(frozen=True)
@@ -237,7 +238,7 @@ def detect_and_handle_duplicates(
         grouped: dict[tuple[object, ...], list[int]] = defaultdict(list)
         for row_index, row in enumerate(rows):
             key = tuple(row[field_positions[field]] for field in rule.fields)
-            if any(_is_incomplete_key_value(value) for value in key):
+            if rule.kind != "EXACT_ROW" and any(_is_incomplete_key_value(value) for value in key):
                 continue
             grouped[key].append(row_index)
         collisions = [tuple(indices) for indices in grouped.values() if len(indices) > 1]
@@ -249,13 +250,35 @@ def detect_and_handle_duplicates(
     quarantined_indices: set[int] = set()
     collapse_groups: list[tuple[DuplicateKeyRule, tuple[int, ...]]] = []
     issues: list[DuplicateIssue] = []
-    primary_rule = next(rule for rule in profile.key_rules if rule.kind == "PRIMARY_KEY")
+    primary_rule = next((rule for rule in profile.key_rules if rule.kind == "PRIMARY_KEY"), None)
 
     for rule, indices in (
         group for rule_groups in duplicate_groups.values() for group in rule_groups
     ):
         identical_payload = all(records[index] == records[indices[0]] for index in indices[1:])
-        same_primary_key = _same_key_group(indices, rows, field_positions, primary_rule.fields)
+        same_primary_key = primary_rule is not None and _same_key_group(
+            indices, rows, field_positions, primary_rule.fields
+        )
+        if rule.kind == "EXACT_ROW":
+            if profile.collapse_exact_primary_key_duplicates:
+                collapse_groups.append((rule, indices))
+            else:
+                # Báo dòng giống nhau nhưng giữ nguyên khi người phụ trách chưa cho phép gộp.
+                for index in indices:
+                    issues.append(
+                        DuplicateIssue(
+                            rule.rule_id,
+                            profile.version,
+                            profile.domain,
+                            profile.entity,
+                            "EXACT_DUPLICATE_DETECTED",
+                            "PRESERVED",
+                            locators[index],
+                            locators[indices[0] if index != indices[0] else indices[1]],
+                            rule.fields,
+                        )
+                    )
+            continue
         if (
             rule.kind == "PRIMARY_KEY"
             and identical_payload
@@ -385,14 +408,20 @@ def _validate_profile(profile: DuplicateProfile) -> None:
         for value in (profile.domain, profile.entity, profile.version)
     ):
         raise ValueError("INVALID_DUPLICATE_PROFILE")
-    if not isinstance(profile.collapse_exact_primary_key_duplicates, bool):
+    if (
+        not isinstance(profile.collapse_exact_primary_key_duplicates, bool)
+        or type(profile.source_rows) is not bool
+    ):
         raise ValueError("INVALID_DUPLICATE_PROFILE")
     if not isinstance(profile.key_rules, tuple) or not profile.key_rules:
         raise ValueError("DUPLICATE_KEY_RULES_REQUIRED")
     if any(not isinstance(rule, DuplicateKeyRule) for rule in profile.key_rules):
         raise ValueError("INVALID_DUPLICATE_KEY_RULE")
     primary_rules = [rule for rule in profile.key_rules if rule.kind == "PRIMARY_KEY"]
-    if len(primary_rules) != 1:
+    exact_rows_only = profile.source_rows and all(
+        rule.kind == "EXACT_ROW" for rule in profile.key_rules
+    )
+    if not exact_rows_only and len(primary_rules) != 1:
         raise ValueError("DUPLICATE_PRIMARY_KEY_RULE_REQUIRED")
     for rule in profile.key_rules:
         if (
@@ -402,9 +431,12 @@ def _validate_profile(profile: DuplicateProfile) -> None:
             or not rule.fields
             or any(not isinstance(field, str) or not field.strip() for field in rule.fields)
             or len(rule.fields) != len(set(rule.fields))
-            or rule.kind not in ("PRIMARY_KEY", "UNIQUE", "COMPOSITE_UNIQUE", "BUSINESS_KEY")
+            or rule.kind
+            not in ("PRIMARY_KEY", "UNIQUE", "COMPOSITE_UNIQUE", "BUSINESS_KEY", "EXACT_ROW")
         ):
             raise ValueError("INVALID_DUPLICATE_KEY_RULE")
+    if any(rule.kind == "EXACT_ROW" for rule in profile.key_rules) and not exact_rows_only:
+        raise ValueError("EXACT_ROWS_REQUIRE_SOURCE_MODE")
     rule_ids = tuple(rule.rule_id for rule in profile.key_rules)
     if len(set(rule_ids)) != len(rule_ids):
         raise ValueError("DUPLICATE_RULE_ID")

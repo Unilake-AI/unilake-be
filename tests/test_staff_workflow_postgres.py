@@ -317,7 +317,171 @@ def actor(environment, uid=14, role="HR_STAFF"):
     environment.user.update(sub=str(uid), roles=[role])
 
 
-def create_issue(environment, assignee=14):
+def test_return_to_uploader_requires_approval_and_scopes_access_without_department(environment):
+    with Session(bind=environment.connection, join_transaction_mode="create_savepoint") as session:
+        session.execute(
+            update(IngestionJob)
+            .where(IngestionJob.ingestion_job_id == 100)
+            .values(requested_by="18")
+        )
+        session.commit()
+    actor(environment, 18)
+    assert environment.client.get("/staff/context").json()["can_resolve_issues"] is False
+    selection = {"quarantine_record_ids": [environment.record_id]}
+    assert (
+        environment.client.post("/data-quality-issues/return-preview", json=selection).status_code
+        == 403
+    )
+    actor(environment, 1, "DATA_ADMIN")
+    preview = environment.client.post("/data-quality-issues/return-preview", json=selection)
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["assignee"]["user_id"] == 18
+    actor(environment, 18)
+    assert environment.client.get("/data-quality-issues").json() == []
+    actor(environment, 1, "DATA_ADMIN")
+    response = environment.client.post(
+        "/data-quality-issues/return-to-uploader", json={**selection, "title": "Sửa file đã nạp"}
+    )
+    assert response.status_code == 200, response.text
+    issue_id = response.json()["issue_id"]
+    assert response.json()["assignment_mode"] == "SOURCE_UPLOADER"
+    assert response.json()["origin_upload_job_id"] == 100
+    for uid, role in ((14, "HR_STAFF"), (15, "HR_STAFF"), (16, "HR_STAFF"), (17, "ACADEMIC_STAFF")):
+        actor(environment, uid, role)
+        assert environment.client.get(f"/data-quality-issues/{issue_id}").status_code == 404
+        assert environment.client.get("/data-quality-issues/stats").json()["total"] == 0
+    actor(environment, 18)
+    context = environment.client.get("/staff/context").json()
+    assert context["can_resolve_issues"] is True
+    assert context["needs_department_assignment"] is False
+    assert context["departments"] == []
+    assert (
+        environment.client.get("/data-quality-issues", params={"mine_only": True}).json()[0][
+            "issue_id"
+        ]
+        == issue_id
+    )
+    response = upload(environment, issue_id)
+    assert response.status_code == 202, response.text
+    job_id = response.json()["ingestion_job_id"]
+    assert process_upload(environment) == job_id
+    response = environment.client.post(
+        f"/data-quality-issues/{issue_id}/resolution",
+        json={"ingestion_job_id": job_id, "note": "Đã sửa file của mình"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "PENDING_VERIFICATION"
+
+
+def test_return_reuses_unassigned_request_and_repeated_approval_keeps_one_history(environment):
+    issue_id = create_issue(environment, assignee=None)
+    additional = str(uuid4())
+    with Session(bind=environment.connection, join_transaction_mode="create_savepoint") as session:
+        session.execute(
+            insert(QUARANTINE_RECORDS).values(
+                record_id=additional,
+                cleaning_run_id=environment.run_id,
+                locator="csv:record:2",
+                record_position=2,
+                issues=[{"code": "MISSING_VALUE", "field": "full_name"}],
+                error_codes=["MISSING_VALUE"],
+            )
+        )
+        session.commit()
+    actor(environment, 1, "DATA_ADMIN")
+    request = {
+        "quarantine_record_ids": [environment.record_id, additional],
+        "title": "Trả lại người nạp",
+    }
+    preview = environment.client.post(
+        "/data-quality-issues/return-preview",
+        json={"quarantine_record_ids": request["quarantine_record_ids"]},
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["existing_issue_id"] == issue_id
+    for _ in range(2):
+        response = environment.client.post("/data-quality-issues/return-to-uploader", json=request)
+        assert response.status_code == 200, response.text
+        assert response.json()["issue_id"] == issue_id
+        assert response.json()["assignee_user_id"] == 14
+        assert set(response.json()["quarantine_record_ids"]) == {environment.record_id, additional}
+    assert (
+        sum(
+            event["event_type"] == "RETURN_APPROVED"
+            for event in environment.client.get(f"/data-quality-issues/{issue_id}").json()[
+                "history"
+            ]
+        )
+        == 1
+    )
+    actor(environment, 15)
+    assert environment.client.get(f"/data-quality-issues/{issue_id}").status_code == 404
+    actor(environment, 14)
+    assert environment.client.get(f"/data-quality-issues/{issue_id}").status_code == 200
+    with Session(bind=environment.connection, join_transaction_mode="create_savepoint") as session:
+        session.query(UserRole).filter(UserRole.app_user_id == 14).delete()
+        session.commit()
+    assert environment.client.get(f"/data-quality-issues/{issue_id}").status_code == 403
+
+
+def test_return_rechecks_account_after_preview_and_rejects_client_supplied_recipient(environment):
+    actor(environment, 1, "DATA_ADMIN")
+    selection = {"quarantine_record_ids": [environment.record_id]}
+    assert (
+        environment.client.post("/data-quality-issues/return-preview", json=selection).status_code
+        == 200
+    )
+    response = environment.client.post(
+        "/data-quality-issues/return-to-uploader",
+        json={**selection, "title": "Trả lại", "assignee_user_id": 15},
+    )
+    assert response.status_code == 422
+    with Session(bind=environment.connection, join_transaction_mode="create_savepoint") as session:
+        session.execute(update(User).where(User.app_user_id == 14).values(is_active=False))
+        session.commit()
+    response = environment.client.post(
+        "/data-quality-issues/return-to-uploader", json={**selection, "title": "Trả lại"}
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "UPLOAD_RETURN_USER_UNAVAILABLE"
+    assert environment.client.get("/data-quality-issues").json() == []
+
+
+def test_return_uses_original_uploader_for_successful_retry(environment):
+    with Session(bind=environment.connection, join_transaction_mode="create_savepoint") as session:
+        session.add(
+            IngestionJob(
+                ingestion_job_id=101,
+                root_job_id=100,
+                data_source_id=9,
+                dataset_id=9,
+                target_layer_id=1,
+                job_type="UPLOAD_V1",
+                source_table="employees.csv",
+                status="SUCCESS",
+                stage="COMPLETED",
+                requested_by="1",
+                created_at=datetime.now(UTC).replace(tzinfo=None),
+            )
+        )
+        session.flush()
+        session.execute(
+            update(CLEANING_RUNS)
+            .where(CLEANING_RUNS.c.run_id == environment.run_id)
+            .values(ingestion_job_id=101)
+        )
+        session.commit()
+    actor(environment, 1, "DATA_ADMIN")
+    response = environment.client.post(
+        "/data-quality-issues/return-preview",
+        json={"quarantine_record_ids": [environment.record_id]},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["origin_upload_job_id"] == 100
+    assert response.json()["assignee"]["user_id"] == 14
+
+
+def create_issue(environment, assignee: int | None = 14):
     actor(environment, 1, "DATA_ADMIN")
     response = environment.client.post(
         "/data-quality-issues",

@@ -157,6 +157,17 @@ def test_profiles_persist_and_reject_stale_edits(environment):
     assert client.put("/pipeline/profiles/positions", json=update).status_code == 409
 
 
+def test_profiles_can_be_selected_for_one_dataset_before_pagination(environment):
+    client, _, _ = environment
+    create_profile(client)
+    response = client.get("/pipeline/profiles", params={"dataset_id": 31, "limit": 1})
+    assert response.status_code == 200
+    assert [row["profile_id"] for row in response.json()] == ["positions"]
+    assert client.get("/pipeline/profiles", params={"dataset_id": 99}).json() == []
+    assert client.get("/pipeline/profiles", params={"dataset_id": 31, "offset": 1}).json() == []
+    assert client.get("/pipeline/profiles", params={"dataset_id": 0}).status_code == 422
+
+
 def test_profiles_validate_source_and_support_file_fallback(environment):
     client, _, _ = environment
     invalid = definition()

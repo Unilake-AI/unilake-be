@@ -66,7 +66,12 @@ class IssueActor:
     domains: frozenset[str]
 
     def can_work_on(self, issue: dict[str, Any]) -> bool:
-        return issue["department_id"] in self.departments and issue["domain"] in self.domains
+        if issue["domain"] not in self.domains:
+            return False
+        if issue.get("assignment_mode") == "SOURCE_UPLOADER":
+            # Hồ sơ đã được lọc theo người nạp gốc; chỉ người được duyệt nhận mới xử lý được.
+            return bool(issue["assignee_user_id"] == self.user_id)
+        return issue["department_id"] in self.departments
 
 
 def _error(code: str, message: str, status: int = 422) -> AppException:
@@ -401,6 +406,8 @@ async def assign_issue(
             "assignee_user_id": request.assignee_user_id,
         },
         assignee_user_id=request.assignee_user_id,
+        assignment_mode="DEPARTMENT",
+        origin_upload_job_id=None,
     )
 
 

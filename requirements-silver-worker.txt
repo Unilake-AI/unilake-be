@@ -1,0 +1,3 @@
+# Worker Silver cần bộ kiểm tra dữ liệu và thư viện công bố Parquet.
+-r requirements-worker.txt
+jsonschema>=4.18,<5
