@@ -17,6 +17,8 @@ from app.dependencies import get_db
 from app.modules.datasources.models import DataLayer, Dataset, SourceSystem
 from app.modules.datasources.schemas import DatasetRead, SourceSystemRead
 from app.modules.staff.contracts import datasets as datasets_service
+from app.repositories.dataset_ownership_repo import default_dataset_owner, set_dataset_owner
+from app.repositories.department_access_repo import active_departments
 
 router = APIRouter(tags=["datasets"])
 DB = Annotated[AsyncSession, Depends(get_db)]
@@ -75,7 +77,9 @@ async def create_dataset(request: DatasetCreate, db: DB, _admin: Admin) -> Datas
     dataset = Dataset(
         **request.model_dump(),
         data_layer_id=layer.data_layer_id,
-        owner_department_id=source.owner_department_id,
+        owner_department_id=await default_dataset_owner(
+            db, request.domain, source.owner_department_id
+        ),
         status="ACTIVE",
     )
     db.add(dataset)
@@ -90,3 +94,24 @@ async def create_dataset(request: DatasetCreate, db: DB, _admin: Admin) -> Datas
             status_code=409,
         ) from None
     return dataset
+
+
+class DatasetOwnership(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    owner_department_id: int = Field(gt=0)
+    expected_owner_department_id: int | None
+
+
+@router.get("/dataset-owner-departments")
+async def owner_departments(db: DB, _admin: Admin) -> list[dict[str, Any]]:
+    return await active_departments(db)
+
+
+@router.patch("/datasets/{dataset_id}/ownership", response_model=DatasetRead)
+async def update_ownership(
+    dataset_id: Annotated[int, Path(gt=0)], request: DatasetOwnership, db: DB, _admin: Admin
+) -> Dataset:
+    return await set_dataset_owner(
+        db, dataset_id, request.owner_department_id, request.expected_owner_department_id
+    )

@@ -110,6 +110,7 @@ class SilverPublicationService:
         mode: str = "production",
         business_gate: BusinessGate | None = None,
         profile_approvals: list[dict[str, Any]] | None = None,
+        automatic_recipe: dict[str, Any] | None = None,
     ) -> None:
         if (
             mode not in {"production", "test"}
@@ -152,6 +153,7 @@ class SilverPublicationService:
                     "scope": "silver-quality-v1",
                     "additional_gate": business_gate.version if business_gate else None,
                     **({"profile_approvals": profile_approvals} if profile_approvals else {}),
+                    **({"automatic_recipe": automatic_recipe} if automatic_recipe else {}),
                 },
                 sort_keys=True,
             ),
@@ -410,10 +412,20 @@ class SilverPublicationService:
             if base_snapshot:
                 parent = self.repository.snapshot(base_snapshot, self.scope)
                 parent_ref = json.loads(parent["manifest_ref"])
-                parent_manifest, tables = self._read_manifest(
-                    ObjectRef(**parent_ref), base_snapshot
-                )
-                entities = parent_manifest["entities"]
+                if json.loads(self.policy_json).get("automatic_recipe"):
+                    # Quy tắc hệ thống thay toàn bộ bản file đã qua kiểm tra, giữ liên kết lịch sử.
+                    # Không ghép dữ liệu cũ thuộc cấu trúc khác vào file mới.
+                    previous = json.loads(self.storage.get(ObjectRef(**parent_ref)))
+                    if (
+                        previous.get("snapshot_id") != base_snapshot
+                        or previous.get("scope") != self.scope
+                    ):
+                        raise SilverError("MANIFEST_CONTRACT_MISMATCH")
+                else:
+                    parent_manifest, tables = self._read_manifest(
+                        ObjectRef(**parent_ref), base_snapshot
+                    )
+                    entities = parent_manifest["entities"]
             specs = self._specs()
             schemas = json.loads(self.contract_json)
             updates: dict[str, list[dict[str, object]]] = {}

@@ -9,6 +9,7 @@ from app.domains.registry import get_domain_registry
 from app.modules.governance.repository import CatalogRepository
 from app.modules.governance.schemas import CatalogEntrySchema, CatalogUpdateSchema
 from app.modules.governance.service import GovernanceService
+from app.repositories.runtime_catalog_repo import runtime_catalog
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,11 +19,14 @@ if TYPE_CHECKING:
 
 class CatalogService:
     def __init__(self, db: AsyncSession, registry: DomainRegistry | None = None) -> None:
+        self.db = db
         self.registry = registry or get_domain_registry()
         self.repo = CatalogRepository(db)
 
     def _ensure_domain(self, domain_id: str) -> None:
         # Chỉ đăng ký metadata vào lĩnh vực đã tồn tại trong hệ thống.
+        if domain_id in {"hr", "academic", "admissions"}:
+            return
         try:
             self.registry.get(domain_id)
         except LookupError as exc:
@@ -41,8 +45,11 @@ class CatalogService:
             (entry.domain_id, entry.dataset): CatalogEntrySchema.model_validate(
                 entry, from_attributes=True
             )
-            for entry in GovernanceService(self.registry).catalog(domain_id=domain_id)
+            for entry in GovernanceService(self.registry).catalog()
+            if domain_id is None or entry.domain_id == domain_id
         }
+        for entry in await runtime_catalog(self.db, domain_id):
+            entries[(entry.domain_id, entry.dataset)] = entry
         # 2. Metadata trong DB được ưu tiên; dấu xóa ẩn cả bản khai báo sẵn.
         for row in await self.repo.list(domain_id):
             key = (row.domain_id, row.dataset)

@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from threading import Event, Thread
 from typing import TYPE_CHECKING
 
 from minio.error import MinioException, S3Error
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from urllib3.exceptions import HTTPError
 
 from app.core.config import settings
+from app.modules.pipeline.contracts.automation import AUTOMATIC_RECIPE_VERSION
 from app.modules.pipeline.repositories.auto_pipeline import AutoPipelineRepository
 from app.modules.pipeline.services.source_cleaning import run_manual_cleaning
 
@@ -72,6 +75,28 @@ def run_once(engine: Engine, worker_id: str) -> bool:
     thread = Thread(target=pulse, daemon=True)
     thread.start()
     try:
+        automatic = job["policy"].get("mode") == "automatic"
+        if automatic:
+            from app.modules.pipeline.services.cleaning_setup import automatic_source_profile
+
+            if job["policy"].get("recipe_version") != AUTOMATIC_RECIPE_VERSION:
+                raise ValueError("AUTO_PIPELINE_RECIPE_VERSION_UNSUPPORTED")
+            profile = automatic_source_profile(engine, job["ingestion_job_id"])
+            if job["policy"].get("profile_fingerprint", profile.fingerprint) != profile.fingerprint:
+                raise ValueError("AUTO_PIPELINE_PROFILE_MISMATCH")
+            job["policy"].update(
+                profile_id="automatic-" + job["job_id"],
+                profile_definition=profile.model_dump(mode="json"),
+                profile_fingerprint=profile.fingerprint,
+            )
+            with engine.begin() as connection:
+                repository.fence(connection, job["job_id"], job["lease_token"])
+                connection.execute(
+                    text(
+                        "UPDATE app.auto_pipeline_job SET policy=CAST(:policy AS jsonb) WHERE job_id=:id"
+                    ),
+                    {"policy": json.dumps(job["policy"]), "id": job["job_id"]},
+                )
         result = run_manual_cleaning(
             job["ingestion_job_id"],
             requested_by=job["policy"]["requested_by"],

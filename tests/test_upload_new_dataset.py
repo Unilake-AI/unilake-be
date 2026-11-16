@@ -21,6 +21,7 @@ from app.modules.ingestion.models import IngestionJob
 from app.modules.ingestion.router import router
 from app.modules.ingestion.services import uploads
 from app.modules.ingestion.services.upload_capture import upload_request
+from app.modules.users.models import Department
 from app.repositories.ingestion_repo import IngestionRepository
 from tests.test_ingestion_uploads import MemoryStore
 
@@ -33,7 +34,7 @@ def environment(tmp_path, monkeypatch):
     )
     # Chạy câu lệnh lưu và truy vấn thật; chỉ đổi cách khai báo bảng cho cơ sở dữ liệu kiểm thử.
     with engine.begin() as connection:
-        for model in (DataLayer, SourceSystem, Dataset, DataSource, IngestionJob):
+        for model in (Department, DataLayer, SourceSystem, Dataset, DataSource, IngestionJob):
             definitions = []
             for column in model.__table__.columns:
                 if column.primary_key:
@@ -54,6 +55,16 @@ def environment(tmp_path, monkeypatch):
             )
     with Session(engine) as session:
         session.add(DataLayer(layer_code="BRONZE", layer_name="Bronze"))
+        for index, code in enumerate(("PNS", "PDT", "PTS"), 1):
+            session.add(
+                Department(
+                    department_id=index,
+                    department_code=code,
+                    department_name=code,
+                    department_type="ROOM",
+                    status="ACTIVE",
+                )
+            )
         session.commit()
 
     async def database():
@@ -114,6 +125,7 @@ def test_staff_first_upload_creates_dataset_source_and_job_without_technical_ids
         assert dataset.dataset_code.startswith("UPLOAD_")
         assert dataset.description == "Bản đầu"
         assert dataset.domain == domain
+        assert dataset.owner_department_id == {"hr": 1, "academic": 2, "admissions": 3}[domain]
         assert system.source_type == "UPLOAD"
         assert system.source_code == f"UPLOAD_{domain.upper()}"
         assert source.source_system_id == dataset.source_system_id

@@ -149,6 +149,202 @@ def test_gold_postgres_csv_and_domain_access(published):
     assert client.get("/api/v1/pipeline/gold/sources").json()[0]["sync_status"] == "CURRENT"
 
 
+def test_manager_reads_current_gold_with_dataset_ownership_and_pagination(published):
+    from sqlalchemy.orm import Session
+
+    from app.dependencies import get_db
+    from tests.test_staff_workflow_postgres import asynchronous
+
+    engine, publish = published
+    with engine.begin() as conn:
+        department = conn.execute(
+            text("SELECT department_id FROM app.department WHERE department_code='PNS'")
+        ).scalar_one()
+        other = conn.execute(
+            text("SELECT department_id FROM app.department WHERE department_code='PDT'")
+        ).scalar_one()
+        conn.execute(
+            text("UPDATE app.dataset SET owner_department_id=:department WHERE dataset_id=31"),
+            {"department": department},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO app.dataset(dataset_id,dataset_code,dataset_name,domain,data_layer_id,owner_department_id) "
+                "OVERRIDING SYSTEM VALUE VALUES (32,'other_hr','Other HR','hr',1,:other),"
+                "(33,'unowned','Unowned HR','hr',1,NULL),(34,'academic','Academic','academic',1,:department)"
+            ),
+            {"department": department, "other": other},
+        )
+        employee = conn.execute(
+            text(
+                "INSERT INTO app.employee(employee_code,full_name,employee_status) VALUES('NV9999','Manager Test','Active') RETURNING employee_id"
+            )
+        ).scalar_one()
+        user_id = conn.execute(
+            text(
+                "INSERT INTO app.app_user(username,password_hash,employee_id) VALUES('manager_test','unused',:employee) RETURNING app_user_id"
+            ),
+            {"employee": employee},
+        ).scalar_one()
+        role_id = conn.execute(
+            text(
+                "INSERT INTO app.role(role_code,role_name) VALUES('HR_MANAGER','HR manager') RETURNING role_id"
+            )
+        ).scalar_one()
+        conn.execute(
+            text("INSERT INTO app.user_role(app_user_id,role_id) VALUES(:user,:role)"),
+            {"user": user_id, "role": role_id},
+        )
+        position = conn.execute(
+            text(
+                "INSERT INTO app.position(position_code,position_name) VALUES('MTEST','Manager Test') RETURNING position_id"
+            )
+        ).scalar_one()
+        conn.execute(
+            text(
+                "INSERT INTO app.assignment(employee_id,department_id,position_id,start_date,assignment_status) VALUES(:employee,:department,:position,current_date-2,'Active')"
+            ),
+            {"employee": employee, "department": department, "position": position},
+        )
+        visible_issue, hidden_issue = str(uuid4()), str(uuid4())
+        conn.execute(
+            text(
+                "INSERT INTO app.data_quality_issue(issue_id,dataset_id,department_id,domain,title,description,status,created_by,created_at,updated_at) "
+                "VALUES(:id,31,:department,'hr','Cần sửa','Test','ASSIGNED',:user,now(),now())"
+            ),
+            [
+                {"id": visible_issue, "department": department, "user": user_id},
+                {"id": hidden_issue, "department": other, "user": user_id},
+            ],
+        )
+        conn.execute(
+            text(
+                "INSERT INTO app.data_quality_issue_event(issue_id,actor_id,event_type,to_status,details,created_at) "
+                "VALUES(:id,:user,'ASSIGNED','ASSIGNED','{}',now())"
+            ),
+            {"id": visible_issue, "user": user_id},
+        )
+
+    async def db_override():
+        with Session(engine) as session:
+            yield asynchronous(session)
+            session.commit()
+
+    app.dependency_overrides[get_db] = db_override
+    app.dependency_overrides[gold_engine] = lambda: engine
+    app.dependency_overrides[get_current_user] = lambda: {
+        "sub": str(user_id),
+        "roles": ["HR_MANAGER"],
+    }
+    try:
+        client = TestClient(app)
+        initial = client.get("/api/v1/manager/overview").json()
+        assert initial["status"] == "NO_DATA"
+        assert initial["datasets"] == 1
+        assert initial["kpis"]["items"] == []
+        assert initial["issues"]["total"] == 1
+        assert len(client.get("/api/v1/manager/issues").json()) == 1
+        assert client.get("/api/v1/manager/issues/stats").json()["assigned"] == 1
+        detail = client.get(f"/api/v1/manager/issues/{visible_issue}")
+        assert detail.status_code == 200, detail.text
+        assert len(detail.json()["history"]) == 1
+        assert client.get(f"/api/v1/manager/issues/{hidden_issue}").status_code == 404
+        assert client.get(f"/api/v1/manager/issues?department_id={other}").json() == []
+        notifications = client.get("/api/v1/notifications?workspace=MANAGER")
+        assert notifications.status_code == 200, notifications.text
+        feed = notifications.json()
+        assert feed["total"] == feed["unread_count"] == 1
+        event_id = feed["items"][0]["event_id"]
+        assert (
+            client.post("/api/v1/notifications/read", json={"event_ids": [event_id]}).status_code
+            == 204
+        )
+        assert client.get("/api/v1/notifications").json()["unread_count"] == 0
+        assert client.get("/api/v1/notifications").json()["items"][0]["read_at"]
+        source, silver, gold = publish()
+        response = client.get("/api/v1/manager/overview")
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "PENDING"
+        repository = GoldRepository(engine)
+        claimed = repository.claim("manager-test")
+        assert claimed is not None
+        assert build_gold(claimed, silver, gold, repository)
+        response = client.get("/api/v1/manager/overview")
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "READY"
+        assert response.json()["kpis"]["items"][0]["value"] == 2
+        assert response.json()["last_updated_at"]
+        legacy = client.get("/api/v1/pipeline/gold/metrics")
+        assert legacy.status_code == 200, legacy.text
+        assert len(legacy.json()) == 2
+        legacy_job = client.get("/api/v1/pipeline/gold/jobs").json()[0]["job_id"]
+        assert client.get(f"/api/v1/pipeline/gold/jobs/{legacy_job}/report").status_code == 200
+        # Không thể đi vòng qua API Gold cũ để đọc nguồn thuộc phòng khác.
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE app.dataset SET owner_department_id=:other WHERE dataset_id=31"),
+                {"other": other},
+            )
+        assert client.get("/api/v1/pipeline/gold/metrics").json() == []
+        assert client.get(f"/api/v1/pipeline/gold/jobs/{legacy_job}/report").status_code == 404
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE app.dataset SET owner_department_id=:department WHERE dataset_id=31"),
+                {"department": department},
+            )
+        assert client.get("/api/v1/manager/datasets").json()["total"] == 1
+        assert (
+            client.get("/api/v1/manager/datasets/31").json()["sources"][0]["sync_status"]
+            == "CURRENT"
+        )
+        for hidden in (32, 33, 34, 999):
+            assert client.get(f"/api/v1/manager/datasets/{hidden}").status_code == 404
+            assert (
+                client.get(f"/api/v1/manager/analytics?dataset_id={hidden}").json()["items"] == []
+            )
+        grouped = client.get(
+            "/api/v1/manager/analytics?entity=employee&metric=record_count_by_employee_status"
+        ).json()
+        assert grouped["items"][0]["dimensions"] == {"employee_status": "ACTIVE"}
+        assert grouped["items"][0]["value"] == 2
+        # Hai nguồn có cùng người vẫn trả hai KPI riêng, không tự cộng thành bốn người.
+        _, silver2, gold2 = publish(scope="production:another-manager-source")
+        claimed2 = repository.claim("manager-test")
+        assert claimed2 is not None
+        assert build_gold(claimed2, silver2, gold2, repository)
+        page = client.get("/api/v1/manager/analytics?limit=1&offset=1").json()
+        assert page["total"] == 2
+        assert len(page["items"]) == 1
+        assert page["items"][0]["value"] == 2
+        assert client.get("/api/v1/manager/analytics?offset=10").json()["total"] == 2
+        # Silver thay đổi: bản Gold trước đó không còn hiện qua manager API.
+        publish(scope=source["scope"])
+        stale = client.get("/api/v1/manager/overview").json()
+        assert stale["status"] == "PARTIAL"
+        assert stale["sources"]["queued"] == 1
+        assert stale["kpis"]["total"] == 1
+        assert stale["kpis"]["items"][0]["scope"] != source["scope"]
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE app.assignment SET end_date=current_date-1 WHERE employee_id=:employee"
+                ),
+                {"employee": employee},
+            )
+        assert client.get("/api/v1/manager/context").json()["needs_department_assignment"]
+        assert client.get("/api/v1/manager/overview").status_code == 403
+        assert client.get("/api/v1/notifications").json()["items"] == []
+        assert (
+            client.post("/api/v1/notifications/read", json={"event_ids": [event_id]}).status_code
+            == 404
+        )
+        assert client.get("/api/v1/pipeline/gold/metrics").json() == []
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(gold_engine, None)
+
+
 def test_new_silver_fences_stale_worker_and_rollback_hides_old_gold(published):
     engine, publish = published
     source, silver, gold = publish()

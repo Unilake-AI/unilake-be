@@ -6,8 +6,10 @@ import csv
 import io
 import json
 from collections.abc import Generator
+from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
@@ -18,7 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.deps import require_role
 from app.core.exceptions import AppException
-from app.core.roles import DATA_WRITE_ROLES, RoleCode
+from app.core.roles import DATA_WRITE_ROLES, MANAGER_SCOPES, RoleCode
 from app.modules.pipeline.repositories.management_db import management_engine
 from app.modules.pipeline.services.gold_engine import DIMENSIONS, RECIPE_VERSION
 
@@ -62,7 +64,38 @@ def access(
         allowed = set(DIMENSIONS)
     if domain is not None:
         allowed &= {domain}
-    return f"{alias}.domain = ANY(:domains)", {"domains": sorted(allowed)}
+    clause = f"{alias}.domain = ANY(:domains)"
+    params: dict[str, Any] = {"domains": sorted(allowed)}
+    manager_scopes = [spec for role, spec in MANAGER_SCOPES.items() if role in roles]
+    if manager_scopes and DATA_WRITE_ROLES.isdisjoint(roles) and RoleCode.VIEWER not in roles:
+        # Các đường đọc Gold cũ cũng phải giữ cùng ranh giới với màn hình manager.
+        # Role STAFF của lĩnh vực khác vẫn giữ quyền vốn có của lĩnh vực đó.
+        params.update(
+            manager_user_id=user.get("sub", "0"),
+            manager_today=datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date(),
+        )
+        pairs = []
+        for index, (name, code) in enumerate(manager_scopes):
+            pairs.append(
+                f"({alias}.domain=:manager_domain_{index} AND dep.department_code=:manager_department_{index})"
+            )
+            params[f"manager_domain_{index}"] = name
+            params[f"manager_department_{index}"] = code
+        params["manager_domains"] = [name for name, _ in manager_scopes]
+        clause += (
+            f" AND (NOT ({alias}.domain=ANY(:manager_domains)) OR EXISTS ("
+            "SELECT 1 FROM app.dataset md JOIN app.department dep ON dep.department_id=md.owner_department_id "
+            "JOIN app.assignment a ON a.department_id=dep.department_id "
+            "JOIN app.employee e ON e.employee_id=a.employee_id "
+            "JOIN app.app_user u ON u.employee_id=e.employee_id "
+            f"WHERE md.dataset_id={alias}.dataset_id AND md.domain={alias}.domain "
+            "AND md.status='ACTIVE' AND dep.status='ACTIVE' AND u.is_active=TRUE "
+            "AND u.app_user_id=CAST(:manager_user_id AS bigint) "
+            "AND upper(e.employee_status)='ACTIVE' AND upper(a.assignment_status)='ACTIVE' "
+            "AND a.start_date<=:manager_today AND (a.end_date IS NULL OR a.end_date>=:manager_today) "
+            "AND (" + " OR ".join(pairs) + ")))"
+        )
+    return clause, params
 
 
 @router.get("/recipes", summary="Xem các phép tổng hợp Gold đang hỗ trợ")

@@ -13,13 +13,61 @@ from sqlalchemy.engine import Engine
 from app.core.deps import require_role
 from app.core.exceptions import AppException
 from app.core.roles import DATA_WRITE_ROLES, UPLOAD_STAFF_DOMAINS, UPLOAD_WRITE_ROLES
+from app.modules.pipeline.contracts.automation import AUTOMATIC_RECIPE_VERSION
+from app.modules.pipeline.repositories.flow_monitor import list_flows
 from app.modules.pipeline.repositories.management_db import management_engine
 from app.modules.pipeline.services.auto_pipeline import configure
+from app.modules.pipeline.services.flow_monitor import FlowPage
 
 router = APIRouter(prefix="/pipeline/auto", tags=["auto-silver"])
 DB = Annotated[Engine, Depends(management_engine)]
 Admin = Annotated[dict[str, Any], Depends(require_role(*DATA_WRITE_ROLES))]
 Reader = Annotated[dict[str, Any], Depends(require_role(*UPLOAD_WRITE_ROLES))]
+
+
+@router.get("/overview", summary="Giám sát Silver tự động trên toàn hệ thống")
+def overview(db: DB, _user: Admin) -> dict[str, Any]:
+    with db.connect() as connection:
+        counts: dict[str, int] = dict(
+            connection.execute(
+                text("SELECT status,count(*) FROM app.auto_pipeline_job GROUP BY status")
+            ).all()
+        )
+        readiness = connection.execute(
+            text("SELECT to_regprocedure('app.enqueue_default_silver(bigint)') IS NOT NULL")
+        ).scalar_one()
+        paused = connection.execute(
+            text("SELECT count(*) FROM app.auto_pipeline_policy WHERE NOT enabled")
+        ).scalar_one()
+        healthy = connection.execute(
+            text(
+                "SELECT count(*) FROM app.silver_worker_heartbeat WHERE last_heartbeat_at>now()-interval '45 seconds'"
+            )
+        ).scalar_one()
+    return {
+        "automatic_enabled": readiness,
+        "recipe_version": AUTOMATIC_RECIPE_VERSION,
+        "total": sum(counts.values()),
+        "counts": counts,
+        "paused_datasets": paused,
+        "healthy_workers": healthy,
+    }
+
+
+@router.get(
+    "/flows", response_model=FlowPage, summary="Theo dõi từng bước nạp Bronze đến công bố Silver"
+)
+def flows(
+    db: DB,
+    _user: Admin,
+    search: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
+    ingestion_job_id: Annotated[int | None, Query(gt=0)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> FlowPage:
+    return list_flows(
+        db, search=search, ingestion_job_id=ingestion_job_id, limit=limit, offset=offset
+    )
 
 
 class AutoPolicyRequest(BaseModel):
@@ -91,8 +139,10 @@ def jobs(
             connection.execute(
                 text(
                     """SELECT j.job_id,j.ingestion_job_id,j.dataset_id,j.status,
-            j.attempt_number,j.error_code,j.result,j.created_at,j.finished_at,j.next_attempt_at
+            j.attempt_number,j.error_code,j.result,j.created_at,j.finished_at,j.next_attempt_at,
+            d.dataset_name,d.domain,i.source_table,coalesce(j.policy->>'mode','custom') AS processing_mode
             FROM app.auto_pipeline_job j JOIN app.dataset d USING(dataset_id)
+            JOIN app.ingestion_job i ON i.ingestion_job_id=j.ingestion_job_id
             WHERE TRUE """
                     + scope
                     + filters
@@ -165,11 +215,14 @@ def retry(job_id: UUID, db: DB, user: Admin) -> dict[str, Any]:
                 text("""UPDATE app.auto_pipeline_job j SET status='QUEUED',
             policy=jsonb_set(j.policy,'{max_attempts}',to_jsonb(j.attempt_number+1)),
             next_attempt_at=NULL,finished_at=NULL,error_code=NULL
-            WHERE job_id=:id AND status='FAILED' AND EXISTS (
+            WHERE job_id=:id AND status='FAILED' AND ((
+                j.policy->>'mode'='automatic' AND j.policy->>'recipe_version'=:recipe
+                AND NOT EXISTS (SELECT 1 FROM app.auto_pipeline_policy p WHERE p.dataset_id=j.dataset_id AND NOT p.enabled)
+            ) OR (coalesce(j.policy->>'mode','custom')<>'automatic' AND EXISTS (
                 SELECT 1 FROM app.auto_pipeline_policy p WHERE p.dataset_id=j.dataset_id
-                AND p.enabled AND p.revision=(j.policy->>'revision')::int)
+                AND p.enabled AND p.revision=(j.policy->>'revision')::int)))
             RETURNING job_id,status,attempt_number"""),
-                {"id": str(job_id)},
+                {"id": str(job_id), "recipe": AUTOMATIC_RECIPE_VERSION},
             )
             .mappings()
             .first()
@@ -189,6 +242,8 @@ def workers(db: DB, _user: Admin) -> list[dict[str, Any]]:
         return [
             dict(row)
             for row in connection.execute(
-                text("SELECT * FROM app.silver_worker_heartbeat ORDER BY worker_id")
+                text(
+                    "SELECT *,last_heartbeat_at>now()-interval '45 seconds' AS healthy FROM app.silver_worker_heartbeat ORDER BY last_heartbeat_at DESC,worker_id"
+                )
             ).mappings()
         ]

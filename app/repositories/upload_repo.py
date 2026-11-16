@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app.core.exceptions import AppException
 from app.modules.datasources.models import DataLayer, Dataset, DataSource, SourceSystem
+from app.repositories.dataset_ownership_repo import default_dataset_owner
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -153,7 +154,7 @@ async def create_upload_target(
         domain=domain,
         source_system_id=system.source_system_id,
         data_layer_id=layer.data_layer_id,
-        owner_department_id=system.owner_department_id,
+        owner_department_id=await default_dataset_owner(db, domain, system.owner_department_id),
         description=description,
         status="ACTIVE",
     )

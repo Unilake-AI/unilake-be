@@ -106,7 +106,7 @@ def system(monkeypatch):
             )
             connection.execute(
                 text(
-                    "INSERT INTO app.data_layer(data_layer_id,layer_code,layer_name) OVERRIDING SYSTEM VALUE VALUES (1,'BRONZE','Bronze')"
+                    "INSERT INTO app.data_layer(data_layer_id,layer_code,layer_name) OVERRIDING SYSTEM VALUE VALUES (1,'BRONZE','Bronze') ON CONFLICT (layer_code) DO NOTHING"
                 )
             )
             connection.execute(
@@ -407,6 +407,12 @@ def test_source_mode_upload_preview_confirm_to_real_parquet_without_crosswalk(sy
             text("SELECT count(*) FROM app.quarantine_record")
         ).scalar_one() == (1 if kind == "partial" else 0)
     if kind == "known":
+        # Lần nạp đầu nay đã tự xếp hàng dù chưa có policy; xử lý xong trước khi thử override.
+        from app.modules.pipeline.services.cleaning_setup import automatic_source_profile
+
+        system["extra_scopes"].append(automatic_source_profile(system["engine"], job_id).scope)
+        assert silver_worker.run_once(system["engine"], "default-before-override")
+        assert _job(system)["status"] == "SUCCESS"
         # Cùng cấu hình giữ mã nguồn cũng chạy được qua hàng đợi và Silver Worker.
         system["policy"](profile_id=saved["profile_id"])
         system["upload"](body)

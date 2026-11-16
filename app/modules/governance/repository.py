@@ -6,7 +6,9 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import ProgrammingError
 
+from app.core.exceptions import AppException
 from app.modules.governance.models import CatalogMetadata, PipelineLineage
 from app.modules.governance.schemas import LineageEdge, LineageGraphResponse, LineageNode
 
@@ -24,7 +26,16 @@ class CatalogRepository:
         stmt = select(CatalogMetadata)
         if domain_id is not None:
             stmt = stmt.where(CatalogMetadata.domain_id == domain_id)
-        return list((await self.db.scalars(stmt)).all())
+        try:
+            return list((await self.db.scalars(stmt)).all())
+        except ProgrammingError as exc:
+            if getattr(exc.orig, "sqlstate", None) == "42P01":
+                raise AppException(
+                    "Data Catalog chưa được nâng cấp cơ sở dữ liệu. Quản trị hệ thống cần chạy make db-catalog-upgrade.",
+                    code="CATALOG_SCHEMA_NOT_READY",
+                    status_code=503,
+                ) from exc
+            raise
 
     async def save(
         self, entry: CatalogEntrySchema, *, deleted: bool = False, create: bool = False

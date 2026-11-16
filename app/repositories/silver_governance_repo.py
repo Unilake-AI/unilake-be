@@ -10,12 +10,13 @@ from dataclasses import asdict
 from datetime import UTC
 from typing import Any, NoReturn
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.engine import Connection
 
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.modules.auth.models import Role, UserRole
+from app.modules.pipeline.contracts.automation import AUTOMATIC_RECIPE_VERSION
 from app.modules.pipeline.contracts.identity import digest
 from app.modules.pipeline.models.profiles import (
     SilverDomainOwner,
@@ -158,6 +159,9 @@ def approved_evidence(
 
 
 def authorize_manifest(connection: Connection, manifest: dict[str, Any]) -> None:
+    if manifest.get("governance", {}).get("automatic_recipe") is not None:
+        authorize_automatic_manifest(connection, manifest)
+        return
     proofs = manifest.get("governance", {}).get("profile_approvals")
     if not isinstance(proofs, list) or not proofs:
         reject("SILVER_SNAPSHOT_APPROVAL_REQUIRED")
@@ -192,6 +196,65 @@ def authorize_manifest(connection: Connection, manifest: dict[str, Any]) -> None
             or not any(proof["rule_version"] == check.get("rule_version") for proof in proofs)
         ):
             reject("SILVER_PARTIAL_KEY_CHECK_REQUIRED")
+
+
+def authorize_automatic_manifest(connection: Connection, manifest: dict[str, Any]) -> None:
+    """Quy tắc hệ thống phải khớp việc đã chốt, cấu trúc và từng bằng chứng Bronze."""
+    proof = manifest["governance"]["automatic_recipe"]
+    if not isinstance(proof, dict) or proof.get("recipe_version") != AUTOMATIC_RECIPE_VERSION:
+        reject("SILVER_AUTOMATIC_RECIPE_INVALID")
+    row = (
+        connection.execute(
+            text("""SELECT j.*,j.lease_expires_at>clock_timestamp() AS leased
+        FROM app.auto_pipeline_job j WHERE job_id=:id FOR SHARE"""),
+            {"id": proof.get("job_id")},
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        reject("SILVER_AUTOMATIC_RECIPE_INVALID")
+    policy = row["policy"]
+    if (
+        policy.get("mode") != "automatic"
+        or policy.get("recipe_version") != AUTOMATIC_RECIPE_VERSION
+    ):
+        reject("SILVER_AUTOMATIC_RECIPE_INVALID")
+    profile = SourceProfile.model_validate(policy.get("profile_definition"))
+    if (
+        profile.identity_mode != "source"
+        or profile.version != AUTOMATIC_RECIPE_VERSION
+        or proof.get("profile_fingerprint") != profile.fingerprint
+        or policy.get("profile_fingerprint") != profile.fingerprint
+        or profile.dataset_id != row["dataset_id"]
+        or manifest["scope"] != "production:" + profile.scope
+        or manifest["schema_fingerprint"] != digest(profile.contracts)
+        or manifest.get("quarantine_report")
+    ):
+        reject("SILVER_AUTOMATIC_RECIPE_INVALID")
+    if row["status"] == "RUNNING" and row["leased"]:
+        pass  # Publication callback kiểm tra lease_token trước khi commit cùng kết quả job.
+    elif (
+        row["status"] == "SUCCESS"
+        and (row["result"] or {}).get("publication", {}).get("snapshot_id")
+        == manifest["snapshot_id"]
+    ):
+        pass
+    else:
+        reject("SILVER_AUTOMATIC_RECIPE_INVALID")
+    for artifact in manifest["entities"].values():
+        if artifact["rows"] and not artifact.get("lineage"):
+            reject("SILVER_APPROVED_LINEAGE_REQUIRED")
+        for batch in artifact.get("lineage", []):
+            provenance = batch.get("provenance") or {}
+            if (
+                batch["key"] != asdict(profile.key())
+                or provenance.get("ingestion_job_id") != row["ingestion_job_id"]
+                or provenance.get("content_sha256") != row["bronze_input"].get("sha256")
+                or provenance.get("object_version_id") != row["bronze_input"].get("version_id")
+                or provenance.get("source_ref") != row["bronze_input"].get("uri")
+            ):
+                reject("SILVER_APPROVED_LINEAGE_REQUIRED")
 
 
 def recheck_approvals(connection: Connection, proofs: list[dict[str, Any]]) -> None:

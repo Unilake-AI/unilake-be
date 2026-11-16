@@ -17,7 +17,8 @@ from app.core.security import create_access_token
 from app.dependencies import get_db
 from app.main import create_app
 from app.modules.auth.models import LoginSession, Role, UserRole
-from app.modules.governance.models import CatalogMetadata
+from app.modules.datasources.models import DataLayer, Dataset
+from app.modules.governance.models import CatalogColumn, CatalogMetadata, CatalogTable
 from app.modules.users.models import User
 
 CATALOG = "/api/v1/governance/catalog"
@@ -42,7 +43,8 @@ def client(monkeypatch) -> Iterator[TestClient]:
         poolclass=StaticPool,
         execution_options={"schema_translate_map": {"app": None}},
     )
-    cast("Table", CatalogMetadata.__table__).create(engine)
+    for model in (CatalogMetadata, DataLayer, Dataset, CatalogTable, CatalogColumn):
+        cast("Table", model.__table__).create(engine)
     cast("Table", Role.__table__).create(engine)
     cast("Table", User.__table__).create(engine)
     cast("Table", UserRole.__table__).create(engine)
@@ -89,6 +91,7 @@ def client(monkeypatch) -> Iterator[TestClient]:
         "app.modules.governance.catalog_service.get_domain_registry", sample_registry
     )
     application = create_app()
+    application.state.test_engine = engine
 
     def override_db() -> Iterator[MagicMock]:
         with Session(engine) as session, session.begin():
@@ -360,3 +363,39 @@ def test_openapi_documents_auth_and_crud(client: TestClient) -> None:
     ]:
         for method in methods:
             assert paths[path][method]["security"] == [{"HTTPBearer": []}]
+
+
+def test_real_registered_dataset_visible_and_metadata_override_persists(client):
+    with Session(client.app.state.test_engine) as db, db.begin():
+        db.add(DataLayer(data_layer_id=1, layer_code="BRONZE", layer_name="Bronze"))
+        db.add(
+            Dataset(
+                dataset_id=1,
+                dataset_code="HR_EMPLOYEES",
+                dataset_name="Nhân viên thực tế",
+                domain="hr",
+                data_layer_id=1,
+                status="ACTIVE",
+            )
+        )
+        db.add(CatalogTable(catalog_table_id=1, dataset_id=1, table_name="employees"))
+        db.add(
+            CatalogColumn(
+                catalog_column_id=1,
+                catalog_table_id=1,
+                column_name="employee_id",
+                data_type="string",
+                is_nullable=False,
+            )
+        )
+    response = client.get(CATALOG, params={"domain_id": "hr"}, headers=headers())
+    assert response.status_code == 200
+    entry = response.json()[0]
+    assert entry["dataset"] == "HR_EMPLOYEES"
+    assert entry["fields"][0]["name"] == "employee_id"
+    url = f"{CATALOG}/hr/HR_EMPLOYEES"
+    response = client.patch(url, json={"description": "Đã xác minh"}, headers=headers())
+    assert response.status_code == 200, response.text
+    assert client.get(url, headers=headers()).json()["description"] == "Đã xác minh"
+    assert client.delete(url, headers=headers()).status_code == 204
+    assert client.get(CATALOG, params={"domain_id": "hr"}, headers=headers()).json() == []

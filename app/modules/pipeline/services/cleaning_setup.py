@@ -23,6 +23,7 @@ from sqlalchemy.engine import Engine
 from app.core.config import settings
 from app.core.exceptions import AppException
 from app.modules.pipeline.cleaning.pipeline import CleaningPipeline
+from app.modules.pipeline.contracts.automation import AUTOMATIC_RECIPE_VERSION
 from app.modules.pipeline.contracts.identity import digest
 from app.modules.pipeline.models.identity import CrosswalkRelease
 from app.modules.pipeline.models.profiles import SilverSourceProfile
@@ -714,3 +715,60 @@ def confirm_setup(
     return save_profile(
         engine, _profile_id(context, profile.identity_mode), profile, actor, evidence["revision"]
     )
+
+
+def automatic_source_profile(engine: Engine, job_id: int) -> SourceProfile:
+    """Quy tắc hệ thống theo file thật; không suy đoán khóa, mã hoặc ngày mơ hồ."""
+    context, parsed = _capture(engine, job_id)
+    source, contracts = _templates(context["domain"])
+    proposals = _entity_proposals(context, parsed, source, contracts)
+    protected = {
+        _name(name)
+        for schema in source["entities"].values()
+        for name in schema.get("pii_columns", [])
+    }
+    complete = [
+        item
+        for item in proposals
+        if item["matched_columns"] == item["total_columns"]
+        and all(
+            _name(name) in protected
+            for name in parsed.columns
+            if name not in item["field_mapping"].values()
+        )
+    ]
+    file = _file_proposal(context, parsed, source)
+    # Chỉ nhận diện nghiệp vụ khi khớp duy nhất toàn bộ cấu trúc Silver đã quy định.
+    selected = complete[0] if len(complete) == 1 else file
+    mapping = selected["field_mapping"]
+    ignored = [name for name in parsed.columns if name not in mapping.values()]
+    fields = selected["fields"]
+    dates = {}
+    for field in fields:
+        if field["kind"] == "date":
+            formats = field.get("date_formats", [])
+            # Mơ hồ hoặc có giá trị sai: dùng định dạng ISO đã quy định, không đoán ngày/tháng.
+            dates[field["name"]] = formats[0] if len(formats) == 1 else "YMD"
+    choices = CleaningChoices(
+        analysis_fingerprint="0" * 64,
+        entity=selected["entity"],
+        identity_mode="source",
+        field_mapping=mapping,
+        ignored_columns=ignored,
+        date_formats=dates,
+        field_types={field["name"]: field["kind"] for field in fields} if selected is file else {},
+        identifier_fields=[field["name"] for field in fields if field["identifier"]],
+    )
+    profile = _source_definition(context, parsed, choices, source, contracts)
+    # Một file có một head ổn định, các file khác không ghi đè nhau dù thuộc cùng dataset.
+    scope = (
+        "auto-"
+        + digest(
+            {
+                "dataset": profile.dataset_id,
+                "source": profile.data_source_id,
+                "table": profile.source_table,
+            }
+        )[:28]
+    )
+    return profile.model_copy(update={"version": AUTOMATIC_RECIPE_VERSION, "scope": scope})
