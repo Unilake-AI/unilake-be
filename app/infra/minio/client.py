@@ -65,6 +65,13 @@ def silver_writer_client() -> Minio:
     )
 
 
+def gold_writer_client() -> Minio:
+    """Tài khoản Gold chỉ đọc Silver và ghi kết quả Gold."""
+    return _scoped_client(
+        settings.gold_writer_access_key, settings.gold_writer_secret_key, "GOLD_WRITER", timeout=60
+    )
+
+
 def source_reader_client(bucket: str) -> Minio:
     # Bronze dùng SA downstream; bucket nguồn khác phải có SA đọc nguồn riêng.
     if bucket == settings.minio_bucket_bronze:

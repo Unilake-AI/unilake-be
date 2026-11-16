@@ -24,6 +24,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Worker chọn danh sách gọn; backend vẫn dùng requirements.txt mặc định.
 ARG REQUIREMENTS_FILE=requirements.txt
+COPY requirements-worker.txt ./requirements-worker.txt
 COPY ${REQUIREMENTS_FILE} ./requirements.txt
 
 # Cache tải package tồn tại qua các lần build, không được đưa vào runtime image.

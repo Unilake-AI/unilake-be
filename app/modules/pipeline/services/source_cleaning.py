@@ -20,11 +20,11 @@ from app.core.exceptions import AppException
 from app.modules.ingestion.contracts import MappingBinding
 from app.modules.ingestion.contracts.readers import (
     ReadRequest,
+    ReadResult,
     SourceReaderFactory,
     read_file_snapshot,
     reader_to_batch,
 )
-from app.modules.pipeline.cleaning.duplicate_records import build_duplicate_profile
 from app.modules.pipeline.cleaning.format_validation import (
     SourceFormatOptions,
     build_format_profile,
@@ -40,6 +40,7 @@ from app.modules.pipeline.cleaning.quarantine import (
     quarantine_source,
     save_quarantine_records,
 )
+from app.modules.pipeline.repositories.auto_pipeline import AutoPipelineRepository
 from app.modules.pipeline.repositories.cleaning_runs import CleaningRunRepository
 from app.modules.pipeline.repositories.identity import CrosswalkRepository
 from app.modules.pipeline.repositories.silver import SilverRepository
@@ -48,6 +49,7 @@ from app.modules.pipeline.services.source_profiles import SourceProfile, _tuples
 from app.modules.pipeline.silver.lineage import record_pipeline_lineage_sync
 from app.modules.pipeline.silver.pipeline import NormalizationTask, SilverPipeline
 from app.modules.pipeline.silver.publication import SilverPublicationService
+from app.modules.pipeline.standardization.duckdb_engine import DuckDBStandardizationEngine
 from app.providers import silver_writer_client, source_reader_client
 from app.repositories.silver_governance_repo import (
     approval_required,
@@ -58,7 +60,7 @@ from app.repositories.silver_governance_repo import (
 from app.repositories.silver_profile_repo import load_source_profile
 
 if TYPE_CHECKING:
-    from sqlalchemy.engine import Connection
+    from sqlalchemy.engine import Connection, Engine
 
     from app.modules.pipeline.standardization.identity_standardization import (
         IdentityResult,
@@ -74,7 +76,7 @@ def _job_context(engine: Any, ingestion_job_id: int) -> dict[str, Any]:
         row = (
             connection.execute(
                 text("""
-                SELECT j.ingestion_job_id,j.status,j.job_type,j.output,j.source_table,
+                SELECT j.ingestion_job_id,j.status,j.job_type,j.output,j.source_table,j.created_at,
                        j.rows_read,j.data_source_id,j.dataset_id,j.root_job_id,j.upload_input,
                        ds.source_type,
                        ds.configuration,ds.location,s.source_system_id,s.source_code,
@@ -199,10 +201,8 @@ def _validate_job_context(context: dict[str, Any]) -> None:
     context["object_key"] = "/".join(object_parts)
 
 
-def _read_bronze(
-    context: dict[str, Any],
-    profile: SourceProfile,
-) -> CleaningTask:
+def read_bronze_snapshot(context: dict[str, Any]) -> ReadResult:
+    """Đọc đúng file gốc và kiểm tra nội dung trước khi đề xuất hoặc áp dụng cách xử lý."""
     output = context["output"]
     source_type = context["source_type"]
     # Đọc đúng phiên bản tệp được ghi nhận khi thu thập, kể cả khi đã có phiên bản mới hơn.
@@ -242,6 +242,18 @@ def _read_bronze(
         provenance=replace(provenance, ingestion_job_id=context["ingestion_job_id"]),
     )
 
+    return parsed
+
+
+def _read_bronze(context: dict[str, Any], profile: SourceProfile) -> CleaningTask:
+    return build_cleaning_task(context, profile, read_bronze_snapshot(context))
+
+
+def build_cleaning_task(
+    context: dict[str, Any], profile: SourceProfile, parsed: ReadResult
+) -> CleaningTask:
+    """Dùng chung cách làm sạch cho bản xem trước và lần lưu dữ liệu thật."""
+    source_type = context["source_type"]
     key = profile.key()
     binding = MappingBinding(
         key.source_system_id,
@@ -292,14 +304,7 @@ def _read_bronze(
             target_to_source=profile.field_mapping,
             source_options=options,
         ),
-        duplicate_profile=build_duplicate_profile(
-            profile.source_schema,
-            domain=profile.domain,
-            entity=profile.entity,
-            version=profile.rule_version,
-            target_to_source=profile.field_mapping,
-            collapse_exact_primary_key_duplicates=profile.collapse_exact_duplicates,
-        ),
+        duplicate_profile=profile.duplicate_profile(),
     )
     return cleaning
 
@@ -307,6 +312,9 @@ def _read_bronze(
 def _identity_service(
     engine: Any, profile: SourceProfile
 ) -> tuple[SchemaMappingService, IdentityStandardizationService]:
+    if profile.identity_mode == "source":
+        return profile.services()
+    assert profile.crosswalk_release is not None
     with engine.begin() as connection:
         crosswalk = CrosswalkRepository(connection).load(profile.crosswalk_release)
     return profile.services(crosswalk)
@@ -340,6 +348,8 @@ def run_manual_cleaning(
     base_snapshot: str | None = "active",
     # [SỬA - Vấn đề 1] Cho phép xuất bản riêng các dòng sạch khi tệp vẫn còn dòng bị cách ly.
     allow_partial_publication: bool = True,
+    auto_context: dict[str, Any] | None = None,
+    engine_override: Engine | None = None,
 ) -> dict[str, Any]:
     """Làm sạch và lưu vào Silver từ một lần thu thập thành công, dùng quy tắc của nguồn đã khai báo."""
     if base_snapshot is not None and (
@@ -350,7 +360,7 @@ def run_manual_cleaning(
         raise ValueError("INVALID_MANUAL_CLEANING_OPTIONS")
     if type(ingestion_job_id) is not int or ingestion_job_id <= 0:
         raise ValueError("INVALID_INGESTION_JOB_ID")
-    engine = create_engine(
+    engine = engine_override or create_engine(
         URL.create(
             "postgresql+psycopg",
             username=settings.db_user,
@@ -367,16 +377,34 @@ def run_manual_cleaning(
     cleaning_completed = False
     publication_committed = False
     try:
-        profile = load_source_profile(engine, settings.silver_profiles_path, profile_id)
+        profile = (
+            SourceProfile.model_validate(auto_context["policy"]["profile_definition"])
+            if auto_context
+            else load_source_profile(engine, settings.silver_profiles_path, profile_id)
+        )
+        if auto_context and profile.fingerprint != auto_context["policy"]["profile_fingerprint"]:
+            raise ValueError("AUTO_PIPELINE_PROFILE_MISMATCH")
         approvals: list[dict[str, Any]] = []
         if approval_required():
             with engine.begin() as connection:
                 approvals.append(approved_evidence(connection, profile_id, profile.fingerprint))
         context = _job_context(engine, ingestion_job_id)
+        if auto_context:
+            # Chạy lại chỉ được đọc đúng bản Bronze đã xếp hàng, không lấy file mới hơn.
+            with engine.begin() as connection:
+                AutoPipelineRepository.fence(
+                    connection, auto_context["job_id"], auto_context["lease_token"]
+                )
+            if context["output"] != auto_context["bronze_input"]:
+                raise ValueError("AUTO_PIPELINE_BRONZE_MISMATCH")
         _bind_profile(context, profile)
         mapping, identity = _identity_service(engine, profile)
         run_id = repository.start(
-            context, entity=profile.entity, actor=requested_by, session=profile.scope
+            context,
+            entity=profile.entity,
+            actor=requested_by,
+            session=profile.scope,
+            auto_job_id=auto_context["job_id"] if auto_context else None,
         )
         repository.update(
             run_id,
@@ -400,9 +428,9 @@ def run_manual_cleaning(
         std_rejected: set[str] = set()
         std_issues: list[dict[str, Any]] = []
         if cleaned.batch.records:
-            mapped = mapping.map_batch(cleaned.batch)
-            typed = identity.types.standardize(mapped)
-            standardized = identity.standardize(typed)
+            standardized = DuckDBStandardizationEngine().standardize(
+                cleaned.batch, mapping, identity, **profile.derivation_options(cleaned.batch)
+            )
             std_rejected = set(standardized.rejected_locators)
             std_issues = [
                 item
@@ -464,7 +492,17 @@ def run_manual_cleaning(
             if approvals
             else {"status": "NEEDS_DOMAIN_OWNER_APPROVAL"},
         }
-        if total_quarantined and approval_required():
+        no_source_key = (
+            profile.identity_mode == "source"
+            and not profile.source_schema["entities"][profile.entity]["primary_key"]
+        )
+        if total_quarantined and no_source_key:
+            # Chưa có cột phân biệt đối tượng thì không thể gộp an toàn phần mới với dữ liệu cũ.
+            result["partial_key_check"] = {
+                "status": "BLOCKED",
+                "reason": "SOURCE_PRIMARY_KEY_REQUIRED_FOR_PARTIAL_PUBLICATION",
+            }
+        elif total_quarantined and approval_required():
             result["partial_key_check"] = partial_key_evidence(
                 cleaning, set(cleaned.quarantined_locators) | std_rejected
             )
@@ -534,6 +572,15 @@ def run_manual_cleaning(
 
         def record_publication(connection: Connection | None, snapshot_id: str) -> None:
             nonlocal publication_recorded
+            if auto_context:
+                if connection is None:
+                    with engine.begin() as transaction:
+                        record_publication(transaction, snapshot_id)
+                    return
+                # Xác nhận quyền trong chính giao dịch công bố; hết hạn thì không đổi Silver.
+                AutoPipelineRepository.fence(
+                    connection, auto_context["job_id"], auto_context["lease_token"]
+                )
             if approval_required():
                 if connection is None:
                     with engine.begin() as transaction:
@@ -556,6 +603,24 @@ def run_manual_cleaning(
                 silver_snapshot_id=snapshot_id,
                 finished_at=datetime.now(UTC),
             )
+            if auto_context:
+                assert connection is not None
+                AutoPipelineRepository.published(
+                    connection,
+                    auto_context["job_id"],
+                    auto_context["lease_token"],
+                    {
+                        **result,
+                        "status": published_status,
+                        "publication": {
+                            "snapshot_id": snapshot_id,
+                            "scope": f"production:{scope}",
+                            "mode": "production",
+                            "records_published": total_passed,
+                            "entity": profile.entity,
+                        },
+                    },
+                )
             with suppress(Exception):
                 record_pipeline_lineage_sync(
                     connection or engine,
@@ -632,6 +697,7 @@ def run_manual_cleaning(
                     batch=publishable_batch,
                     mapping=mapping,
                     identity=identity,
+                    **profile.derivation_options(publishable_batch),
                 ),
             ),
             base_snapshot=base,
@@ -644,6 +710,7 @@ def run_manual_cleaning(
         result.update(
             status=published_status,
             publication={
+                "status": published_status,
                 "snapshot_id": publication.snapshot_id,
                 "scope": publication.scope,
                 "mode": publication.mode,
@@ -680,7 +747,8 @@ def run_manual_cleaning(
             raise ValueError(f"SILVER_PUBLICATION_REJECTED:{exc}") from exc
         raise
     finally:
-        engine.dispose()
+        if engine_override is None:
+            engine.dispose()
 
 
 def _log_report(requested_by: str, report: dict[str, Any]) -> None:
@@ -711,9 +779,9 @@ def preview_cleaning(
     _bind_profile(context, profile)
     mapping, identity = _identity_service(engine, profile)
     cleaned = CleaningPipeline().clean(_read_bronze(context, profile))
-    mapped = mapping.map_batch(cleaned.batch)
-    typed = identity.types.standardize(mapped)
-    normalized = identity.standardize(typed)
+    normalized = DuckDBStandardizationEngine().standardize(
+        cleaned.batch, mapping, identity, **profile.derivation_options(cleaned.batch)
+    )
     report = cleaned.report
     return {
         "preview": True,

@@ -222,7 +222,8 @@ def build_format_profile(
                 scale=scale,
                 # Dựa vào khai báo cột, không đoán cột mã qua tên hoặc giá trị mẫu.
                 preserve_source_id=target_field in entity_schema.get("primary_key", ())
-                or "references" in column,
+                or "references" in column
+                or column.get("source_identifier") is True,
             )
         )
     if not rules:
@@ -411,6 +412,10 @@ def _normalize_and_validate(value: object, rule: FormatFieldRule) -> tuple[objec
         return normalized, tuple(changes)
 
     if rule.value_kind == "string":
+        if rule.preserve_source_id and isinstance(normalized, int):
+            # Khi lưu mã dưới dạng chữ, số nguyên 7 thành "7"; chuỗi "007" vẫn giữ nguyên.
+            normalized = str(normalized)
+            changes.append("SOURCE_ID_STORED_AS_TEXT")
         if not isinstance(normalized, str):
             raise _InvalidFieldValueError("INVALID_STRING_TYPE")
         alias_map = dict(rule.options.aliases)

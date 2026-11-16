@@ -2,11 +2,24 @@
 
 Silver làm sạch dữ liệu và thống nhất cấu trúc để chuẩn bị xử lý Gold. Các phép tính như GPA, điều kiện trúng tuyển, thâm niên và chỉ số báo cáo thuộc bước xử lý nghiệp vụ sau Silver. Danh sách 39 quy định nghiệp vụ trong tài liệu cũ không còn là điều kiện bắt buộc để công bố Silver.
 
+**Cập nhật 15/11/2026:** dataset có thể được cấu hình tự chạy sau Ingestion `SUCCESS`.
+Silver Worker thực hiện các bước xử lý dưới đây mà không cần người dùng gọi API Cleaning cho từng file.
+Quản trị vẫn chọn profile và bật tự chạy rõ ràng; xem [hướng dẫn Auto Silver](../auto-silver-pipeline.md).
+
+## Thiết lập từ gợi ý trước khi chạy thủ công
+
+Mặc định hiện tại giữ mã nguồn (`identity_mode=source`), không yêu cầu bản đối chiếu.
+File chưa có mẫu có thể chọn cấu trúc từ cột thực tế. Hợp nhất mã là lựa chọn nâng cao.
+
+Màn hình làm sạch hiện hỗ trợ đọc Bronze, đề xuất cách xử lý, xem trước rồi xác
+nhận để lưu. Không cần tự nhập mã profile hoặc soạn JSON cho cấu hình mới.
+Xem [hướng dẫn và API thiết lập Silver](../silver-guided-setup.md).
+
 ## Luồng đang triển khai
 
 1. Đăng ký nguồn và bộ dữ liệu Bronze trong danh mục hiện có.
 2. Thu thập qua API ingestion hoặc [tải file trực tiếp](../ingestion-uploads.md). Worker lưu bản gốc vào MinIO, ghi nhận phiên bản tệp, mã kiểm tra nội dung, số dòng và cách đọc tệp. Chỉ lần thu thập `SUCCESS` được dùng tiếp, gồm cả job thu thập `EXECUTION_V1` và tải lên `UPLOAD_V1`.
-3. Quản trị viên chọn cấu hình nguồn và gọi API làm sạch. Cấu hình phải khớp mã nguồn, bộ dữ liệu, hệ thống nguồn, tên tệp, loại tệp và lĩnh vực của lần thu thập.
+3. Quản trị viên chọn cấu hình nguồn và gọi API làm sạch, hoặc Silver Worker lấy cấu hình tự chạy đã chốt của dataset. Cấu hình phải khớp mã nguồn, bộ dữ liệu, hệ thống nguồn, tên tệp, loại tệp và lĩnh vực của lần thu thập.
 4. Đọc đúng phiên bản Bronze với cách đọc đã được lưu khi thu thập. Kiểm tra lại kích thước, nội dung và số dòng.
 5. Xử lý ô thiếu, định dạng không hợp lệ và bản ghi trùng theo cấu hình. Dữ liệu Bronze được giữ nguyên. Khi còn bản ghi lỗi, lưu hồ sơ cách ly và báo cáo; chặn công bố cả lô. Chưa cho phép công bố một phần.
 6. Đổi tên cột, chuẩn hóa kiểu dữ liệu, đối chiếu mã nguồn sang mã chung và thống nhất giá trị bằng bảng đối chiếu được khai báo.

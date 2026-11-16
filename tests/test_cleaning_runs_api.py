@@ -78,7 +78,14 @@ def test_run_detail_and_report_use_independent_statuses_and_verified_object(monk
         assert "ORDER BY app.cleaning_run.started_at DESC" in str(query)
         assert list(query.params.values()) == [31, "FAILED", 1, 2]
 
-        assert client.get(endpoint + "/report").json() == {"records_quarantined": 2}
+        report = client.get(endpoint + "/report").json()
+        assert report["records_quarantined"] == 2
+        assert report["status"] == "FAILED"
+        assert report["publication_status"] == "FAILED"
+        assert report["publication"] is None
+        assert report["issue_summary"] == {"error": 0, "warning": 0, "information": 0}
+        # Báo cáo nguồn giữ nguyên checksum; không sửa object đã được dùng làm bằng chứng.
+        assert storage.get(ref) == data
         (tmp_path / ref.key).write_bytes(b"corrupted")
         response = client.get(endpoint + "/report")
         assert response.status_code == 503

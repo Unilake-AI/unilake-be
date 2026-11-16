@@ -2,6 +2,10 @@
 
 Ngày kiểm tra: **13/11/2026**. Môi trường: macOS ARM64, Python 3.13.7.
 
+Cập nhật 15/11/2026: đã bổ sung chuẩn hóa qua DuckDB và luồng tự chạy theo dataset.
+Phạm vi và lệnh chạy mới nằm trong [hướng dẫn Auto Silver](auto-silver-pipeline.md).
+Các kết quả bên dưới là mốc kiểm chứng riêng của Giai đoạn 1.
+
 ## 1. Kết quả thực hiện
 
 Đã sửa bộ làm sạch DuckDB và nối vào `CleaningPipeline`. Kết quả được đối chiếu với ba hàm làm sạch trước đây, gồm cả dữ liệu đạt, dữ liệu cách ly, thứ tự vấn đề, vị trí dòng, phiên bản quy định và thông tin nguồn.

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from app.infra.duckdb.query import EmptyGoldQueryExecutor
 from app.infra.llm import MockLLMClient
 from app.infra.minio.client import bronze_reader_client as bronze_reader_client
+from app.infra.minio.client import gold_writer_client as gold_writer_client
 from app.infra.minio.client import silver_writer_client as silver_writer_client
 from app.infra.minio.client import source_reader_client as source_reader_client
 from app.infra.minio.client import upload_cleanup_client as upload_cleanup_client

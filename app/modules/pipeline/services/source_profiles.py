@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from app.modules.pipeline.cleaning.duplicate_records import build_duplicate_profile
+from app.modules.pipeline.cleaning.duplicate_records import (
+    DuplicateKeyRule,
+    DuplicateProfile,
+    build_duplicate_profile,
+)
 from app.modules.pipeline.cleaning.format_validation import (
     SourceFormatOptions,
     build_format_profile,
@@ -28,6 +32,9 @@ from app.modules.pipeline.standardization.type_standardization import (
     FieldOptions,
     TypeStandardizationService,
 )
+
+if TYPE_CHECKING:
+    from app.modules.ingestion.contracts import BronzeBatch
 
 
 class SourceProfile(BaseModel):
@@ -54,14 +61,19 @@ class SourceProfile(BaseModel):
     null_tokens: dict[str, list[str]] = Field(default_factory=dict)
     dictionaries: dict[str, dict[str, str]] = Field(default_factory=dict)
     reference_namespaces: dict[str, str] = Field(default_factory=dict)
-    crosswalk_release: str = Field(min_length=1)
+    identity_mode: Literal["canonical", "source"] = "canonical"
+    crosswalk_release: str | None = Field(default=None, min_length=1)
     effective_at: AwareDatetime
     collapse_exact_duplicates: bool = False
     source_preview_columns: list[str] = Field(default_factory=list)
 
     @property
     def fingerprint(self) -> str:
-        return digest(self.model_dump(mode="json"))
+        payload = self.model_dump(mode="json")
+        # Cấu hình cũ chưa có lựa chọn này; giữ mã kiểm chứng cũ để vẫn đọc lại được.
+        if self.identity_mode == "canonical":
+            payload.pop("identity_mode")
+        return digest(payload)
 
     @property
     def rule_version(self) -> str:
@@ -78,8 +90,28 @@ class SourceProfile(BaseModel):
             self.contracts[self.domain]["x-version"],
         )
 
+    def derivation_options(self, batch: BronzeBatch) -> dict[str, Any]:
+        """Chỉ lấy năm sinh khi quy định đã chỉ rõ cột ngày sinh; không đoán hoặc lưu lại ngày sinh."""
+        properties = self.contracts[self.domain]["$defs"][self.entity]["properties"]
+        derived = {
+            spec["x-derived-from"]: self.field_mapping[name]
+            for name, spec in properties.items()
+            if "x-derived-from" in spec
+        }
+        if not derived:
+            return {}
+        if batch.provenance is None:
+            raise ValueError("DERIVATION_INPUT_PROVENANCE_REQUIRED")
+        return {
+            "derivation_inputs": {
+                locator: {name: row[source] for name, source in derived.items()}
+                for locator, row in zip(batch.record_locators, batch.records, strict=True)
+            },
+            "derivation_input_version": batch.provenance.input_version,
+        }
+
     def services(
-        self, crosswalk: CrosswalkSnapshot
+        self, crosswalk: CrosswalkSnapshot | None = None
     ) -> tuple[SchemaMappingService, IdentityStandardizationService]:
         contract = self.contracts[self.domain]
         props = contract["$defs"][self.entity]["properties"]
@@ -119,6 +151,28 @@ class SourceProfile(BaseModel):
         )
         return SchemaMappingService(MappingRegistry((profile,))), identity
 
+    def duplicate_profile(self) -> DuplicateProfile:
+        schema = self.source_schema["entities"][self.entity]
+        if self.identity_mode == "source" and not schema["primary_key"]:
+            fields = tuple(self.field_mapping.values())
+            return DuplicateProfile(
+                self.domain,
+                self.entity,
+                self.rule_version,
+                fields,
+                (DuplicateKeyRule("SOURCE-EXACT-ROW", fields, "EXACT_ROW"),),
+                self.collapse_exact_duplicates,
+                source_rows=True,
+            )
+        return build_duplicate_profile(
+            self.source_schema,
+            domain=self.domain,
+            entity=self.entity,
+            version=self.rule_version,
+            target_to_source=self.field_mapping,
+            collapse_exact_primary_key_duplicates=self.collapse_exact_duplicates,
+        )
+
     @model_validator(mode="after")
     def validate_definition(self) -> SourceProfile:
         if not self.field_mapping or len(set(self.field_mapping.values())) != len(
@@ -133,6 +187,16 @@ class SourceProfile(BaseModel):
             raise ValueError("UNKNOWN_NULL_TOKEN_FIELD")
         try:
             properties = self.contracts[self.domain]["$defs"][self.entity]["properties"]
+            spec = self.contracts[self.domain]["$defs"][self.entity]
+            if self.identity_mode == "source":
+                if self.crosswalk_release is not None or self.reference_namespaces:
+                    raise ValueError("SOURCE_MODE_CANNOT_REMAP_IDENTIFIERS")
+                if spec.get("x-identity-mode") != "source" or any(
+                    "x-references" in p for p in properties.values()
+                ):
+                    raise ValueError("SOURCE_ID_CONTRACT_REQUIRED")
+            elif spec.get("x-identity-mode") == "source" or self.crosswalk_release is None:
+                raise ValueError("CANONICAL_CROSSWALK_REQUIRED")
             if set(self.field_mapping) != {name for name in properties if not name.startswith("_")}:
                 raise ValueError("SILVER_BUSINESS_FIELDS_MUST_BE_MAPPED")
             source_columns = {
@@ -151,15 +215,10 @@ class SourceProfile(BaseModel):
                     for name, options in self.format_options.items()
                 },
             )
-            build_duplicate_profile(
-                self.source_schema,
-                domain=self.domain,
-                entity=self.entity,
-                version=self.rule_version,
-                target_to_source=self.field_mapping,
-                collapse_exact_primary_key_duplicates=self.collapse_exact_duplicates,
+            self.duplicate_profile()
+            self.services(
+                CrosswalkSnapshot(self.crosswalk_release, ()) if self.crosswalk_release else None
             )
-            self.services(CrosswalkSnapshot(self.crosswalk_release, ()))
         except (KeyError, TypeError) as exc:
             raise ValueError("INVALID_SILVER_PROFILE") from exc
         return self

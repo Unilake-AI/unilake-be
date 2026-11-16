@@ -222,6 +222,7 @@ def test_file_to_cleaning_to_production_parquet(
     )
     for table in [*SILVER_TABLES, CLEANING_RUNS, QUARANTINE_RECORDS, PIPELINE_LINEAGE]:
         table.create(engine)
+    assert profile.crosswalk_release is not None
     crosswalk = CrosswalkSnapshot(
         profile.crosswalk_release,
         (
@@ -385,10 +386,12 @@ def test_all_quarantined_rows_remain_blocked_even_with_partial_publication(tmp_p
     monkeypatch.setattr(runner, "create_engine", lambda *_args, **_kwargs: engine)
     monkeypatch.setattr(runner, "load_source_profile", lambda *_: profile)
     monkeypatch.setattr(runner, "_job_context", lambda *_: context)
+    release = profile.crosswalk_release
+    assert release is not None
     monkeypatch.setattr(
         runner,
         "_identity_service",
-        lambda *_: profile.services(CrosswalkSnapshot(profile.crosswalk_release, ())),
+        lambda *_: profile.services(CrosswalkSnapshot(release, ())),
     )
     monkeypatch.setattr(runner, "read_file_snapshot", lambda *_args, **_kwargs: parsed)
     client = MagicMock()
@@ -471,6 +474,7 @@ def test_standardization_errors_are_quarantined_and_clean_rows_publish(tmp_path,
     )
     for table in [*SILVER_TABLES, CLEANING_RUNS, QUARANTINE_RECORDS, PIPELINE_LINEAGE]:
         table.create(engine)
+    assert profile.crosswalk_release is not None
     crosswalk = CrosswalkSnapshot(
         profile.crosswalk_release,
         (

@@ -8,6 +8,14 @@ from sqlalchemy import text
 
 from app.infra.db.session import async_session_factory
 
+DEPARTMENTS_SEED_SQL = """
+INSERT INTO app.department (department_code, department_name, department_type, status) VALUES
+('PTS', 'Phòng Tuyển sinh', 'Office', 'ACTIVE'),
+('PDT', 'Phòng Đào tạo', 'Office', 'ACTIVE'),
+('PNS', 'Phòng Nhân sự', 'Office', 'ACTIVE')
+ON CONFLICT (department_code) DO NOTHING;
+"""
+
 PERMISSIONS_SEED_SQL = """
 INSERT INTO app.permission (permission_code, permission_name, description) VALUES
 ('auth.login',                'Đăng nhập',                      'Cho phép đăng nhập hệ thống'),
@@ -164,6 +172,8 @@ async def seed_data() -> None:
     """Thực thi các script nạp dữ liệu ban đầu."""
     print("Seeding database roles, permissions, and users...")
     async with async_session_factory() as db:
+        # Chuẩn bị danh mục phòng thật; không tự tạo hồ sơ nhân viên hay cấp phân công giả.
+        await db.execute(text(DEPARTMENTS_SEED_SQL))
         await db.execute(text(PERMISSIONS_SEED_SQL))
         await db.execute(text(ROLES_SEED_SQL))
         for query in ROLE_PERMISSIONS_SQL_LIST:

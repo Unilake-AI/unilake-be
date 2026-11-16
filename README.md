@@ -265,6 +265,15 @@ Theo dõi worker, thống kê và chạy lại thủ công được mô tả tro
 
 Các API chọn bộ dữ liệu Bronze, quản lý profile, xem trước và lựa chọn phiên bản Silver nằm trong [hướng dẫn quản lý Silver trên Swagger](docs/silver-management-api.md). Profile tạo qua API được lưu trong PostgreSQL; cần áp dụng migration `20261110_silver_management.sql` trên database đích trước khi sử dụng.
 
+Khi kiểm tra thủ công trên FE, Data Admin có thể chọn file Bronze để hệ thống gợi ý
+cách xử lý, xem trước rồi xác nhận lưu. BE tự tạo cấu hình, không cần nhập mã
+profile hoặc soạn JSON. Xem [luồng thiết lập từ gợi ý](docs/silver-guided-setup.md).
+
+Luồng tự động theo dataset đã có hàng đợi PostgreSQL và Silver Worker riêng:
+`Ingestion SUCCESS → Auto Pipeline Job → Cleaning/Standardization → Quarantine/Silver`.
+Cấu hình mặc định chưa bật cho dataset nào; quản trị chọn profile và bật qua API.
+Xem API, migration, retry và kiểm thử local trong [hướng dẫn Auto Silver](docs/auto-silver-pipeline.md).
+
 ## Quản lý cơ sở dữ liệu
 
 ### Role và tài khoản mẫu
@@ -381,6 +390,7 @@ Schema và profile trong `docs/` và `data/standardization/` là tài nguyên c�
 | Phân quyền lưu trữ | [Service account MinIO](docs/bronze-service-accounts.md) |
 | Chất lượng dữ liệu | [Chính sách kiểm tra đầu vào Bronze](docs/bronze-input-validation-policy.md) |
 | Chuẩn hóa | [Tổng quan và contract](docs/standardization/README.md) |
+| Gold và báo cáo | [Tự tổng hợp Silver → Gold, API, lưu trữ và cách chạy](docs/gold-pipeline.md) |
 | Mở rộng hệ thống | [Hướng dẫn mở rộng domain](docs/domain-extension-guide.md) |
 
 Một số tài liệu kế thừa sử dụng cấu trúc monorepo với đường dẫn `backend/` hoặc `PYTHONPATH=backend`. Khi áp dụng cho repository này, chạy từ thư mục gốc và điều chỉnh các tiền tố đường dẫn tương ứng.

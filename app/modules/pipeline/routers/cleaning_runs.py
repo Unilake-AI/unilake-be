@@ -22,6 +22,7 @@ from app.core.roles import RoleCode
 from app.dependencies import get_db
 from app.modules.pipeline.models import CLEANING_RUNS
 from app.modules.pipeline.repositories.silver_storage import MinioSilverStore, ObjectRef
+from app.modules.pipeline.services.cleaning_report import final_cleaning_report
 from app.providers import silver_writer_client
 
 router = APIRouter(
@@ -158,7 +159,8 @@ async def get_cleaning_report(run: Annotated[dict[str, Any], Depends(_get_run)])
             "Lượt làm sạch chưa có báo cáo", code="CLEANING_REPORT_NOT_FOUND", status_code=404
         )
     try:
-        return await run_in_threadpool(_read_report, run["report_ref"])
+        stored = await run_in_threadpool(_read_report, run["report_ref"])
+        return final_cleaning_report(stored, run)
     except (MinioException, HTTPError, OSError, ValueError, TypeError):
         raise AppException(
             "Không thể đọc báo cáo làm sạch",

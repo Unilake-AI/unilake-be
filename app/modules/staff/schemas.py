@@ -55,6 +55,15 @@ class AssignIssue(IssueInput):
     assignee_user_id: int = Field(gt=0)
 
 
+class UploadReturnSelection(IssueInput):
+    quarantine_record_ids: list[UUID] = Field(min_length=1, max_length=100)
+
+
+class ApproveUploadReturn(UploadReturnSelection):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=4000)
+
+
 class SubmitResolution(IssueInput):
     ingestion_job_id: int = Field(gt=0)
     note: str = Field(min_length=1, max_length=4000)
@@ -81,11 +90,14 @@ class IssueRead(BaseModel):
     dataset_id: int
     department_id: int
     domain: str
+    department_name: str | None = None
     title: str
     description: str
     status: IssueStatus
     created_by: int
     assignee_user_id: int | None
+    assignment_mode: Literal["DEPARTMENT", "SOURCE_UPLOADER"] = "DEPARTMENT"
+    origin_upload_job_id: int | None = None
     resolution_job_id: int | None
     verification_run_id: UUID | None
     created_at: AwareDatetime
@@ -126,6 +138,15 @@ class AssigneeChoice(BaseModel):
     user_id: int
     username: str
     full_name: str
+
+
+class UploadReturnPreview(BaseModel):
+    department: IssueDepartmentChoice
+    assignee: AssigneeChoice
+    source_table: str
+    origin_upload_job_id: int
+    existing_issue_id: UUID | None = None
+    note: str
 
 
 class IssueDepartmentChoice(BaseModel):

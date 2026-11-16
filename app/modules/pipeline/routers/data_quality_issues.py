@@ -12,7 +12,7 @@ from app.core.deps import get_current_user
 from app.dependencies import get_db
 from app.modules.ingestion.contracts.jobs import IngestionJobRead
 from app.modules.staff.contracts import quality_issues as service
-from app.modules.staff.contracts import schemas
+from app.modules.staff.contracts import schemas, upload_returns
 
 router = APIRouter(prefix="/data-quality-issues", tags=["data-quality-issues"])
 DB = Annotated[AsyncSession, Depends(get_db)]
@@ -70,6 +70,28 @@ async def issue_assignees(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[schemas.AssigneeChoice]:
     return await service.issue_assignees(db, actor, department_id, domain, limit, offset)
+
+
+@router.post(
+    "/return-preview",
+    response_model=schemas.UploadReturnPreview,
+    summary="Tự xác định người nạp file để quản trị xem trước khi gửi trả",
+)
+async def preview_upload_return(
+    request: schemas.UploadReturnSelection, db: DB, actor: Actor
+) -> schemas.UploadReturnPreview:
+    return await upload_returns.preview_return(request, db, actor)
+
+
+@router.post(
+    "/return-to-uploader",
+    response_model=schemas.IssueDetail,
+    summary="Quản trị duyệt trả hồ sơ lỗi về người đã nạp file",
+)
+async def approve_upload_return(
+    request: schemas.ApproveUploadReturn, db: DB, actor: Actor
+) -> schemas.IssueDetail:
+    return await upload_returns.approve_return(request, db, actor)
 
 
 @router.get("/{issue_id}", response_model=schemas.IssueDetail)

@@ -18,12 +18,21 @@ class CleaningRunRepository:
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
 
-    def start(self, context: dict[str, Any], *, entity: str, actor: str, session: str) -> str:
+    def start(
+        self,
+        context: dict[str, Any],
+        *,
+        entity: str,
+        actor: str,
+        session: str,
+        auto_job_id: str | None = None,
+    ) -> str:
         run_id = str(uuid4())
         # Ghi lượt chạy trước khi đọc file Bronze để tra được cả các lượt xử lý lỗi.
         with self.engine.begin() as conn:
             conn.execute(
                 insert(CLEANING_RUNS).values(
+                    **({"auto_job_id": auto_job_id} if auto_job_id else {}),
                     run_id=run_id,
                     ingestion_job_id=context["ingestion_job_id"],
                     dataset_id=context["dataset_id"],

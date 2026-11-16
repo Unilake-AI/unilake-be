@@ -174,7 +174,20 @@ Tài khoản STAFF muốn nhận và xử lý yêu cầu cần:
 - `app.app_user.employee_id` liên kết hồ sơ nhân sự có `employee_status=ACTIVE`.
 - Một phân công `app.assignment` có `assignment_status=ACTIVE`, nằm trong khoảng ngày hiệu lực, thuộc đơn vị đang `ACTIVE`.
 
-Tài khoản seed có role nhưng chưa có hồ sơ/phân công sẽ thấy `needs_department_assignment=true`. Đây là thông tin quản trị cần thiết, không được thay bằng phân công mẫu tự tạo. Không đưa dữ liệu nhân viên upload vào bảng nhân sự quản lý tài khoản chỉ để vượt kiểm tra này.
+Tài khoản có role nhưng chưa có hồ sơ/phân công và chưa được duyệt trả file
+vẫn thấy `needs_department_assignment=true`. Không tự tạo phân công mẫu và
+không đưa dữ liệu nhân viên upload vào bảng nhân sự quản lý tài khoản để vượt
+kiểm tra này.
+
+Với cách **Trả về người nạp file**, quản trị xem gợi ý qua
+`POST /data-quality-issues/return-preview`, rồi duyệt qua
+`POST /data-quality-issues/return-to-uploader`. Sau duyệt, đúng người nạp được
+giao yêu cầu có thể xem và nộp bản sửa của file đó dù chưa có phân công phòng
+ban. `can_resolve_issues=true` và thông báo trong `/staff/context` giải thích
+phạm vi này. Đồng nghiệp không được đọc yêu cầu chỉ vì cùng phòng; người mất
+role hoặc bị khóa không còn quyền. Bằng chứng nạp gốc và lịch sử duyệt được
+lưu riêng, không sửa hồ sơ tài khoản. Cách giao thủ công vẫn yêu cầu phân công
+phòng ban như trước. Database cũ cần migration `20261116_return_to_uploader.sql`.
 
 API và worker cần PostgreSQL/MinIO và tài khoản kho tiếp nhận/Bronze được cấu hình. Web API trên Render chỉ cập nhật khi code được triển khai lên nhánh service đang theo dõi; thay đổi local không tự cập nhật Render.
 

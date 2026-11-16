@@ -87,7 +87,15 @@ def parquet_bytes(records: Sequence[dict[str, object]], spec: Mapping[str, Any])
 
 def read_parquet(data: bytes, spec: Mapping[str, Any], count: int) -> list[dict[str, object]]:
     table = pq.read_table(pa.BufferReader(data))
-    if not table.schema.equals(arrow_schema(spec), check_metadata=True) or table.num_rows != count:
+    expected = arrow_schema(spec)
+    if len(table.column_names) != len(expected.names) or set(table.column_names) != set(
+        expected.names
+    ):
+        raise SilverError("PARQUET_SCHEMA_OR_COUNT_MISMATCH")
+    # PostgreSQL JSONB có thể đổi thứ tự các tên cột trong cấu hình.
+    # Ghép lại theo tên trước khi kiểm tra; vẫn kiểm tra chặt kiểu, quyền để trống và số dòng.
+    table = table.select(expected.names)
+    if not table.schema.equals(expected, check_metadata=True) or table.num_rows != count:
         raise SilverError("PARQUET_SCHEMA_OR_COUNT_MISMATCH")
     return table.to_pylist()  # type: ignore[no-any-return]
 
@@ -121,6 +129,7 @@ def validate_snapshot(
                     if (
                         value is not None
                         and (name in spec["x-primary-key"] or "x-references" in field)
+                        and spec.get("x-identity-mode") != "source"
                         and (not isinstance(value, int) or value <= 0)
                     ):
                         raise ConversionError("CANONICAL_ID_INVALID")

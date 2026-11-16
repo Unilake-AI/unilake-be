@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import false, func, insert, select, text, update
+from sqlalchemy import and_, false, func, insert, or_, select, text, update
 
 from app.modules.datasources.models import DataLayer, DataSource
 from app.modules.ingestion.models import IngestionJob
@@ -18,6 +18,7 @@ from app.modules.pipeline.models import (
     DATASET_CATALOG,
     QUARANTINE_RECORDS,
 )
+from app.modules.users.models import Department, Employee, User
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,6 +67,7 @@ async def issue_candidates(db: AsyncSession, record_ids: set[str]) -> list[dict[
             R.entity,
             IngestionJob.data_source_id,
             IngestionJob.source_table,
+            IngestionJob.ingestion_job_id,
         )
         .select_from(QUARANTINE_RECORDS)
         .join(CLEANING_RUNS, Q.cleaning_run_id == R.run_id)
@@ -83,6 +85,86 @@ async def issue_targets(db: AsyncSession, issue_id: str) -> list[dict[str, Any]]
         .distinct()
     )
     return [dict(row) for row in (await db.execute(query)).mappings()]
+
+
+async def uploader_account(db: AsyncSession, user_id: int) -> dict[str, Any] | None:
+    query = (
+        select(
+            User.app_user_id.label("user_id"),
+            User.username,
+            func.coalesce(Employee.full_name, User.username).label("full_name"),
+        )
+        .outerjoin(Employee, Employee.employee_id == User.employee_id)
+        .where(User.app_user_id == user_id, User.is_active.is_(True))
+    )
+    row = (await db.execute(query)).mappings().first()
+    return dict(row) if row else None
+
+
+async def upload_job(db: AsyncSession, job_id: int, *, lock: bool = False) -> IngestionJob | None:
+    query = select(IngestionJob).where(IngestionJob.ingestion_job_id == job_id)
+    if lock:
+        query = query.with_for_update()
+    return (await db.execute(query)).scalars().one_or_none()
+
+
+async def return_department(
+    db: AsyncSession, owner_id: int | None, default_code: str
+) -> dict[str, Any] | None:
+    query = select(
+        Department.department_id, Department.department_code, Department.department_name
+    ).where(
+        Department.status == "ACTIVE",
+        Department.department_id == owner_id
+        if owner_id is not None
+        else Department.department_code == default_code,
+    )
+    row = (await db.execute(query)).mappings().first()
+    return dict(row) if row else None
+
+
+async def issues_for_records(db: AsyncSession, record_ids: set[str]) -> list[dict[str, Any]]:
+    query = select(DATA_QUALITY_ISSUES).where(
+        DATA_QUALITY_ISSUES.c.issue_id.in_(select(L.issue_id).where(L.record_id.in_(record_ids)))
+    )
+    return [dict(row) for row in (await db.execute(query)).mappings()]
+
+
+def _uploader_scope(user_id: int) -> Any:
+    columns = DATA_QUALITY_ISSUES.c
+    # Chỉ thấy yêu cầu đã được duyệt trả về chính mình và còn khớp người nạp gốc.
+    origin = (
+        select(IngestionJob.ingestion_job_id)
+        .where(
+            IngestionJob.ingestion_job_id == columns.origin_upload_job_id,
+            IngestionJob.requested_by == str(user_id),
+            IngestionJob.job_type == "UPLOAD_V1",
+            IngestionJob.dataset_id == columns.dataset_id,
+        )
+        .correlate(DATA_QUALITY_ISSUES)
+        .exists()
+    )
+    department = (
+        select(Department.department_id)
+        .where(Department.department_id == columns.department_id, Department.status == "ACTIVE")
+        .correlate(DATA_QUALITY_ISSUES)
+        .exists()
+    )
+    return and_(
+        columns.assignment_mode == "SOURCE_UPLOADER",
+        columns.assignee_user_id == user_id,
+        origin,
+        department,
+    )
+
+
+async def has_uploader_returns(db: AsyncSession, user_id: int, domains: set[str]) -> bool:
+    query = (
+        select(DATA_QUALITY_ISSUES.c.issue_id)
+        .where(_uploader_scope(user_id), DATA_QUALITY_ISSUES.c.domain.in_(domains))
+        .limit(1)
+    )
+    return (await db.execute(query)).scalar_one_or_none() is not None
 
 
 async def latest_issue_output(db: AsyncSession, issue_id: str) -> dict[str, Any] | None:
@@ -158,12 +240,17 @@ def _issue_query(
     mine_only: bool = False,
 ) -> Any:
     columns = DATA_QUALITY_ISSUES.c
-    query = select(DATA_QUALITY_ISSUES)
+    query = select(DATA_QUALITY_ISSUES, Department.department_name).join(
+        Department, Department.department_id == columns.department_id
+    )
     if not is_admin:
-        query = (
-            query.where(columns.department_id.in_(departments), columns.domain.in_(domains))
+        department_scope = (
+            and_(columns.assignment_mode == "DEPARTMENT", columns.department_id.in_(departments))
             if departments
-            else query.where(false())
+            else false()
+        )
+        query = query.where(
+            columns.domain.in_(domains), or_(department_scope, _uploader_scope(user_id))
         )
     if department_id is not None:
         query = query.where(columns.department_id == department_id)
@@ -191,7 +278,7 @@ async def get_issue(
     ).where(DATA_QUALITY_ISSUES.c.issue_id == issue_id)
     # Chỉ một thao tác được đổi trạng thái yêu cầu tại một thời điểm.
     if lock:
-        query = query.with_for_update()
+        query = query.with_for_update(of=DATA_QUALITY_ISSUES)
     row = (await db.execute(query)).mappings().one_or_none()
     return dict(row) if row is not None else None
 

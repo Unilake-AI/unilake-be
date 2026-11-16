@@ -21,6 +21,7 @@ from app.modules.pipeline.standardization.type_standardization import Conversion
 
 if TYPE_CHECKING:
     from app.modules.ingestion.contracts import FileProvenance
+    from app.modules.pipeline.contracts.identity import CrosswalkEntry
     from app.modules.pipeline.standardization.schema_mapping import MappingIssue, MappingKey
     from app.modules.pipeline.standardization.type_standardization import (
         TypeIssue,
@@ -65,8 +66,8 @@ class IdentityResult:
     conversion_version: str
     conversion_fingerprint: str
     identity_version: str
-    crosswalk_version: str
-    crosswalk_fingerprint: str
+    crosswalk_version: str | None
+    crosswalk_fingerprint: str | None
     dictionary_versions: dict[str, str]
     configuration_fingerprint: str
     effective_at: str
@@ -87,30 +88,34 @@ class IdentityResult:
 class IdentityStandardizationService:
     types: TypeStandardizationService
     version: str
-    crosswalk: CrosswalkSnapshot
+    crosswalk: CrosswalkSnapshot | None
     dictionaries: Mapping[str, ValueDictionary]
     references: Mapping[str, str]
     effective_at: datetime
     configuration_fingerprint: str
+    _crosswalk_index: Mapping[tuple[str, str, tuple[str, ...]], CrosswalkEntry]
 
     def __init__(
         self,
         *,
         types: TypeStandardizationService,
         version: str,
-        crosswalk: CrosswalkSnapshot,
+        crosswalk: CrosswalkSnapshot | None,
         dictionaries: Mapping[str, ValueDictionary],
         reference_namespaces: Mapping[str, str],
         effective_at: datetime,
     ) -> None:
         if not isinstance(version, str) or not version.strip():
             raise IdentityConfigurationError("IDENTITY_VERSION_REQUIRED")
-        if not isinstance(crosswalk, CrosswalkSnapshot):
+        source_mode = types.spec.get("x-identity-mode") == "source"
+        if not isinstance(crosswalk, CrosswalkSnapshot) and not (source_mode and crosswalk is None):
             raise IdentityConfigurationError("CROSSWALK_SNAPSHOT_REQUIRED")
+        if source_mode and crosswalk is not None:
+            raise IdentityConfigurationError("SOURCE_MODE_CANNOT_REMAP_IDENTIFIERS")
         when = utc(effective_at)
         props = types.spec["properties"]
-        pk = types.spec["x-primary-key"]
-        if len(pk) > 1 and any("x-references" not in props[n] for n in pk):
+        pk = [name for name in types.spec["x-primary-key"] if not name.startswith("_")]
+        if not source_mode and len(pk) > 1 and any("x-references" not in props[n] for n in pk):
             raise IdentityConfigurationError("UNSUPPORTED_COMPOSITE_IDENTITY")
         refs = {n for n, s in props.items() if "x-references" in s}
         if set(reference_namespaces) != refs or any(
@@ -170,7 +175,7 @@ class IdentityStandardizationService:
             "engine": "s4-v1",
             "types": types.configuration_fingerprint,
             "version": version,
-            "crosswalk": crosswalk.fingerprint,
+            "crosswalk": crosswalk.fingerprint if crosswalk else None,
             "dictionaries": {k: asdict(v) for k, v in dictionaries.items()},
             "references": dict(reference_namespaces),
             "effective_at": when.isoformat(),
@@ -183,6 +188,12 @@ class IdentityStandardizationService:
             "references": MappingProxyType(dict(reference_namespaces)),
             "effective_at": when,
             "configuration_fingerprint": digest(payload),
+            # Dùng chung tra cứu chỉ đọc cho cả lô, không dựng lại bảng mã ở từng dòng.
+            "_crosswalk_index": MappingProxyType(
+                {(e.namespace, e.entity, e.source): e for e in crosswalk.entries}
+                if crosswalk
+                else {}
+            ),
         }.items():
             object.__setattr__(self, name, value)
 
@@ -209,12 +220,13 @@ class IdentityStandardizationService:
         ):
             raise IdentityConfigurationError("INVALID_TYPE_HANDOFF")
         props = self.types.spec["properties"]
-        pk = self.types.spec["x-primary-key"]
+        source_mode = self.types.spec.get("x-identity-mode") == "source"
+        pk = [name for name in self.types.spec["x-primary-key"] if not name.startswith("_")]
         pending_fields = {
             n for n, s in props.items() if n in pk or "x-references" in s or "enum" in s
         } | set(self.types.value_mapping_fields)
         ordinary = {n for n in props if not n.startswith("_")} - pending_fields
-        index = {(e.namespace, e.entity, e.source): e for e in self.crosswalk.entries}
+        index = self._crosswalk_index
         accepted = []
         rejected = list(typed.rejected_locators)
         issues: list[IdentityIssue] = []
@@ -267,6 +279,13 @@ class IdentityStandardizationService:
                     else:
                         values[name] = target
                 elif name in pk:
+                    if source_mode:
+                        # Giữ mã đã được xác nhận, không tìm hoặc tự cấp mã chung.
+                        try:
+                            values[name] = convert_value(raw, spec)
+                        except ConversionError as exc:
+                            issue(row.locator, name, exc.code)
+                        continue
                     if len(pk) != 1:
                         raise IdentityConfigurationError("UNSUPPORTED_COMPOSITE_IDENTITY")
                     target = resolve(typed.key.source_system_id, typed.key.entity, raw)
@@ -296,7 +315,7 @@ class IdentityStandardizationService:
                         values[name] = convert_value(target_value, spec)
                     except ConversionError as exc:
                         issue(row.locator, name, exc.code)
-            if typed.key.entity == "lecturer" and len(issues) == start:
+            if not source_mode and typed.key.entity == "lecturer" and len(issues) == start:
                 own_id = resolve(
                     typed.key.source_system_id, "lecturer", row.pending_s4["employee_id"]
                 )
@@ -308,7 +327,7 @@ class IdentityStandardizationService:
                 rejected.append(row.locator)
         # Từ chối mọi dòng có xung đột sau chuẩn hóa, không chỉ dòng đến sau cùng.
         groups: dict[tuple[object, ...], list[StandardizedRow]] = {}
-        for standardized in accepted:
+        for standardized in accepted if pk else ():
             groups.setdefault(tuple(standardized.values[n] for n in pk), []).append(standardized)
         # Nếu nhiều dòng quy về cùng khóa chuẩn, loại toàn bộ nhóm xung đột.
         # Giữ dòng đầu/cuối sẽ khiến kết quả phụ thuộc thứ tự đọc và có thể mất dữ liệu.
@@ -324,8 +343,8 @@ class IdentityStandardizationService:
             typed.conversion_version,
             typed.configuration_fingerprint,
             self.version,
-            self.crosswalk.version,
-            self.crosswalk.fingerprint,
+            self.crosswalk.version if self.crosswalk else None,
+            self.crosswalk.fingerprint if self.crosswalk else None,
             {k: v.version for k, v in self.dictionaries.items()},
             self.configuration_fingerprint,
             self.effective_at.isoformat(),

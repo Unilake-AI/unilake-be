@@ -6,6 +6,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from app.modules.pipeline.standardization.duckdb_engine import DuckDBStandardizationEngine
+
 if TYPE_CHECKING:
     from app.modules.ingestion.contracts import BronzeBatch
     from app.modules.pipeline.repositories.silver_storage import ObjectRef
@@ -38,13 +40,15 @@ class SilverPipeline:
     ) -> PublicationReceipt:
         results = []
         for task in tasks:
-            mapped = task.mapping.map_batch(task.batch)
-            typed = task.identity.types.standardize(
-                mapped,
-                derivation_inputs=task.derivation_inputs,
-                derivation_input_version=task.derivation_input_version,
+            results.append(
+                DuckDBStandardizationEngine().standardize(
+                    task.batch,
+                    task.mapping,
+                    task.identity,
+                    derivation_inputs=task.derivation_inputs,
+                    derivation_input_version=task.derivation_input_version,
+                )
             )
-            results.append(task.identity.standardize(typed))
         if quarantine_report is not None:
             return self.publisher.publish(
                 results, base_snapshot=base_snapshot, quarantine_report=quarantine_report

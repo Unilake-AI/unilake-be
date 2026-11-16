@@ -4,7 +4,9 @@ Ngày rà soát: **10/11/2026**. Phạm vi: mã nguồn backend trong repository
 
 Tài liệu này tập hợp luồng đang có và phương án cần thống nhất trước khi phát triển tiếp. **“Hiện có” là hành vi đã đối chiếu với code; “Đề xuất” là thiết kế chưa triển khai, chưa được coi là đã chốt.** Việc API có trong code không chứng minh API đó đã được triển khai hoặc chạy thành công trên Render. Tài liệu không xác nhận dữ liệu đang có trong database thật.
 
-**Cập nhật sau rà soát:** đã triển khai phần STAFF đặt tên bộ dữ liệu mới và tải file trong một yêu cầu. Backend tự cấp mã và xác định lĩnh vực theo quyền; không cần nhập ID kỹ thuật. Phân quyền theo từng đơn vị con, tự gắn profile và chuyển Silver sang job vẫn chưa triển khai.
+**Cập nhật sau rà soát:** đã triển khai phần STAFF đặt tên bộ dữ liệu mới và tải file trong một yêu cầu. Backend tự cấp mã và xác định lĩnh vực theo quyền; không cần nhập ID kỹ thuật. Phân quyền theo từng đơn vị con vẫn cần đối chiếu theo API cụ thể.
+
+**Cập nhật 15/11/2026:** đã có cấu hình tự chạy theo dataset, hàng đợi PostgreSQL và Silver Worker riêng. Khi được quản trị bật, Ingestion `SUCCESS` tự tạo việc làm sạch/chuẩn hóa/công bố Silver. Xem [luồng Auto Silver, API và điều kiện chạy](auto-silver-pipeline.md); hệ thống không tự đoán profile cho dataset chưa cấu hình.
 
 **Cập nhật API STAFF:** đã thêm thông tin quyền/lựa chọn cho UI, chi tiết và tìm bộ dữ liệu, lọc lịch sử cá nhân, thống kê yêu cầu, upload bản sửa trong yêu cầu và hỗ trợ gửi xác nhận từ job `UPLOAD_V1`. Xem [hướng dẫn STAFF](staff-api.md) về toàn bộ luồng và điều kiện phân công đơn vị.
 
@@ -322,9 +324,9 @@ Ví dụ chuẩn hóa chỉ thực hiện khi đã cấu hình: bỏ khoảng tr
 
 Các nhãn draft/approval và bộ 39 quy định nghiệp vụ trong tài liệu cũ không còn là cổng bắt buộc của luồng công bố này. Điều đó không bỏ kiểm tra cấu trúc, kiểu, khóa và nguồn gốc. Các phép tính phân tích cần được đặc tả ở Gold theo từng bài toán.
 
-## 8. Khi dữ liệu có lỗi: hiện có và phần chưa nối kín
+## 8. Khi dữ liệu có lỗi: giao phòng ban sửa và xác minh
 
-Luồng dự kiến sử dụng các API đã có:
+Luồng sử dụng các API đã có:
 
 1. Data Admin xem `/cleaning-runs/{run_id}/report` và `/quarantine-records`.
 2. Tạo `/data-quality-issues`, gắn các hồ sơ dòng lỗi, đơn vị và người phụ trách.
@@ -332,9 +334,60 @@ Luồng dự kiến sử dụng các API đã có:
 4. Người phụ trách gửi `/resolution` kèm job mới và ghi chú.
 5. Data Admin chạy cleaning cho job mới rồi gửi `/verification` kèm cleaning run và kết quả đối chiếu.
 
+Tại giao diện `/data/quarantine`, quản trị chọn hồ sơ và bấm **Gửi yêu cầu sửa về
+phòng ban**. Mặc định chọn **Trả về người nạp file**: hệ thống tự lấy người đã
+nạp file từ lần nạp gốc, phòng phụ trách từ bộ dữ liệu hoặc danh mục theo lĩnh
+vực. Quản trị xem tên người nhận và bấm **Duyệt gửi về người nạp**. Đọc gợi ý
+chưa giao việc và chưa thay đổi yêu cầu. Có thể chọn qua nhiều trang, tối đa 100 hồ sơ cho mỗi yêu cầu; các
+hồ sơ phải cùng một lượt làm sạch. Áp dụng bộ lọc mới sẽ xóa lựa chọn cũ để tránh
+gửi nhầm hồ sơ. Form dùng chung với `/data/quality`, tự nhận danh sách đã chọn
+và phòng phụ trách nếu bộ dữ liệu đã có phòng quản lý. Không cần nhập ID.
+
+Hai API cho cách trả về người nạp:
+
+- `POST /data-quality-issues/return-preview`: gửi `quarantine_record_ids`, nhận
+  tên người nạp, phòng phụ trách, file nguồn và yêu cầu cũ nếu đã có.
+- `POST /data-quality-issues/return-to-uploader`: gửi danh sách hồ sơ, tiêu đề và
+  nội dung khi quản trị duyệt. Backend xác định lại người nhận và quyền hiện
+  hành; không nhận mã người nhận hay phòng ban tùy ý trong body này.
+
+Nếu đã có một yêu cầu đang cần xử lý và chưa giao cho người khác, chọn đủ các
+hồ sơ của yêu cầu đó để cập nhật người nhận. Có thể bổ sung hồ sơ cùng lần nạp
+chưa được giao; giữ nguyên lịch sử và không tạo yêu cầu trùng khi bấm lại.
+File được chạy lại lấy người nạp từ job gốc, không lấy người bấm chạy lại.
+Nguồn không phải upload hoặc không xác minh được người nạp cần quản trị chọn
+cách giao thủ công, hệ thống không tự đoán.
+
+Khi chủ động chọn giao thủ công, giao diện lấy phòng ban qua `GET /data-quality-issues/departments`, lấy người
+phụ trách qua `GET /data-quality-issues/assignees` theo phòng và lĩnh vực, rồi
+gửi `POST /data-quality-issues` khi quản trị bấm **Tạo yêu cầu**. Khi API từ chối,
+form giữ nguyên dữ liệu và hiển thị lỗi; chỉ báo đã giao khi tạo thành công.
+Nếu chưa chọn người nhận, yêu cầu được giao cho phòng ban trước; cần phân công
+người phụ trách ở `/data/quality` để nhân viên được phép nộp bản sửa. Đây là
+giao việc trong hệ thống, không phải gửi email hay tin nhắn ra ngoài.
+
+Danh mục ban đầu có ba phòng: `PTS` — Phòng Tuyển sinh, `PDT` — Phòng Đào tạo,
+`PNS` — Phòng Nhân sự. Docker và `python -m app.seed` đều tạo danh mục này khi
+chưa có, không tạo trùng và không ghi đè phòng đã được quản trị sửa. Database
+cũ dùng migration `20261116_department_catalog.sql` để bổ sung danh mục và
+ngừng sử dụng đúng các phòng thử nghiệm `DQI-academic-*`/`DQI-outside-*` mang
+tên Demo tương ứng; các hồ sơ và liên kết cũ vẫn được giữ lại. Phân công STAFF
+vẫn cần hồ sơ nhân viên và phân công đang hiệu lực do quản trị xác nhận.
+
 `/resolution` đã nhận cả `UPLOAD_V1` và `EXECUTION_V1`. File upload phải do người phụ trách tải (đối chiếu job gốc nếu retry), đúng dataset/nguồn/tên file và thực sự là lần nạp mới hơn. Không lấy job thành công của file chấm công để xác nhận sửa file nhân viên dù dùng chung dataset. Yêu cầu sửa chỉ gộp hồ sơ cùng loại dữ liệu và file; lượt xác minh cũng phải đúng entity. Thiếu phân công đơn vị vẫn chặn nhận/nộp yêu cầu; `/staff/context` cho UI biết rõ điều kiện này.
 
-Điều kiện quyền riêng của yêu cầu sửa: kiểm tra role còn hiệu lực và phân công đơn vị đang hiệu lực trong database. Chỉ người được giao và còn quyền mới được báo đã sửa; quản trị không được nộp thay chỉ nhờ có role quản trị. Xác minh đạt yêu cầu cleaning run đã công bố Silver và xác nhận đủ các hồ sơ liên quan. Trạng thái: `ASSIGNED` → `PENDING_VERIFICATION` → `VERIFIED`; xác minh không đạt quay về `ASSIGNED`.
+Điều kiện quyền riêng của yêu cầu sửa: kiểm tra role còn hiệu lực trong database.
+Cách giao thủ công vẫn cần phân công đơn vị đang hiệu lực. Cách trả về người
+nạp được lưu là `SOURCE_UPLOADER`, kèm `origin_upload_job_id` và sự kiện quản
+trị duyệt. Chỉ đúng người nhận còn quyền ở lĩnh vực đó, còn khớp người nạp gốc,
+và phòng phụ trách còn hoạt động mới xem/nhận/nộp bản sửa. Cách này cho phép
+sửa chính file đã được duyệt trả về dù chưa có hồ sơ nhân sự/phân công; không
+tự tạo nhân viên giả và không mở quyền xem các yêu cầu khác của phòng ban.
+Danh sách, thống kê và quyền xử lý của STAFF cập nhật mỗi 15 giây khi đang mở
+giao diện. Chỉ người được giao và còn quyền mới được báo đã sửa; quản trị không
+được nộp thay chỉ nhờ có role quản trị. Xác minh đạt yêu cầu cleaning run đã
+công bố Silver và xác nhận đủ các hồ sơ liên quan. Trạng thái: `ASSIGNED` →
+`PENDING_VERIFICATION` → `VERIFIED`; xác minh không đạt quay về `ASSIGNED`.
 
 Xem dòng nguồn cách ly qua `/quarantine-records/{record_id}/source` chỉ cho quản trị và chỉ trả các cột đã được cho phép tại thời điểm chạy, theo `source_preview_columns`. STAFF xem thông tin lỗi được gắn trong yêu cầu họ có quyền, không có quyền gọi trực tiếp toàn bộ API quarantine.
 

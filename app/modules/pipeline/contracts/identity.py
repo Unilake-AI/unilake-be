@@ -6,6 +6,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from functools import cached_property
 
 
 class IdentityConfigurationError(ValueError):
@@ -99,6 +100,7 @@ class CrosswalkSnapshot:
             for e in sorted(self.entries, key=lambda e: (e.namespace, e.entity, e.source))
         ]
 
-    @property
+    @cached_property
     def fingerprint(self) -> str:
+        # Bản đối chiếu không được sửa; chỉ tính dấu kiểm chứng một lần cho cả lô.
         return digest({"version": self.version, "entries": self.payload()})

@@ -469,6 +469,8 @@ CREATE TABLE IF NOT EXISTS data_quality_issue (
     status VARCHAR(30) NOT NULL CHECK (status IN ('ASSIGNED', 'PENDING_VERIFICATION', 'VERIFIED')),
     created_by BIGINT NOT NULL REFERENCES app_user(app_user_id),
     assignee_user_id BIGINT REFERENCES app_user(app_user_id),
+    assignment_mode VARCHAR(30) NOT NULL DEFAULT 'DEPARTMENT',
+    origin_upload_job_id BIGINT REFERENCES ingestion_job(ingestion_job_id),
     resolution_job_id BIGINT REFERENCES ingestion_job(ingestion_job_id),
     verification_run_id VARCHAR(36) REFERENCES cleaning_run(run_id),
     created_at TIMESTAMPTZ NOT NULL,
