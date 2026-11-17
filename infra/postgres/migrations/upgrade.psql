@@ -133,5 +133,7 @@ BEGIN
         RAISE EXCEPTION 'SCHEMA_NOT_READY: missing pipeline functions';
     END IF;
 END $$;
+\ir 20261117_manager_query_history.sql
+INSERT INTO app.schema_migration (migration_name) VALUES ('20261117_manager_query_history.sql') ON CONFLICT DO NOTHING;
 SELECT pg_advisory_unlock(hashtextextended('unilake.schema.upgrade', 0));
 \echo UniLake schema upgrade completed.

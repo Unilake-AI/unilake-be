@@ -389,3 +389,27 @@ def test_reuse_records_cleaning_in_same_authorized_transaction(production):
     first = publisher.publish((result,))
     assert publisher.publish((result,)).reused
     assert commits == [(True, first.snapshot_id), (True, first.snapshot_id)]
+
+
+def test_manager_review_queue_requires_active_grant_and_matching_role(governance):
+    client, _, user, created, review = governance
+    response = client.get("/pipeline/profiles/review-queue")
+    assert response.status_code == 200, response.text
+    queue = response.json()
+    assert queue["grants"] == [{"grant_id": review["grant_id"], "domain": "hr"}]
+    assert queue["items"][0]["revision"] == created["revision"]
+    assert queue["items"][0]["can_approve"]
+    approve(governance)
+    queue = client.get("/pipeline/profiles/review-queue").json()
+    assert queue["items"][0]["status"] == "APPROVED"
+    assert queue["items"][0]["can_revoke"]
+    assert not queue["items"][0]["can_approve"]
+    user.update(sub="3", roles=["ACADEMIC_MANAGER"])
+    assert client.get("/pipeline/profiles/review-queue").json() == {"grants": [], "items": []}
+    user.update(sub="1", roles=["ADMIN"])
+    client.post(
+        f"/pipeline/profiles/owners/grants/{review['grant_id']}/revoke",
+        json={"reason": "Delegation ended for this test"},
+    )
+    user.update(sub="2", roles=["HR_MANAGER"])
+    assert client.get("/pipeline/profiles/review-queue").json() == {"grants": [], "items": []}

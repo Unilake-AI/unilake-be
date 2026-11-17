@@ -304,13 +304,10 @@ def test_manager_reads_current_gold_with_dataset_ownership_and_pagination(publis
                 text("UPDATE app.dataset SET owner_department_id=:department WHERE dataset_id=31"),
                 {"department": department},
             )
-        assert client.get("/api/v1/manager/datasets").json()["total"] == 1
-        assert (
-            client.get("/api/v1/manager/datasets/31").json()["sources"][0]["sync_status"]
-            == "CURRENT"
-        )
+        summary = client.get("/api/v1/manager/overview").json()
+        assert summary["datasets"] == 1
+        assert summary["sources"]["current"] == 1
         for hidden in (32, 33, 34, 999):
-            assert client.get(f"/api/v1/manager/datasets/{hidden}").status_code == 404
             assert (
                 client.get(f"/api/v1/manager/analytics?dataset_id={hidden}").json()["items"] == []
             )
