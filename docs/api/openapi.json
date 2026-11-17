@@ -3171,6 +3171,33 @@
         }
       }
     },
+    "/api/v1/pipeline/profiles/review-queue": {
+      "get": {
+        "tags": [
+          "silver-profiles"
+        ],
+        "summary": "Review Queue",
+        "description": "Chỉ trả các cấu hình đã đăng ký thuộc domain có grant còn hiệu lực.",
+        "operationId": "review_queue_api_v1_pipeline_profiles_review_queue_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewQueue"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/pipeline/profiles/{profile_id}": {
       "get": {
         "tags": [
@@ -6336,13 +6363,12 @@
           "nlq"
         ],
         "summary": "Ask Nlq",
-        "description": "Chạy luồng NLQ từ phân tích ý định đến thực thi chỉ đọc.",
         "operationId": "ask_nlq_api_v1_nlq_ask_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NaturalLanguageQueryRequest"
+                "$ref": "#/components/schemas/ManagerQueryRequest"
               }
             }
           },
@@ -6354,7 +6380,47 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NaturalLanguageQueryResponse"
+                  "$ref": "#/components/schemas/ManagerQueryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -6369,7 +6435,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/staff/context": {
@@ -6706,6 +6777,23 @@
               "default": "record_count",
               "title": "Metric"
             }
+          },
+          {
+            "name": "dimension_value",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 150
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dimension Value"
+            }
           }
         ],
         "responses": {
@@ -6715,233 +6803,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MetricPage"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - token is missing, invalid, or expired.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - current user does not have a required role.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found - requested resource does not exist.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/manager/datasets": {
-      "get": {
-        "tags": [
-          "manager"
-        ],
-        "summary": "Datasets",
-        "operationId": "datasets_api_v1_manager_datasets_get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "domain",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "hr",
-                    "academic",
-                    "admissions"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Domain"
-            }
-          },
-          {
-            "name": "dataset_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "exclusiveMinimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dataset Id"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
-              "default": 20,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DatasetPage"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - token is missing, invalid, or expired.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - current user does not have a required role.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found - requested resource does not exist.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/manager/datasets/{dataset_id}": {
-      "get": {
-        "tags": [
-          "manager"
-        ],
-        "summary": "Dataset Detail",
-        "operationId": "dataset_detail_api_v1_manager_datasets__dataset_id__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "dataset_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "title": "Dataset Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ManagerDataset"
                 }
               }
             }
@@ -7499,13 +7360,13 @@
         }
       }
     },
-    "/api/v1/manager/{domain}/record-types": {
+    "/api/v1/manager/catalog": {
       "get": {
         "tags": [
           "manager"
         ],
-        "summary": "Các loại dữ liệu nghiệp vụ của phòng",
-        "operationId": "record_types_api_v1_manager__domain__record_types_get",
+        "summary": "Catalog",
+        "operationId": "catalog_api_v1_manager_catalog_get",
         "security": [
           {
             "HTTPBearer": []
@@ -7514,123 +7375,23 @@
         "parameters": [
           {
             "name": "domain",
-            "in": "path",
-            "required": true,
+            "in": "query",
+            "required": false,
             "schema": {
-              "enum": [
-                "hr",
-                "academic",
-                "admissions"
+              "anyOf": [
+                {
+                  "enum": [
+                    "hr",
+                    "academic",
+                    "admissions"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
               ],
-              "type": "string",
               "title": "Domain"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RecordType"
-                  },
-                  "title": "Response Record Types Api V1 Manager  Domain  Record Types Get"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - token is missing, invalid, or expired.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - current user does not have a required role.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found - requested resource does not exist.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/manager/{domain}/records/{entity}": {
-      "get": {
-        "tags": [
-          "manager"
-        ],
-        "summary": "Danh sách dữ liệu nghiệp vụ đã đồng bộ từ Gold",
-        "operationId": "records_api_v1_manager__domain__records__entity__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "domain",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "enum": [
-                "hr",
-                "academic",
-                "admissions"
-              ],
-              "type": "string",
-              "title": "Domain"
-            }
-          },
-          {
-            "name": "entity",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 50,
-              "title": "Entity"
             }
           },
           {
@@ -7648,42 +7409,6 @@
                 }
               ],
               "title": "Dataset Id"
-            }
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 100
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Search"
-            }
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 30
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Status"
             }
           },
           {
@@ -7716,7 +7441,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RecordPage"
+                  "$ref": "#/components/schemas/ExplorerPage"
                 }
               }
             }
@@ -7774,13 +7499,13 @@
         }
       }
     },
-    "/api/v1/manager/{domain}/records/{entity}/{record_id}": {
+    "/api/v1/manager/catalog/{dataset_id}": {
       "get": {
         "tags": [
           "manager"
         ],
-        "summary": "Chi tiết dữ liệu nghiệp vụ trong phạm vi phòng",
-        "operationId": "record_detail_api_v1_manager__domain__records__entity___record_id__get",
+        "summary": "Catalog Detail",
+        "operationId": "catalog_detail_api_v1_manager_catalog__dataset_id__get",
         "security": [
           {
             "HTTPBearer": []
@@ -7788,38 +7513,13 @@
         ],
         "parameters": [
           {
-            "name": "domain",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "enum": [
-                "hr",
-                "academic",
-                "admissions"
-              ],
-              "type": "string",
-              "title": "Domain"
-            }
-          },
-          {
-            "name": "entity",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 50,
-              "title": "Entity"
-            }
-          },
-          {
-            "name": "record_id",
+            "name": "dataset_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "integer",
               "exclusiveMinimum": 0,
-              "title": "Record Id"
+              "title": "Dataset Id"
             }
           }
         ],
@@ -7829,7 +7529,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ManagerRecord"
+                  "$ref": "#/components/schemas/ExplorerDataset"
                 }
               }
             }
@@ -7885,6 +7585,677 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/manager/catalog/{dataset_id}/lineage": {
+      "get": {
+        "tags": [
+          "manager"
+        ],
+        "summary": "Catalog Lineage",
+        "operationId": "catalog_lineage_api_v1_manager_catalog__dataset_id__lineage_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetLineage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/manager/analysis-options": {
+      "get": {
+        "tags": [
+          "manager"
+        ],
+        "summary": "Analysis Options",
+        "operationId": "analysis_options_api_v1_manager_analysis_options_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "hr",
+                    "academic",
+                    "admissions"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Domain"
+            }
+          },
+          {
+            "name": "dataset_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response Analysis Options Api V1 Manager Analysis Options Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/manager/publication-trend": {
+      "get": {
+        "tags": [
+          "manager"
+        ],
+        "summary": "Publication Trend",
+        "operationId": "publication_trend_api_v1_manager_publication_trend_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "hr",
+                    "academic",
+                    "admissions"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Domain"
+            }
+          },
+          {
+            "name": "dataset_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "title": "Response Publication Trend Api V1 Manager Publication Trend Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/manager/query-history": {
+      "get": {
+        "tags": [
+          "manager"
+        ],
+        "summary": "Query History",
+        "operationId": "query_history_api_v1_manager_query_history_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "hr",
+                    "academic",
+                    "admissions"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Domain"
+            }
+          },
+          {
+            "name": "dataset_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryHistoryPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/manager/query-history/{query_id}": {
+      "get": {
+        "tags": [
+          "manager"
+        ],
+        "summary": "Query History Detail",
+        "operationId": "query_history_detail_api_v1_manager_query_history__query_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Query Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryHistoryDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/manager/ai-capabilities": {
+      "get": {
+        "tags": [
+          "manager"
+        ],
+        "summary": "Ai Capabilities",
+        "operationId": "ai_capabilities_api_v1_manager_ai_capabilities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Ai Capabilities Api V1 Manager Ai Capabilities Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - token is missing, invalid, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - current user does not have a required role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found - requested resource does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/notifications": {
@@ -9678,52 +10049,6 @@
         "title": "DataSourceUpdate",
         "description": "Payload cập nhật data source; tất cả field đều optional để hỗ trợ partial update."
       },
-      "DatabaseSyncStats": {
-        "properties": {
-          "total": {
-            "type": "integer",
-            "title": "Total",
-            "default": 0
-          },
-          "synced": {
-            "type": "integer",
-            "title": "Synced",
-            "default": 0
-          },
-          "not_started": {
-            "type": "integer",
-            "title": "Not Started",
-            "default": 0
-          },
-          "queued": {
-            "type": "integer",
-            "title": "Queued",
-            "default": 0
-          },
-          "running": {
-            "type": "integer",
-            "title": "Running",
-            "default": 0
-          },
-          "blocked": {
-            "type": "integer",
-            "title": "Blocked",
-            "default": 0
-          },
-          "failed": {
-            "type": "integer",
-            "title": "Failed",
-            "default": 0
-          },
-          "superseded": {
-            "type": "integer",
-            "title": "Superseded",
-            "default": 0
-          }
-        },
-        "type": "object",
-        "title": "DatabaseSyncStats"
-      },
       "DatasetCreate": {
         "properties": {
           "dataset_code": {
@@ -9775,6 +10100,32 @@
         ],
         "title": "DatasetCreate"
       },
+      "DatasetLineage": {
+        "properties": {
+          "dataset_id": {
+            "type": "integer",
+            "title": "Dataset Id"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/LineageStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "default": "Chỉ hiển thị các bước có bằng chứng gắn với bộ dữ liệu này; thiếu bước không được suy diễn là đã chạy."
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "steps"
+        ],
+        "title": "DatasetLineage"
+      },
       "DatasetOwnership": {
         "properties": {
           "owner_department_id": {
@@ -9801,37 +10152,6 @@
           "expected_owner_department_id"
         ],
         "title": "DatasetOwnership"
-      },
-      "DatasetPage": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ManagerDataset"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "limit": {
-            "type": "integer",
-            "title": "Limit"
-          },
-          "offset": {
-            "type": "integer",
-            "title": "Offset"
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "title": "DatasetPage"
       },
       "DatasetRead": {
         "properties": {
@@ -10079,6 +10399,115 @@
         "title": "ErrorResponse",
         "description": "Cấu trúc phản hồi lỗi API chuẩn được AppException sử dụng."
       },
+      "ExplorerDataset": {
+        "properties": {
+          "dataset_id": {
+            "type": "integer",
+            "title": "Dataset Id"
+          },
+          "dataset_code": {
+            "type": "string",
+            "title": "Dataset Code"
+          },
+          "dataset_name": {
+            "type": "string",
+            "title": "Dataset Name"
+          },
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "layer": {
+            "type": "string",
+            "title": "Layer"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "last_published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Published At"
+          },
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogTableSchema"
+            },
+            "type": "array",
+            "title": "Tables"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "dataset_code",
+          "dataset_name",
+          "domain",
+          "layer",
+          "description",
+          "updated_at",
+          "last_published_at"
+        ],
+        "title": "ExplorerDataset"
+      },
+      "ExplorerPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExplorerDataset"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "ExplorerPage"
+      },
       "FieldDefinitionSchema": {
         "properties": {
           "name": {
@@ -10264,88 +10693,6 @@
           "value"
         ],
         "title": "GoldMetric"
-      },
-      "GoldSource": {
-        "properties": {
-          "database_sync_status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Database Sync Status"
-          },
-          "database_sync_error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Database Sync Error"
-          },
-          "scope": {
-            "type": "string",
-            "title": "Scope"
-          },
-          "silver_snapshot_id": {
-            "type": "string",
-            "title": "Silver Snapshot Id"
-          },
-          "job_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Job Id"
-          },
-          "sync_status": {
-            "type": "string",
-            "title": "Sync Status"
-          },
-          "finished_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Finished At"
-          },
-          "error_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Code"
-          }
-        },
-        "type": "object",
-        "required": [
-          "scope",
-          "silver_snapshot_id",
-          "job_id",
-          "sync_status",
-          "finished_at",
-          "error_code"
-        ],
-        "title": "GoldSource"
       },
       "HTTPValidationError": {
         "properties": {
@@ -11746,6 +12093,51 @@
         "title": "LineageNode",
         "description": "Nút trên đồ thị phả hệ dữ liệu cho Frontend (ReactFlow / D3.js)."
       },
+      "LineageStep": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "source_layer": {
+            "type": "string",
+            "title": "Source Layer"
+          },
+          "target_layer": {
+            "type": "string",
+            "title": "Target Layer"
+          },
+          "source_label": {
+            "type": "string",
+            "title": "Source Label"
+          },
+          "target_label": {
+            "type": "string",
+            "title": "Target Label"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source_layer",
+          "target_layer",
+          "source_label",
+          "target_label",
+          "created_at",
+          "details"
+        ],
+        "title": "LineageStep"
+      },
       "LoginRequest": {
         "properties": {
           "username": {
@@ -11881,59 +12273,6 @@
         ],
         "title": "ManagerContext"
       },
-      "ManagerDataset": {
-        "properties": {
-          "dataset_id": {
-            "type": "integer",
-            "title": "Dataset Id"
-          },
-          "dataset_code": {
-            "type": "string",
-            "title": "Dataset Code"
-          },
-          "dataset_name": {
-            "type": "string",
-            "title": "Dataset Name"
-          },
-          "domain": {
-            "type": "string",
-            "title": "Domain"
-          },
-          "owner_department_id": {
-            "type": "integer",
-            "title": "Owner Department Id"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "sources": {
-            "items": {
-              "$ref": "#/components/schemas/GoldSource"
-            },
-            "type": "array",
-            "title": "Sources"
-          }
-        },
-        "type": "object",
-        "required": [
-          "dataset_id",
-          "dataset_code",
-          "dataset_name",
-          "domain",
-          "owner_department_id",
-          "description",
-          "sources"
-        ],
-        "title": "ManagerDataset"
-      },
       "ManagerOverview": {
         "properties": {
           "data_layer": {
@@ -11958,9 +12297,6 @@
           },
           "sources": {
             "$ref": "#/components/schemas/SourceStats"
-          },
-          "database_sync": {
-            "$ref": "#/components/schemas/DatabaseSyncStats"
           },
           "last_updated_at": {
             "anyOf": [
@@ -11997,28 +12333,86 @@
         ],
         "title": "ManagerOverview"
       },
-      "ManagerRecord": {
+      "ManagerQueryRequest": {
         "properties": {
-          "record_id": {
-            "type": "integer",
-            "title": "Record Id"
+          "question": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Question"
           },
-          "values": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Values"
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "hr",
+                  "academic",
+                  "admissions"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
           },
-          "source": {
-            "$ref": "#/components/schemas/RecordSource"
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "ManagerQueryRequest"
+      },
+      "ManagerQueryResponse": {
+        "properties": {
+          "query_id": {
+            "type": "string",
+            "title": "Query Id"
+          },
+          "sql": {
+            "type": "string",
+            "title": "Sql"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "default": "Kết quả thống kê theo nguồn, không mặc định là số người duy nhất và không xác nhận nguyên nhân."
           }
         },
         "type": "object",
         "required": [
-          "record_id",
-          "values",
-          "source"
+          "query_id",
+          "sql",
+          "rows"
         ],
-        "title": "ManagerRecord"
+        "title": "ManagerQueryResponse"
       },
       "ManualCleaningRequest": {
         "properties": {
@@ -12261,43 +12655,6 @@
           "offset"
         ],
         "title": "MetricPage"
-      },
-      "NaturalLanguageQueryRequest": {
-        "properties": {
-          "question": {
-            "type": "string",
-            "title": "Question"
-          }
-        },
-        "type": "object",
-        "required": [
-          "question"
-        ],
-        "title": "NaturalLanguageQueryRequest",
-        "description": "Câu hỏi của người dùng gửi đến bộ xử lý NLQ."
-      },
-      "NaturalLanguageQueryResponse": {
-        "properties": {
-          "sql": {
-            "type": "string",
-            "title": "Sql"
-          },
-          "rows": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Rows",
-            "default": []
-          }
-        },
-        "type": "object",
-        "required": [
-          "sql"
-        ],
-        "title": "NaturalLanguageQueryResponse",
-        "description": "Dữ liệu phản hồi NLQ."
       },
       "NotificationPage": {
         "properties": {
@@ -12711,30 +13068,144 @@
         ],
         "title": "QuarantineSummary"
       },
-      "RecordPage": {
+      "QueryHistoryDetail": {
         "properties": {
-          "data_layer": {
+          "id": {
             "type": "string",
-            "const": "GOLD",
-            "title": "Data Layer",
-            "default": "GOLD"
+            "format": "uuid",
+            "title": "Id"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
           },
           "domain": {
-            "type": "string",
-            "enum": [
-              "hr",
-              "academic",
-              "admissions"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
             "title": "Domain"
           },
-          "entity": {
-            "type": "string",
-            "title": "Entity"
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
           },
+          "row_count": {
+            "type": "integer",
+            "title": "Row Count"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "result": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "question",
+          "status",
+          "domain",
+          "duration_ms",
+          "row_count",
+          "created_at",
+          "error_code"
+        ],
+        "title": "QueryHistoryDetail"
+      },
+      "QueryHistoryItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
+          },
+          "row_count": {
+            "type": "integer",
+            "title": "Row Count"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "question",
+          "status",
+          "domain",
+          "duration_ms",
+          "row_count",
+          "created_at",
+          "error_code"
+        ],
+        "title": "QueryHistoryItem"
+      },
+      "QueryHistoryPage": {
+        "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/ManagerRecord"
+              "$ref": "#/components/schemas/QueryHistoryItem"
             },
             "type": "array",
             "title": "Items"
@@ -12754,100 +13225,12 @@
         },
         "type": "object",
         "required": [
-          "domain",
-          "entity",
           "items",
           "total",
           "limit",
           "offset"
         ],
-        "title": "RecordPage"
-      },
-      "RecordSource": {
-        "properties": {
-          "dataset_id": {
-            "type": "integer",
-            "title": "Dataset Id"
-          },
-          "dataset_name": {
-            "type": "string",
-            "title": "Dataset Name"
-          },
-          "gold_job_id": {
-            "type": "string",
-            "title": "Gold Job Id"
-          },
-          "silver_snapshot_id": {
-            "type": "string",
-            "title": "Silver Snapshot Id"
-          },
-          "published_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Published At"
-          },
-          "synced_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Synced At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "dataset_id",
-          "dataset_name",
-          "gold_job_id",
-          "silver_snapshot_id",
-          "published_at",
-          "synced_at"
-        ],
-        "title": "RecordSource"
-      },
-      "RecordType": {
-        "properties": {
-          "entity": {
-            "type": "string",
-            "title": "Entity"
-          },
-          "primary_key": {
-            "type": "string",
-            "title": "Primary Key"
-          },
-          "fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Fields"
-          },
-          "search_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Search Fields"
-          },
-          "status_field": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status Field"
-          }
-        },
-        "type": "object",
-        "required": [
-          "entity",
-          "primary_key",
-          "fields",
-          "search_fields",
-          "status_field"
-        ],
-        "title": "RecordType"
+        "title": "QueryHistoryPage"
       },
       "RefreshRequest": {
         "properties": {
@@ -12877,6 +13260,91 @@
         ],
         "title": "RefreshTokenRequest",
         "description": "Dữ liệu yêu cầu cấp access token mới bằng refresh token."
+      },
+      "ReviewGrant": {
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Grant Id"
+          },
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grant_id",
+          "domain"
+        ],
+        "title": "ReviewGrant"
+      },
+      "ReviewProfile": {
+        "properties": {
+          "profile_id": {
+            "type": "string",
+            "title": "Profile Id"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/SourceProfile"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "fingerprint": {
+            "type": "string",
+            "title": "Fingerprint"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "can_approve": {
+            "type": "boolean",
+            "title": "Can Approve"
+          },
+          "can_revoke": {
+            "type": "boolean",
+            "title": "Can Revoke"
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile_id",
+          "definition",
+          "revision",
+          "fingerprint",
+          "status",
+          "can_approve",
+          "can_revoke"
+        ],
+        "title": "ReviewProfile"
+      },
+      "ReviewQueue": {
+        "properties": {
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewGrant"
+            },
+            "type": "array",
+            "title": "Grants"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewProfile"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grants",
+          "items"
+        ],
+        "title": "ReviewQueue"
       },
       "ReviewRequest": {
         "properties": {

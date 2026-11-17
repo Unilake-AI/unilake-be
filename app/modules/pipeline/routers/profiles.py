@@ -16,7 +16,7 @@ from sqlalchemy.engine import Engine
 from app.core.config import settings
 from app.core.deps import require_role
 from app.core.exceptions import AppException
-from app.core.roles import RoleCode
+from app.core.roles import MANAGER_SCOPES, RoleCode
 from app.modules.pipeline.repositories.management_db import management_engine
 from app.modules.pipeline.repositories.object_metadata import configuration, edit_configuration
 from app.modules.pipeline.services.profile_storage import save_profile
@@ -115,6 +115,75 @@ def list_profiles(
         if dataset_id is None or profiles[name].definition.dataset_id == dataset_id
     ]
     return matched[offset : offset + limit]
+
+
+class ReviewGrant(BaseModel):
+    grant_id: UUID
+    domain: str
+
+
+class ReviewProfile(BaseModel):
+    profile_id: str
+    definition: SourceProfile
+    revision: int
+    fingerprint: str
+    status: str
+    can_approve: bool
+    can_revoke: bool
+
+
+class ReviewQueue(BaseModel):
+    grants: list[ReviewGrant]
+    items: list[ReviewProfile]
+
+
+def reviewer_grants(state: dict[str, Any], reviewer: dict[str, Any]) -> list[ReviewGrant]:
+    actor = str(reviewer["sub"])
+    domains = {MANAGER_SCOPES[role][0] for role in reviewer["roles"] if role in MANAGER_SCOPES}
+    return [
+        ReviewGrant(grant_id=grant["grant_id"], domain=grant["domain"])
+        for grant in state["grants"].values()
+        if str(grant["user_id"]) == actor
+        and grant["revoked_at"] is None
+        and grant["domain"] in domains
+    ]
+
+
+@router.get("/review-queue", response_model=ReviewQueue)
+def review_queue(db: DB, reviewer: Reviewer) -> ReviewQueue:
+    """Chỉ trả các cấu hình đã đăng ký thuộc domain có grant còn hiệu lực."""
+    with db.begin() as connection:
+        state = configuration(connection)
+        grants = reviewer_grants(state, reviewer)
+        domains = {grant.domain for grant in grants}
+        for domain in sorted(domains):
+            require_manager(connection, str(reviewer["sub"]), domain)
+        items = []
+        for name, current in sorted(state["profiles"].items()):
+            if current["definition"]["domain"] not in domains:
+                continue
+            approval = state["approvals"].get(f"{name}:{current['revision']}")
+            status = (
+                "PENDING"
+                if approval is None
+                else "REVOKED"
+                if approval["revoked_at"] is not None
+                else "APPROVED"
+            )
+            items.append(
+                ReviewProfile(
+                    profile_id=name,
+                    definition=current["definition"],
+                    revision=current["revision"],
+                    fingerprint=current["fingerprint"],
+                    status=status,
+                    can_approve=approval is None
+                    and str(current["updated_by"]) != str(reviewer["sub"]),
+                    can_revoke=status == "APPROVED"
+                    and str(approval["approved_by"]) == str(reviewer["sub"]),
+                )
+            )
+    return ReviewQueue(grants=grants, items=items)
 
 
 @router.get(

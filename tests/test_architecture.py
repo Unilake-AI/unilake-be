@@ -92,8 +92,7 @@ async def test_nlq_flow_helpers_and_endpoint() -> None:
     response = client.post("/api/v1/nlq/ask", json={"question": "Danh sách sinh viên"})
 
     assert generated.endswith("SQL:")
-    assert response.status_code == 200
-    assert response.json() == {"sql": "select 1", "rows": []}
+    assert response.status_code == 401
 
 
 def test_architecture_settings_and_schemas() -> None:
@@ -129,3 +128,40 @@ def test_architecture_settings_and_schemas() -> None:
         ).question
         == "Q"
     )
+
+
+def test_nlq_is_unavailable_until_scoped_executor_is_configured(monkeypatch) -> None:
+    from app.dependencies import get_db
+    from app.modules.manager import ai, history
+    from app.modules.manager.router import current_manager
+    from tests.test_manager_v1 import manager
+
+    monkeypatch.setattr(
+        ai,
+        "generate_sql",
+        AsyncMock(
+            side_effect=AppException("Not configured", code="NLQ_UNAVAILABLE", status_code=503)
+        ),
+    )
+    monkeypatch.setattr(history, "record", AsyncMock(return_value="query-1"))
+    app.dependency_overrides[get_current_user] = lambda: {"sub": "11", "roles": ["HR_MANAGER"]}
+    app.dependency_overrides[get_db] = lambda: AsyncMock()
+    app.dependency_overrides[current_manager] = manager
+    try:
+        response = TestClient(app).post("/api/v1/nlq/ask", json={"question": "Số nhân viên?"})
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "NLQ_UNAVAILABLE"
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+        app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(current_manager, None)
+
+
+@pytest.mark.parametrize("role", ["HR_STAFF", "VIEWER", "DATA_ADMIN"])
+def test_nlq_rejects_non_manager_roles(role) -> None:
+    app.dependency_overrides[get_current_user] = lambda: {"sub": "11", "roles": [role]}
+    try:
+        response = TestClient(app).post("/api/v1/nlq/ask", json={"question": "Số nhân viên?"})
+        assert response.status_code == 403
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)

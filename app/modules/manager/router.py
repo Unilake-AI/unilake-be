@@ -10,29 +10,23 @@ from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import require_role
 from app.core.exceptions import AppException
 from app.core.responses import COMMON_ERROR_RESPONSES
 from app.core.roles import MANAGER_SCOPES
 from app.dependencies import get_db
+from app.modules.manager import exploration, history
 from app.modules.manager.access import ManagerAccess, manager_access
 from app.modules.manager.schemas import (
     AnalyticsFilters,
-    DatasetPage,
-    Domain,
     ManagerContext,
-    ManagerDataset,
     ManagerIssueFilters,
     ManagerOverview,
-    ManagerRecord,
     MetricPage,
-    RecordFilters,
-    RecordPage,
-    RecordType,
     ReportFilters,
 )
 from app.modules.staff.contracts import schemas as staff_schemas
-from app.repositories import manager_records_repo as records_repository
 from app.repositories import manager_report_repo as repository
 
 router = APIRouter(prefix="/manager", tags=["manager"], responses=COMMON_ERROR_RESPONSES)
@@ -72,9 +66,7 @@ async def overview(
     # KPI trang này chỉ dùng tổng bản ghi; các phép nhóm được đọc qua /analytics.
     kpis = await repository.metrics(db, manager, AnalyticsFilters(**filters.model_dump()))
     sources = await repository.source_stats(db, manager, filters)
-    page = await repository.datasets(
-        db, manager, ReportFilters(domain=filters.domain, dataset_id=filters.dataset_id, limit=1)
-    )
+    dataset_count = await repository.dataset_count(db, manager, filters)
     stats = await repository.issue_stats(
         db, manager, ManagerIssueFilters(domain=filters.domain, dataset_id=filters.dataset_id)
     )
@@ -89,9 +81,8 @@ async def overview(
         )
     return ManagerOverview(
         status=status,
-        datasets=page.total,
+        datasets=dataset_count,
         sources=sources,
-        database_sync=await repository.database_sync_stats(db, manager, filters),
         last_updated_at=await repository.last_updated(db, manager, filters),
         kpis=kpis,
         issues=stats,
@@ -103,23 +94,6 @@ async def analytics(
     db: DB, manager: Manager, filters: Annotated[AnalyticsFilters, Query()]
 ) -> MetricPage:
     return await repository.metrics(db, manager, filters)
-
-
-@router.get("/datasets", response_model=DatasetPage)
-async def datasets(
-    db: DB, manager: Manager, filters: Annotated[ReportFilters, Query()]
-) -> DatasetPage:
-    return await repository.datasets(db, manager, filters)
-
-
-@router.get("/datasets/{dataset_id}", response_model=ManagerDataset)
-async def dataset_detail(
-    dataset_id: Annotated[int, Path(gt=0)], db: DB, manager: Manager
-) -> ManagerDataset:
-    page = await repository.datasets(db, manager, ReportFilters(dataset_id=dataset_id))
-    if not page.items:
-        raise AppException("Không tìm thấy bộ dữ liệu", code="DATASET_NOT_FOUND", status_code=404)
-    return page.items[0]
 
 
 @router.get("/issues", response_model=list[staff_schemas.IssueRead])
@@ -146,49 +120,61 @@ async def issue_detail(issue_id: UUID, db: DB, manager: Manager) -> staff_schema
     return result
 
 
-@router.get(
-    "/{domain}/record-types",
-    response_model=list[RecordType],
-    summary="Các loại dữ liệu nghiệp vụ của phòng",
-)
-async def record_types(domain: Domain, manager: Manager) -> list[RecordType]:
-    return records_repository.record_types(manager, domain)
+@router.get("/catalog", response_model=exploration.ExplorerPage)
+async def catalog(
+    db: DB, manager: Manager, filters: Annotated[ReportFilters, Query()]
+) -> exploration.ExplorerPage:
+    return await exploration.catalog(db, manager, filters)
 
 
-@router.get(
-    "/{domain}/records/{entity}",
-    response_model=RecordPage,
-    summary="Danh sách dữ liệu nghiệp vụ đã đồng bộ từ Gold",
-)
-async def records(
-    domain: Domain,
-    entity: Annotated[str, Path(min_length=1, max_length=50)],
-    db: DB,
-    manager: Manager,
-    filters: Annotated[RecordFilters, Query()],
-) -> RecordPage:
-    return await records_repository.records(db, manager, domain, entity, filters)
+@router.get("/catalog/{dataset_id}", response_model=exploration.ExplorerDataset)
+async def catalog_detail(
+    dataset_id: Annotated[int, Path(gt=0)], db: DB, manager: Manager
+) -> exploration.ExplorerDataset:
+    return await exploration.dataset(db, manager, dataset_id)
 
 
-@router.get(
-    "/{domain}/records/{entity}/{record_id}",
-    response_model=ManagerRecord,
-    summary="Chi tiết dữ liệu nghiệp vụ trong phạm vi phòng",
-)
-async def record_detail(
-    domain: Domain,
-    entity: Annotated[str, Path(min_length=1, max_length=50)],
-    record_id: Annotated[int, Path(gt=0)],
-    db: DB,
-    manager: Manager,
-) -> ManagerRecord:
-    page = await records_repository.records(
-        db, manager, domain, entity, RecordFilters(limit=1), record_id=record_id
-    )
-    if not page.items:
-        raise AppException(
-            "Không tìm thấy bản ghi trong phạm vi được xem",
-            code="MANAGER_RECORD_NOT_FOUND",
-            status_code=404,
-        )
-    return page.items[0]
+@router.get("/catalog/{dataset_id}/lineage", response_model=exploration.DatasetLineage)
+async def catalog_lineage(
+    dataset_id: Annotated[int, Path(gt=0)], db: DB, manager: Manager
+) -> exploration.DatasetLineage:
+    return await exploration.lineage(db, manager, dataset_id)
+
+
+@router.get("/analysis-options")
+async def analysis_options(
+    db: DB, manager: Manager, filters: Annotated[ReportFilters, Query()]
+) -> list[dict[str, Any]]:
+    return await repository.analysis_options(db, manager, filters)
+
+
+@router.get("/publication-trend")
+async def publication_trend(
+    db: DB, manager: Manager, filters: Annotated[ReportFilters, Query()]
+) -> list[dict[str, Any]]:
+    return await repository.publication_trend(db, manager, filters)
+
+
+@router.get("/query-history", response_model=history.QueryHistoryPage)
+async def query_history(
+    db: DB, manager: Manager, filters: Annotated[ReportFilters, Query()]
+) -> history.QueryHistoryPage:
+    return await history.list_history(db, manager, filters)
+
+
+@router.get("/query-history/{query_id}", response_model=history.QueryHistoryDetail)
+async def query_history_detail(
+    query_id: UUID, db: DB, manager: Manager
+) -> history.QueryHistoryDetail:
+    return await history.detail(db, manager, query_id)
+
+
+@router.get("/ai-capabilities")
+async def ai_capabilities(manager: Manager) -> dict[str, Any]:
+    return {
+        "configured": settings.llm_provider.lower() == "openai"
+        and bool(settings.llm_api_key and settings.llm_model),
+        "max_rows": 200,
+        "data_layer": "GOLD",
+        "note": "Truy vấn thống kê Gold trong phạm vi phòng ban. Chưa hỗ trợ điểm trung bình, tỷ lệ đạt và kết luận nguyên nhân.",
+    }
