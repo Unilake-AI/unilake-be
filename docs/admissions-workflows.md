@@ -102,8 +102,9 @@ ignored_columns và date_format như các nghiệp vụ nhập nhiều bảng tr
 được kiểm tra. Muốn xóa điểm sai của phương thức không dùng điểm, Manager dùng
 yêu cầu RESULT_CORRECTION với admission_score=null và lý do.
 
-Luồng tiếp nhận, Bronze, Silver, Gold giữ cơ chế đã có. Trước transaction nghiệp vụ,
-BE kiểm tra toàn bộ file. Một dòng sai mã, điểm, trạng thái hoặc revision làm chặn
+Luồng tiếp nhận, Bronze, Silver, Gold giữ cơ chế đã có. BE kiểm tra toàn bộ kế hoạch
+trước các câu lệnh ghi nghiệp vụ; phần kiểm tra phụ thuộc DB nằm trong transaction
+đồng bộ. Một dòng sai mã, điểm, trạng thái hoặc revision làm chặn
 cả file; các bảng danh mục, applicant và student không được tạo từ hai loại file này.
 
 Theo dõi kết quả:
