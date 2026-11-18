@@ -13,6 +13,7 @@ from app.core.roles import RoleCode
 from app.dependencies import get_db
 from app.modules.ingestion.business_imports import ImportOptions  # noqa: TC001
 from app.modules.ingestion.schemas import (
+    BusinessImportPreview,
     IngestionAttemptRead,
     IngestionJobMetrics,
     IngestionJobRead,
@@ -94,6 +95,18 @@ async def business_import_report(job_id: int, db: DB, user: User) -> dict[str, A
     return await import_report(job_id, db, user)
 
 
+@router.get(
+    "/jobs/{job_id}/business-import/preview",
+    summary="Xem kế hoạch nhập nghiệp vụ và lỗi tham chiếu",
+    response_model=BusinessImportPreview,
+    response_model_exclude_none=True,
+)
+async def business_import_preview(job_id: int, db: DB, user: User) -> dict[str, Any]:
+    from app.modules.ingestion.services.business_imports import import_preview
+
+    return await import_preview(job_id, db, user)
+
+
 @router.post(
     "/uploads",
     response_model=IngestionJobRead,
@@ -130,7 +143,7 @@ async def upload_ingestion(
     import_options: Annotated[
         str | None,
         Form(
-            description="JSON nghiệp vụ: import_type, version, field_mapping, ignored_columns, date_format, blank_update"
+            description="JSON nghiệp vụ: import_type, version, context, field_mapping, ignored_columns, date_format, blank_update"
         ),
     ] = None,
 ) -> IngestionJobRead:
@@ -149,11 +162,15 @@ async def upload_ingestion(
 
 @router.get("/import-types", summary="Quy định nhập file nghiệp vụ theo quyền")
 async def import_types(user: User) -> list[dict[str, Any]]:
-    from app.modules.ingestion.business_imports import CONTRACTS
+    from app.modules.ingestion.business_imports import CONTEXT_FIELDS, CONTRACTS
     from app.modules.ingestion.services.access import upload_domains
 
     allowed = upload_domains(user)
-    return [c.describe() for c in CONTRACTS.values() if allowed is None or c.domain in allowed]
+    return [
+        {**c.describe(), "context_fields": CONTEXT_FIELDS.get(c.name, ())}
+        for c in CONTRACTS.values()
+        if allowed is None or c.domain in allowed
+    ]
 
 
 class ImportLayoutRequest(BaseModel):

@@ -231,7 +231,11 @@ def read_job(db: Engine, user: dict[str, Any], job_id: str) -> dict[str, Any]:
         row = (
             conn.execute(
                 text(
-                    "SELECT j.*,q.status AS database_sync_status,q.error_code AS database_sync_error,q.error_report AS database_sync_report,q.result AS database_sync_result FROM app.gold_job j LEFT JOIN app.gold_sync_job q ON q.gold_job_id=j.job_id WHERE j.job_id=:id AND "
+                    """SELECT j.*,q.status AS database_sync_status,q.error_code AS database_sync_error,
+                    q.error_report AS database_sync_report,q.result AS database_sync_result,
+                    q.preparation->'preview' AS business_import_preparation
+                    FROM app.gold_job j LEFT JOIN app.gold_sync_job q ON q.gold_job_id=j.job_id
+                    WHERE j.job_id=:id AND """
                     + clause
                 ),
                 {**params, "id": job_id},
@@ -376,7 +380,7 @@ def retry_database_sync(job_id: UUID, db: DB, user: Admin) -> dict[str, Any]:
     with db.begin() as conn:
         row = (
             conn.execute(
-                text("""UPDATE app.gold_sync_job q SET status='QUEUED',next_attempt_at=now(),finished_at=NULL,error_code=NULL,error_report=NULL
+                text("""UPDATE app.gold_sync_job q SET status='QUEUED',next_attempt_at=now(),finished_at=NULL,error_code=NULL,error_report=NULL,preparation=NULL
         FROM app.gold_job j,app.gold_scope s WHERE q.gold_job_id=j.job_id AND j.scope=s.scope
         AND s.active_job_id=j.job_id AND s.generation=j.generation AND q.gold_job_id=:id
         AND q.status IN ('FAILED','BLOCKED') RETURNING q.gold_job_id,q.status"""),

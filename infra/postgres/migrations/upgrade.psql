@@ -109,6 +109,8 @@ INSERT INTO app.schema_migration (migration_name) VALUES ('20261116_storage_mode
 
 \ir 20261117_manager_query_history.sql
 INSERT INTO app.schema_migration (migration_name) VALUES ('20261117_manager_query_history.sql') ON CONFLICT DO NOTHING;
+\ir 20261118_business_import_preparation.sql
+INSERT INTO app.schema_migration (migration_name) VALUES ('20261118_business_import_preparation.sql') ON CONFLICT DO NOTHING;
 \ir 20261118_business_imports.sql
 INSERT INTO app.schema_migration (migration_name) VALUES ('20261118_business_imports.sql') ON CONFLICT DO NOTHING;
 \ir 20261118_system_departments.sql

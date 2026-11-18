@@ -46,6 +46,41 @@ class IngestionJobRead(BaseModel):
     quality_issue_id: str | None = None
 
 
+class ImportActionCounts(BaseModel):
+    inserted: int
+    updated: int
+    unchanged: int
+
+
+class ImportPreviewOperation(BaseModel):
+    operation_id: int
+    table: str
+    action: Literal["inserted", "updated", "unchanged"]
+    fields: list[str]
+    source_row_count: int
+    source_rows: list[str]
+
+
+class BusinessImportPreview(BaseModel):
+    ingestion_job_id: int
+    status: Literal["PENDING", "READY", "BLOCKED", "NOT_AVAILABLE"]
+    database_status: str | None
+    database_committed: bool
+    database_error: dict[str, Any] | None = None
+    error_report: dict[str, Any] | None = None
+    attempt_number: int | None = None
+    prepared_at: datetime | None = None
+    silver_snapshot_id: str | None = None
+    format_version: int | None = None
+    import_type: str | None = None
+    contract_version: str | None = None
+    context: dict[str, str] | None = None
+    input_rows: int | None = None
+    operation_count: int | None = None
+    tables: dict[str, ImportActionCounts] | None = None
+    operations: list[ImportPreviewOperation] | None = None
+
+
 class IngestionJobStats(BaseModel):
     total: int
     queued: int

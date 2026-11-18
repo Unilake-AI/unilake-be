@@ -88,6 +88,7 @@ def sync_records(
     *,
     domain: str | None = None,
     actor: Any = None,
+    expected_plan: str | None = None,
 ) -> dict[str, int]:
     if connection.dialect.name == "postgresql":
         connection.execute(
@@ -104,7 +105,9 @@ def sync_records(
 
             if not any(c.entity == entity and c.domain == domain for c in CONTRACTS.values()):
                 raise ImportBlockedError([{"code": "IMPORT_TYPE_OR_DOMAIN_INVALID"}])
-        return sync_import_records(connection, entity, records, gold_job_id, actor=actor)
+        return sync_import_records(
+            connection, entity, records, gold_job_id, actor=actor, expected_plan=expected_plan
+        )
     pending: list[tuple[str, dict[str, Any]]] = []
     for entity, rows in payload.items():
         target, projected = project_records(entity, rows)

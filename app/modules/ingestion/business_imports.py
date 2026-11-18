@@ -36,6 +36,17 @@ class ImportOptions(BaseModel):
     ignored_columns: list[str] = Field(default_factory=list)
     date_format: Literal["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"] = "%Y-%m-%d"
     blank_update: Literal["preserve"] = "preserve"
+    context: dict[str, str] = Field(default_factory=dict, max_length=3)
+
+    def metadata(self) -> dict[str, Any]:
+        # Keep historical v1 job signatures unchanged when no context was supplied.
+        return self.model_dump(mode="json", exclude={"context"} if not self.context else None)
+
+
+CONTEXT_FIELDS = {
+    "admissions_registration": ("program_code", "year_label", "method_code"),
+    "academic_curriculum": ("program_code", "version"),
+}
 
 
 @dataclass(frozen=True)
@@ -292,6 +303,16 @@ def contract_for(options: ImportOptions, domain: str) -> ImportContract:
         raise ImportValidationError([issue("IMPORT_TYPE_OR_DOMAIN_INVALID")])
     if not contract.enabled:
         raise ImportValidationError([issue("IMPORT_BUSINESS_POLICY_REQUIRED")])
+    errors = [
+        issue("IMPORT_CONTEXT_INVALID", name)
+        for name, value in options.context.items()
+        if name not in CONTEXT_FIELDS.get(contract.name, ())
+        or not value.strip()
+        or len(value) > 128
+        or "\x00" in value
+    ]
+    if errors:
+        raise ImportValidationError(errors)
     return contract
 
 
@@ -324,7 +345,7 @@ def resolve_layout(
         elif matches:
             mapping[name] = matches[0]
     for name in contract.anchors:
-        if name not in mapping:
+        if name not in mapping and name not in options.context:
             errors.append(issue("IMPORT_COLUMN_REQUIRED", name))
     covered = list(mapping.values()) + options.ignored_columns
     if len(set(covered)) != len(covered) or not set(covered) <= set(columns):
@@ -394,13 +415,24 @@ def normalize_row(
 ) -> dict[str, Any]:
     result, errors = {}, []
     for field in contract.fields:
-        if field.name not in mapping:
+        column = mapping.get(field.name)
+        context_value = options.context.get(field.name)
+        if column is None and context_value is None:
             continue
-        column = mapping[field.name]
         try:
-            result[field.name] = convert(raw.get(column), field.kind, options.date_format)
-            if result[field.name] is not None and field.name in VALUE_ALIASES:
-                result[field.name] = VALUE_ALIASES[field.name][result[field.name].casefold()]
+            value = convert(
+                raw.get(column) if column is not None else None, field.kind, options.date_format
+            )
+            if context_value is not None:
+                expected = convert(context_value, field.kind, options.date_format)
+                if value is not None and value != expected:
+                    errors.append(
+                        issue("IMPORT_CONTEXT_MISMATCH", field.name, locator=locator, column=column)
+                    )
+                value = expected
+            if value is not None and field.name in VALUE_ALIASES:
+                value = VALUE_ALIASES[field.name][value.casefold()]
+            result[field.name] = value
         except (ValueError, KeyError, InvalidOperation, OverflowError):
             errors.append(issue("IMPORT_VALUE_INVALID", field.name, locator=locator, column=column))
     for name in contract.anchors:

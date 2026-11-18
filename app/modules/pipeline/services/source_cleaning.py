@@ -322,10 +322,19 @@ def _identity_service(
 
 
 def _bind_profile(context: dict[str, Any], profile: SourceProfile) -> None:
-    if (context.get("upload_input") or {}).get(
-        "business_import"
-    ) and profile.business_import is None:
-        raise ValueError("IMPORT_AUTOMATION_PROFILE_CONFLICT")
+    upload = context.get("upload_input") or {}
+    if requested := upload.get("business_import"):
+        from app.modules.ingestion.contracts.business_imports import ImportOptions
+
+        evidence = profile.business_import or {}
+        pinned = upload.get("business_import_contract_fingerprint")
+        if (
+            not evidence.get("options")
+            or ImportOptions.model_validate(evidence["options"]).metadata()
+            != ImportOptions.model_validate(requested).metadata()
+            or (pinned and evidence.get("contract_fingerprint") != pinned)
+        ):
+            raise ValueError("IMPORT_AUTOMATION_PROFILE_CONFLICT")
     for field in (
         "data_source_id",
         "dataset_id",

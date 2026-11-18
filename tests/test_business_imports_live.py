@@ -26,6 +26,38 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+@pytest.fixture(autouse=True)
+def import_actor(automatic, monkeypatch, tmp_path):
+    from app.modules.ingestion.services import worker as ingestion_worker
+    from app.modules.pipeline.routers import gold as gold_api
+    from app.modules.pipeline.services import silver_worker
+
+    application = automatic["app"]
+    application.include_router(gold_api.router)
+    application.dependency_overrides[gold_api.gold_engine] = lambda: automatic["engine"]
+    for worker in (ingestion_worker, silver_worker, gold_worker):
+        monkeypatch.setattr(worker, "HEALTH_FILE", tmp_path / worker.HEALTH_FILE.name)
+    with automatic["engine"].begin() as conn:
+        role_id = conn.execute(
+            text("""
+                INSERT INTO app.role(role_code, role_name) VALUES ('ADMIN','Admin')
+                ON CONFLICT (role_code) DO UPDATE SET role_code=EXCLUDED.role_code
+                RETURNING role_id
+            """)
+        ).scalar_one()
+        user_id = conn.execute(
+            text("""
+                INSERT INTO app.app_user(username,password_hash)
+                VALUES ('stage_two_actor','unused') RETURNING app_user_id
+            """)
+        ).scalar_one()
+        conn.execute(
+            text("INSERT INTO app.user_role(app_user_id,role_id) VALUES (:user,:role)"),
+            {"user": user_id, "role": role_id},
+        )
+    automatic["user"]["sub"] = str(user_id)
+
+
 def upload(system, content, *, options=None, filename="staff.csv"):
     data = {"dataset_id": "31"}
     if options is not None:
@@ -45,7 +77,10 @@ def upload(system, content, *, options=None, filename="staff.csv"):
 
 def publish(system, job_id):
     profile, silver = process(system, job_id)
-    assert silver["status"] == "SUCCESS", silver
+    assert silver["status"] == "SUCCESS", (
+        silver.get("error_code"),
+        (silver.get("result") or {}).get("error_report"),
+    )
     assert gold_worker.run_once(system["engine"], "import-gold-test")
     assert gold_business_sync.run_once(system["engine"])
     with system["engine"].connect() as conn:
@@ -94,14 +129,24 @@ def test_staff_vietnamese_file_to_employee_and_lecturer_reimport(automatic):
     assert response.status_code == 200, response.text
     assert response.json()["database_committed"] is True
     assert response.json()["database_result"]["tables"]["lecturer"]["unchanged"] == 1
+    url = f"/ingestion/jobs/{job}/business-import/preview"
+    preview = asyncio.run(system["request"]("GET", url))
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["status"] == "READY"
+    assert preview.json()["tables"]["lecturer"]["unchanged"] == 1
+    assert "Nguyễn An" not in preview.text
+    assert "plan_ref" not in preview.json()
     system["user"]["roles"] = ["ACADEMIC_STAFF"]
     response = asyncio.run(system["request"]("GET", f"/ingestion/jobs/{job}/business-import"))
     assert response.status_code in {403, 404}
+    assert asyncio.run(system["request"]("GET", url)).status_code in {403, 404}
 
 
 def test_real_excel_file_with_explicit_header_mapping(automatic):
     book = Workbook()
-    book.active.append(["Mã nội bộ", "Tên cán bộ", "Là giảng viên", "employee_status", "Ghi chú", "Học vị"])
+    book.active.append(
+        ["Mã nội bộ", "Tên cán bộ", "Là giảng viên", "employee_status", "Ghi chú", "Học vị"]
+    )
     book.active.append(["0007", "Trần Bình", True, "ACTIVE", "Giữ trong Bronze", None])
     output = BytesIO()
     book.save(output)
@@ -213,6 +258,89 @@ def test_missing_master_is_blocked_with_row_column_report(automatic):
         assert conn.execute(text("SELECT count(*) FROM app.assignment")).scalar_one() == 0
 
 
+def test_preparation_blocks_unresolved_catalog_without_domain_writes(automatic):
+    with automatic["engine"].begin() as conn:
+        conn.execute(text("UPDATE app.dataset SET domain='academic' WHERE dataset_id=31"))
+    job = upload(
+        automatic,
+        "Mã chương trình,Phiên bản,Mã khung,Tên khung,Mã học phần\nCNTT,2026,K26,Khung,CS001\n",
+    )
+    _, _, result = publish(automatic, job)
+    response = asyncio.run(
+        automatic["request"]("GET", f"/ingestion/jobs/{job}/business-import/preview")
+    )
+    assert response.status_code == 200, response.text
+    preview = response.json()
+    assert preview["status"] == preview["database_status"] == "BLOCKED"
+    assert preview["database_committed"] is False
+    assert "plan_ref" not in result["preparation"]
+    assert {
+        error["column"]
+        for error in preview["error_report"]["issues"]
+        if error["code"] == "IMPORT_REFERENCE_MISSING" and error["locator"]
+    } == {"Mã chương trình", "Mã học phần"}
+    with automatic["engine"].connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM app.curriculum")).scalar_one() == 0
+
+
+def test_preparation_checks_uploader_account_again(automatic):
+    job = upload(
+        automatic,
+        "Mã NV,Họ Tên,Là giảng viên,Trạng thái nhân viên\nNV001,Nguyễn An,Có,ACTIVE\n",
+    )
+    with automatic["engine"].begin() as conn:
+        conn.execute(
+            text("UPDATE app.app_user SET is_active=false WHERE app_user_id=:id"),
+            {"id": int(automatic["user"]["sub"])},
+        )
+    _, _, result = publish(automatic, job)
+    assert result["status"] == "BLOCKED"
+    assert result["preparation"]["preview"]["error_report"]["code"] == "IMPORT_ACTOR_FORBIDDEN"
+    with automatic["engine"].connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM app.employee")).scalar_one() == 0
+
+
+def test_retry_replans_when_postgres_changes_after_preview(automatic, monkeypatch):
+    job = upload(
+        automatic,
+        "Mã NV,Họ Tên,Là giảng viên,Trạng thái nhân viên\nNV001,Nguyễn An,Có,ACTIVE\n",
+    )
+    prepare = gold_business_sync._prepare_import
+
+    def add_employee_after_preview(*args, **kwargs):
+        fingerprint = prepare(*args, **kwargs)
+        with automatic["engine"].begin() as conn:
+            conn.execute(
+                text("""
+                INSERT INTO app.employee(employee_code,full_name,employee_status)
+                VALUES ('NV001','Bản ghi đến song song','ACTIVE')
+            """)
+            )
+        return fingerprint
+
+    with monkeypatch.context() as patch:
+        patch.setattr(gold_business_sync, "_prepare_import", add_employee_after_preview)
+        _, _, result = publish(automatic, job)
+    assert result["status"] == "BLOCKED"
+    assert result["error_code"] == "IMPORT_PLAN_STALE"
+    assert result["preparation"]["preview"]["tables"]["employee"]["inserted"] == 1
+    with automatic["engine"].connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM app.lecturer")).scalar_one() == 0
+
+    url = f"/pipeline/gold/jobs/{result['gold_job_id']}/database-sync/retry"
+    response = asyncio.run(automatic["request"]("POST", url))
+    assert response.status_code == 202, response.text
+    assert gold_business_sync.run_once(automatic["engine"])
+    with automatic["engine"].connect() as conn:
+        status, preparation = conn.execute(
+            text("SELECT status,preparation FROM app.gold_sync_job WHERE gold_job_id=:id"),
+            {"id": result["gold_job_id"]},
+        ).one()
+        assert status == "SYNCED"
+        assert preparation["preview"]["tables"]["employee"]["updated"] == 1
+        assert conn.execute(text("SELECT count(*) FROM app.lecturer")).scalar_one() == 1
+
+
 @pytest.mark.parametrize(
     ("domain", "kind", "content", "counts"),
     [
@@ -225,7 +353,7 @@ def test_missing_master_is_blocked_with_row_column_report(automatic):
         (
             "admissions",
             "admissions_registration",
-            "Mã TS,Họ Tên,Mã chương trình,Năm tuyển sinh,Mã phương thức,Nguyện vọng,Trạng thái đăng ký\nTS001,Trần An,CNTT,2026,THPT,1,APPLIED\nTS001,Trần An,QTKD,2026,THPT,2,APPLIED\n",
+            "Mã TS,Họ Tên,Mã chương trình,Nguyện vọng,Trạng thái đăng ký\nTS001,Trần An,CNTT,1,APPLIED\nTS001,Trần An,QTKD,2,APPLIED\n",
             {"applicant": 1, "admission": 2},
         ),
     ],
@@ -236,22 +364,6 @@ def test_department_multi_table_file_and_reimport(automatic, domain, kind, conte
         conn.execute(
             text("UPDATE app.dataset SET domain=:domain WHERE dataset_id=31"), {"domain": domain}
         )
-        if domain == "admissions":
-            role_id = conn.execute(
-                text(
-                    "INSERT INTO app.role(role_code,role_name) VALUES('ADMIN','Admin') RETURNING role_id"
-                )
-            ).scalar_one()
-            user_id = conn.execute(
-                text(
-                    "INSERT INTO app.app_user(username,password_hash) VALUES('import_admin','unused') RETURNING app_user_id"
-                )
-            ).scalar_one()
-            conn.execute(
-                text("INSERT INTO app.user_role VALUES(:user,:role)"),
-                {"user": user_id, "role": role_id},
-            )
-            system["user"].update(sub=str(user_id), roles=["ADMIN"])
         conn.execute(
             text(
                 "INSERT INTO app.major(major_code,major_name,department_id) VALUES('CNTT','CNTT',(SELECT department_id FROM app.department WHERE department_code='PDT'))"
@@ -277,11 +389,16 @@ def test_department_multi_table_file_and_reimport(automatic, domain, kind, conte
                 "INSERT INTO app.admission_method(method_code,method_name,max_score) VALUES('THPT','THPT',30)"
             )
         )
-    for _ in range(2):
-        job = upload(system, content, options={"import_type": kind})
+    context = {"year_label": "2026", "method_code": "THPT"} if domain == "admissions" else {}
+    for attempt in range(2):
+        job = upload(system, content, options={"import_type": kind, "context": context})
         _, _, synced = publish(system, job)
         assert synced["status"] == "SYNCED", synced
         assert synced["result"]["entities"] == counts
+        preview = synced["preparation"]["preview"]
+        assert preview["context"] == context
+        action = "inserted" if attempt == 0 else "unchanged"
+        assert {table: entries[action] for table, entries in preview["tables"].items()} == counts
     with system["engine"].connect() as conn:
         for entity, expected in counts.items():
             assert conn.execute(text(f"SELECT count(*) FROM app.{entity}")).scalar_one() == expected

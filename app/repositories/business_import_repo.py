@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from itertools import islice
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     JSON,
@@ -18,6 +21,7 @@ from sqlalchemy import (
     func,
     insert,
     select,
+    tuple_,
     update,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -32,6 +36,7 @@ from app.modules.admissions.policy import (
 )
 from app.modules.ingestion.business_imports import (
     CONTRACTS,
+    ImportContract,
     ImportOptions,
     ImportValidationError,
     contract_for,
@@ -48,6 +53,26 @@ from app.repositories.business_identity import (
     _save_identity,
     canonical,
 )
+
+if TYPE_CHECKING:
+    from typing import BinaryIO
+
+IMPORT_PLAN_VERSION = 1
+
+PREPARATION_TYPES = {
+    "hr_employee": (),
+    "admissions_registration": (
+        ("program", "program_code", "program_code"),
+        ("admission_year", "year_label", "year_label"),
+        ("admission_method", "method_code", "method_code"),
+    ),
+    "academic_curriculum": (
+        ("program", "program_code", "program_code"),
+        ("course", "course_code", "course_code"),
+        ("course", "course_code", "prerequisite_course_code"),
+    ),
+}
+PREPARATION_ENTITIES = {CONTRACTS[name].entity for name in PREPARATION_TYPES}
 
 CHANGES = Table(
     "business_import_change",
@@ -88,6 +113,7 @@ class Operation:
     values: dict[str, Any]
     target: dict[str, Any] | None
     origins: list[dict[str, Any]] = field(default_factory=list)
+    natural: tuple[str, ...] = ()
     workflow: str | None = None
     expected_revision: int | None = None
     request_key: str | None = None
@@ -107,6 +133,8 @@ class Planner:
         options: ImportOptions,
         mapping: dict[str, str],
         actor: AdmissionActor | None = None,
+        *,
+        lock_rows: bool = True,
     ) -> None:
         self.connection, self.namespace, self.options, self.mapping = (
             connection,
@@ -120,6 +148,95 @@ class Planner:
         self.lookup_cache: dict[str, Any] = {}
         self.row_checks: dict[str, Any] = {}
         self.actor = actor
+        self.lock_rows = lock_rows
+
+    def lock(self, query: Any, *, shared: bool = False) -> Any:
+        return query.with_for_update(read=shared) if self.lock_rows else query
+
+    def preload_catalogs(self, contract: ImportContract, rows: list[dict[str, Any]]) -> None:
+        codes: dict[tuple[str, str], set[str]] = defaultdict(set)
+        for entity, column, field_name in PREPARATION_TYPES.get(contract.name, ()):
+            codes[entity, column].update(row[field_name] for row in rows if row.get(field_name))
+        for (entity, column), distinct in sorted(codes.items()):
+            table = MODELS[entity]
+            remaining = iter(sorted(distinct))
+            while chunk := list(islice(remaining, 500)):
+                query = select(table).where(table.c[column].in_(chunk)).order_by(*table.primary_key)
+                for value in chunk:
+                    self.lookup_cache[canonical([entity, {column: value}])] = []
+                for target in self.connection.execute(self.lock(query, shared=True)).mappings():
+                    key = canonical([entity, {column: target[column]}])
+                    self.lookup_cache[key].append(target)
+
+    def matching_rows(
+        self,
+        table: Any,
+        fields: tuple[str, ...],
+        keys: set[tuple[Any, ...]],
+        *conditions: Any,
+        lock: bool = True,
+    ) -> dict[tuple[Any, ...], Any]:
+        columns = [table.c[name] for name in fields]
+        result = {}
+        remaining = iter(sorted(keys))
+        while batch := list(islice(remaining, 500)):
+            match = (
+                columns[0].in_([key[0] for key in batch])
+                if len(columns) == 1
+                else tuple_(*columns).in_(batch)
+            )
+            query = select(table).where(*conditions, match).order_by(*table.primary_key)
+            for row in self.connection.execute(self.lock(query) if lock else query).mappings():
+                result[tuple(row[name] for name in fields)] = row
+        return result
+
+    def resolve_existing(self, contract: ImportContract) -> None:
+        by_entity: dict[str, list[Operation]] = defaultdict(list)
+        for op in self.operations.values():
+            by_entity[op.entity].append(op)
+        for entity in contract.writes:
+            operations = by_entity[entity]
+            if not operations:
+                continue
+            table = MODELS[entity]
+            pk = tuple(col.name for col in table.primary_key)
+            identities = self.matching_rows(
+                IDENTITIES,
+                ("source_key",),
+                {(op.source_key,) for op in operations},
+                IDENTITIES.c.namespace == self.namespace,
+                IDENTITIES.c.entity == entity,
+                lock=False,
+            )
+            targets = self.matching_rows(
+                table,
+                pk,
+                {tuple(row["target_key"][name] for name in pk) for row in identities.values()},
+            )
+            by_natural: dict[tuple[str, ...], dict[tuple[Any, ...], list[Operation]]] = defaultdict(
+                lambda: defaultdict(list)
+            )
+            for op in operations:
+                op.values = {
+                    name: self.resolved(value) if isinstance(value, Ref) else value
+                    for name, value in op.values.items()
+                }
+                identity = identities.get((op.source_key,))
+                if identity is not None:
+                    key = tuple(identity["target_key"][name] for name in pk)
+                    op.target = targets.get(key)
+                    if op.target is None:
+                        self.origin = op.origins[0]
+                        self.error("IMPORT_TARGET_MISSING", entity)
+                elif op.natural:
+                    natural_key = tuple(op.values.get(name) for name in op.natural)
+                    if all(v is not None and not isinstance(v, Ref) for v in natural_key):
+                        by_natural[op.natural][natural_key].append(op)
+            for fields, matches in by_natural.items():
+                existing = self.matching_rows(table, fields, set(matches))
+                for key, pending in matches.items():
+                    for op in pending:
+                        op.target = existing.get(key)
 
     def error(self, code: str, entity: str, name: str | None = None, **extra: Any) -> None:
         self.errors.append(
@@ -139,9 +256,10 @@ class Planner:
         if token not in self.lookup_cache:
             self.lookup_cache[token] = (
                 self.connection.execute(
-                    select(table)
-                    .where(*(table.c[k] == v for k, v in filters.items()))
-                    .with_for_update(read=True)
+                    self.lock(
+                        select(table).where(*(table.c[k] == v for k, v in filters.items())),
+                        shared=True,
+                    )
                 )
                 .mappings()
                 .all()
@@ -181,6 +299,11 @@ class Planner:
                     op.values[name] = value
             op.origins.append(dict(self.origin))
             return Ref(token, first_pk)
+        if self.options.import_type in PREPARATION_TYPES:
+            self.operations[token] = Operation(
+                token, entity, source_key, values, None, [dict(self.origin)], natural
+            )
+            return Ref(token, first_pk)
         identity = (
             self.connection.execute(
                 select(IDENTITIES).where(
@@ -196,9 +319,11 @@ class Planner:
         if identity is not None:
             target = (
                 self.connection.execute(
-                    select(table)
-                    .where(*(table.c[k] == v for k, v in identity["target_key"].items()))
-                    .with_for_update()
+                    self.lock(
+                        select(table).where(
+                            *(table.c[k] == v for k, v in identity["target_key"].items())
+                        )
+                    )
                 )
                 .mappings()
                 .first()
@@ -210,9 +335,7 @@ class Planner:
         ):
             target = (
                 self.connection.execute(
-                    select(table)
-                    .where(*(table.c[n] == values[n] for n in natural))
-                    .with_for_update()
+                    self.lock(select(table).where(*(table.c[n] == values[n] for n in natural)))
                 )
                 .mappings()
                 .first()
@@ -532,9 +655,7 @@ class Planner:
                 unique_values[unique_key] = op
                 target = (
                     self.connection.execute(
-                        select(table)
-                        .where(*(table.c[n] == v for n, v in vals.items()))
-                        .with_for_update()
+                        self.lock(select(table).where(*(table.c[n] == v for n, v in vals.items())))
                     )
                     .mappings()
                     .first()
@@ -579,7 +700,6 @@ class Planner:
             raise ImportBlockedError(self.errors)
 
     def execute(self, job_id: str, input_rows: int) -> ImportResult:
-        self.validate()
         targets: dict[str, dict[str, Any]] = {}
         tables: dict[str, dict[str, int]] = {}
         admission_results: list[dict[str, int]] = []
@@ -718,22 +838,21 @@ class Planner:
         return result
 
 
-def sync_import_records(
+def plan_import_records(
     connection: Any,
     entity: str,
     records: list[dict[str, Any]],
-    job_id: str,
     *,
     actor: AdmissionActor | None = None,
-) -> ImportResult:
-    if not records:
-        return ImportResult({}, 0)
+    lock_rows: bool = True,
+) -> Planner:
     expected = next((c for c in CONTRACTS.values() if c.entity == entity), None)
-    if expected is None:
+    if expected is None or (not lock_rows and entity not in PREPARATION_ENTITIES):
         raise ImportBlockedError([issue("IMPORT_TYPE_OR_DOMAIN_INVALID")])
     planner = None
     signature = None
-    errors = []
+    errors: list[dict[str, Any]] = []
+    rows: list[tuple[str, dict[str, Any]]] = []
     for record in records:
         try:
             encoded = json.loads(record["_business_import_row"])
@@ -754,7 +873,14 @@ def sync_import_records(
                 raise ValueError("IMPORT_EVIDENCE_INVALID")
             signature = identity
             if planner is None:
-                planner = Planner(connection, namespace, options, evidence["field_mapping"], actor)
+                planner = Planner(
+                    connection,
+                    namespace,
+                    options,
+                    evidence["field_mapping"],
+                    actor,
+                    lock_rows=lock_rows,
+                )
             values = encoded["values"]
             if set(values) - {f.name for f in contract.fields}:
                 raise ValueError("IMPORT_EVIDENCE_INVALID")
@@ -769,25 +895,114 @@ def sync_import_records(
             for n in normalized:
                 if (n == "status" or n.endswith("_status")) and isinstance(normalized[n], str):
                     normalized[n] = normalized[n].upper()
-            planner.origin = {"locator": encoded["locator"], "columns": evidence["field_mapping"]}
-            planner.add_row(contract, normalized)
-        except AdmissionRuleError as exc:
-            errors.append(
-                issue(
-                    exc.code,
-                    exc.field,
-                    entity="admission",
-                    locator=encoded.get("locator"),
-                    column=evidence.get("field_mapping", {}).get(exc.field),
-                    message=exc.message,
-                    **exc.details,
-                )
-            )
+            rows.append((encoded["locator"], normalized))
         except ImportValidationError as exc:
             errors.extend(exc.issues)
         except (KeyError, TypeError, ValueError):
             errors.append(issue("IMPORT_EVIDENCE_INVALID"))
-    if errors:
-        raise ImportBlockedError(errors)
-    assert planner is not None
+    if planner is None:
+        raise ImportBlockedError(errors or [issue("IMPORT_EVIDENCE_INVALID")])
+    planner.preload_catalogs(expected, [row for _, row in rows])
+    planner.errors.extend(errors)
+    for locator, row in rows:
+        planner.origin = {"locator": locator, "columns": planner.mapping}
+        try:
+            planner.add_row(expected, row)
+        except AdmissionRuleError as exc:
+            planner.error(exc.code, "admission", exc.field, message=exc.message, **exc.details)
+    if expected.name in PREPARATION_TYPES:
+        planner.resolve_existing(expected)
+    planner.validate()
+    return planner
+
+
+def describe_import_plan(
+    planner: Planner, input_rows: int, archive: BinaryIO | None = None
+) -> dict[str, Any]:
+    tables: dict[str, dict[str, int]] = {}
+    sample: list[dict[str, Any]] = []
+    digest = hashlib.sha256()
+    operation_ids = {token: i for i, token in enumerate(planner.operations, 1)}
+    header = {
+        "format_version": IMPORT_PLAN_VERSION,
+        "import_type": planner.options.import_type,
+        "contract_version": planner.options.version,
+        "context": planner.options.context,
+        "input_rows": input_rows,
+    }
+
+    def append(record: dict[str, Any]) -> None:
+        line = (packed(record) + "\n").encode()
+        digest.update(line)
+        if archive is not None:
+            archive.write(line)
+
+    append({**header, "options": planner.options.metadata(), "namespace": planner.namespace})
+    for op in planner.operations.values():
+        table = MODELS[op.entity]
+        values = {
+            name: {"operation_id": operation_ids[value.operation], "field": value.field}
+            if isinstance(value, Ref)
+            else value
+            for name, value in op.values.items()
+            if value is not None
+        }
+        changed = [
+            name for name, value in values.items() if op.target is None or op.target[name] != value
+        ]
+        action = "inserted" if op.target is None else "updated" if changed else "unchanged"
+        counts = tables.setdefault(op.entity, {"inserted": 0, "updated": 0, "unchanged": 0})
+        counts[action] += 1
+        locators = [item["locator"] for item in op.origins]
+        entry = {
+            "operation_id": operation_ids[op.token],
+            "table": op.entity,
+            "action": action,
+            "fields": sorted(changed),
+            "source_row_count": len(locators),
+        }
+        if len(sample) < 100:
+            sample.append({**entry, "source_rows": locators[:20]})
+        append(
+            {
+                **entry,
+                "source_key": op.source_key,
+                "source_rows": locators,
+                "target_key": {c.name: op.target[c.name] for c in table.primary_key}
+                if op.target is not None
+                else None,
+                "target_fingerprint": fingerprint(dict(op.target))
+                if op.target is not None
+                else None,
+                "values_fingerprint": fingerprint(values),
+                "references": {
+                    name: value for name, value in values.items() if table.c[name].foreign_keys
+                },
+            }
+        )
+    return {
+        **header,
+        "tables": tables,
+        "operation_count": len(operation_ids),
+        "operations": sample,
+        "plan_fingerprint": digest.hexdigest(),
+    }
+
+
+def sync_import_records(
+    connection: Any,
+    entity: str,
+    records: list[dict[str, Any]],
+    job_id: str,
+    *,
+    actor: AdmissionActor | None = None,
+    expected_plan: str | None = None,
+) -> ImportResult:
+    if not records:
+        return ImportResult({}, 0)
+    planner = plan_import_records(connection, entity, records, actor=actor)
+    if expected_plan is not None:
+        observed = describe_import_plan(planner, len(records))["plan_fingerprint"]
+        if observed != expected_plan:
+            raise ImportBlockedError([issue("IMPORT_PLAN_STALE")])
     return planner.execute(job_id, len(records))
