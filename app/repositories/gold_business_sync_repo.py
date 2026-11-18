@@ -27,6 +27,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
+from app.core.roles import SYSTEM_DEPARTMENT_CODES
 from app.infra.db.base import Base
 from app.modules.users import models as business
 
@@ -200,6 +201,30 @@ def _upsert(connection: Connection, entity: str, row: dict[str, Any], job_id: st
         IDENTITIES.c.source_key == key,
     )
     identity = connection.execute(select(IDENTITIES).where(*identity_condition)).mappings().first()
+    if entity == "department":
+        # app.department là danh mục RBAC cố định, không phải bản sao cây tổ chức nguồn.
+        # Chỉ tạo ánh xạ nguồn -> phòng đã có; tuyệt đối không INSERT/UPDATE phòng.
+        code = row.get("department_code")
+        if not isinstance(code, str) or code.strip().upper() not in SYSTEM_DEPARTMENT_CODES:
+            raise BusinessSyncBlockedError(
+                "GOLD_SYNC_SYSTEM_DEPARTMENT_ONLY", entity, "department_code"
+            )
+        target_id = connection.execute(
+            select(table.c.department_id)
+            .where(table.c.department_code == code.strip().upper(), table.c.status == "ACTIVE")
+            .with_for_update(read=True)
+        ).scalar_one_or_none()
+        if target_id is None:
+            raise BusinessSyncBlockedError(
+                "GOLD_SYNC_SYSTEM_DEPARTMENT_MISSING", entity, "department_code"
+            )
+        target_key = {"department_id": target_id}
+        if identity is not None and identity["target_key"] != target_key:
+            raise BusinessSyncBlockedError(
+                "GOLD_SYNC_DEPARTMENT_MAPPING_CONFLICT", entity, "department_code"
+            )
+        _save_identity(connection, namespace, entity, key, target_key, job_id, identity is not None)
+        return
     values = {name: value for name, value in row.items() if name in table.c}
     # Ứng dụng dùng mã trạng thái viết hoa; Silver giữ enum theo hợp đồng nguồn.
     for field, value in values.items():
@@ -324,6 +349,23 @@ def _upsert(connection: Connection, entity: str, row: dict[str, Any], job_id: st
             .where(*(table.c[name] == value for name, value in target_key.items()))
             .values(**values)
         )
+    _save_identity(connection, namespace, entity, key, target_key, job_id, identity is not None)
+
+
+def _save_identity(
+    connection: Connection,
+    namespace: str,
+    entity: str,
+    key: str,
+    target_key: dict[str, Any],
+    job_id: str,
+    exists: bool,
+) -> None:
+    identity_condition = (
+        IDENTITIES.c.namespace == namespace,
+        IDENTITIES.c.entity == entity,
+        IDENTITIES.c.source_key == key,
+    )
     record = {
         "namespace": namespace,
         "entity": entity,
@@ -333,7 +375,7 @@ def _upsert(connection: Connection, entity: str, row: dict[str, Any], job_id: st
         "last_gold_job_id": job_id,
         "updated_at": datetime.now().astimezone(),
     }
-    if identity is None:
+    if not exists:
         connection.execute(insert(IDENTITIES).values(**record))
     else:
         connection.execute(update(IDENTITIES).where(*identity_condition).values(**record))

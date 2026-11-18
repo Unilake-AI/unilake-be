@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
-from app.core.roles import DATA_WRITE_ROLES, UPLOAD_STAFF_DOMAINS
+from app.core.roles import DATA_WRITE_ROLES, MANAGER_SCOPES, UPLOAD_STAFF_DOMAINS
 from app.modules.datasources.contracts import DatasetRead
 from app.repositories import staff_dataset_repo
 
@@ -17,6 +17,8 @@ def _domains(user: dict[str, Any]) -> frozenset[str] | None:
     if not DATA_WRITE_ROLES.isdisjoint(roles):
         return None
     domains = frozenset(domain for role, domain in UPLOAD_STAFF_DOMAINS.items() if role in roles)
+    if not domains:
+        domains = frozenset(domain for role, (domain, _) in MANAGER_SCOPES.items() if role in roles)
     if not domains:
         raise AppException("Không có quyền chọn bộ dữ liệu", code="FORBIDDEN", status_code=403)
     return domains
