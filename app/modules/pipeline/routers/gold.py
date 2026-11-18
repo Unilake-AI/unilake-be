@@ -21,7 +21,13 @@ from app.core.exceptions import AppException
 from app.core.roles import DATA_WRITE_ROLES, MANAGER_SCOPES, RoleCode
 from app.modules.pipeline.repositories.management_db import management_engine
 from app.modules.pipeline.repositories.silver import SilverRepository
-from app.modules.pipeline.services.gold_engine import DIMENSIONS, RECIPE_VERSION
+from app.modules.pipeline.services.gold_engine import (
+    DIMENSIONS,
+    IMPORT_COUNTS,
+    IMPORT_DIMENSIONS,
+    RECIPE_VERSION,
+    RECIPES,
+)
 
 router = APIRouter(prefix="/pipeline/gold", tags=["gold"])
 Admin = Annotated[dict[str, Any], Depends(require_role(*DATA_WRITE_ROLES))]
@@ -93,6 +99,9 @@ def recipes(_user: Reader) -> dict[str, Any]:
         "version": RECIPE_VERSION,
         "metric": "record_count",
         "dimensions": DIMENSIONS,
+        "supported_versions": list(RECIPES),
+        "import_dimensions": IMPORT_DIMENSIONS,
+        "import_counts": IMPORT_COUNTS,
         "note": "Đếm bản ghi trong từng nguồn Silver; không cộng thành số người duy nhất toàn trường. File chưa xác định loại chỉ có tổng số dòng.",
     }
 

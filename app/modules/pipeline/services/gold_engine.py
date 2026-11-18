@@ -9,7 +9,8 @@ from typing import Any
 import duckdb
 import pyarrow as pa
 
-RECIPE_VERSION = "group-counts-v1"
+RECIPE_VERSION = "group-counts-v2"
+LEGACY_RECIPE_VERSION = "group-counts-v1"
 # Chỉ đếm theo các cột đã biết; không đoán loại dữ liệu từ tên file hay tự tính KPI.
 DIMENSIONS: dict[str, dict[str, tuple[str, ...]]] = {
     "hr": {
@@ -31,19 +32,57 @@ DIMENSIONS: dict[str, dict[str, tuple[str, ...]]] = {
         "major": ("department_id", "status"),
     },
 }
+IMPORT_DIMENSIONS = {
+    "import_hr_employee_v1": ("gender", "employee_status", "academic_degree", "academic_title"),
+    "import_hr_assignment_v1": ("department_code", "position_code", "assignment_status"),
+    "import_admissions_registration_v1": (
+        "program_code",
+        "year_label",
+        "method_code",
+        "admission_status",
+    ),
+    "import_academic_curriculum_v1": ("program_code", "version", "course_type"),
+}
+IMPORT_COUNTS = {
+    "import_hr_employee_v1": {"distinct_employee_count": ("employee_code",)},
+    "import_admissions_registration_v1": {
+        "distinct_applicant_count": ("applicant_code",),
+        "registration_count": ("applicant_code", "program_code", "year_label", "method_code"),
+    },
+    "import_academic_curriculum_v1": {
+        "curriculum_count": ("program_code", "version"),
+        "curriculum_course_count": ("program_code", "version", "course_code"),
+    },
+}
 RECIPE_FINGERPRINT = hashlib.sha256(
     json.dumps(
         {
             "version": RECIPE_VERSION,
+            "dimensions": DIMENSIONS,
+            "business_import_recipe": "business-import-counts-v1",
+            "import_dimensions": IMPORT_DIMENSIONS,
+            "import_counts": IMPORT_COUNTS,
+            "aggregation": "COUNT_ALL_ROWS_GROUP_EACH_FIELD_INCLUDE_NULL_PRESERVE_IDENTIFIER_TYPE",
+        },
+        sort_keys=True,
+    ).encode()
+).hexdigest()
+LEGACY_RECIPE_FINGERPRINT = hashlib.sha256(
+    json.dumps(
+        {
+            "version": LEGACY_RECIPE_VERSION,
             "dimensions": DIMENSIONS,
             "aggregation": "COUNT_ALL_ROWS_GROUP_EACH_FIELD_INCLUDE_NULL_PRESERVE_IDENTIFIER_TYPE",
         },
         sort_keys=True,
     ).encode()
 ).hexdigest()
+RECIPES = {RECIPE_VERSION: RECIPE_FINGERPRINT, LEGACY_RECIPE_VERSION: LEGACY_RECIPE_FINGERPRINT}
 
 
-def aggregate(domain: str, entity: str, table: Any) -> list[dict[str, Any]]:
+def aggregate(
+    domain: str, entity: str, table: Any, *, business_imports: bool = True
+) -> list[dict[str, Any]]:
     """Số dòng là số bản ghi Silver, không mặc định là số người duy nhất toàn trường."""
     if domain not in DIMENSIONS:
         raise ValueError("GOLD_DOMAIN_UNSUPPORTED")
@@ -56,7 +95,18 @@ def aggregate(domain: str, entity: str, table: Any) -> list[dict[str, Any]]:
         if table.num_columns == 0:
             return result
         connection.register("silver_input", table)
-        for field in DIMENSIONS[domain].get(entity, ()):
+        for metric, fields in (IMPORT_COUNTS.get(entity, {}) if business_imports else {}).items():
+            if set(fields) <= set(table.column_names):
+                columns = ",".join(f'"{name}"' for name in fields)
+                value = connection.execute(
+                    f"SELECT count(*) FROM (SELECT DISTINCT {columns} FROM silver_input)"
+                ).fetchone()[0]
+                result.append(
+                    {"entity": entity, "metric": metric, "dimensions": {}, "value": value}
+                )
+        for field in DIMENSIONS[domain].get(
+            entity, IMPORT_DIMENSIONS.get(entity, ()) if business_imports else ()
+        ):
             if field not in table.column_names:
                 continue
             # Tên cột chỉ lấy từ danh sách trong mã nguồn. Giá trị mã vẫn giữ kiểu gốc.

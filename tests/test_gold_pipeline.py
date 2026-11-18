@@ -147,6 +147,33 @@ def test_pending_job_cannot_change_recipe_silently(tmp_path):
     repository.publish.assert_not_called()
 
 
+def test_queued_legacy_job_keeps_its_original_recipe(tmp_path):
+    from app.modules.pipeline.services.gold_engine import (
+        LEGACY_RECIPE_FINGERPRINT,
+        LEGACY_RECIPE_VERSION,
+    )
+
+    job, silver, gold = source_fixture(tmp_path)
+    job.update(recipe_version=LEGACY_RECIPE_VERSION, recipe_fingerprint=LEGACY_RECIPE_FINGERPRINT)
+    repository = Mock()
+    repository.publish.return_value = True
+    assert build_gold(job, silver, gold, repository)
+    result = repository.publish.call_args.args[2]
+    assert result["recipe_version"] == LEGACY_RECIPE_VERSION
+    assert result["recipe_fingerprint"] == LEGACY_RECIPE_FINGERPRINT
+
+
+def test_business_import_recipe_matches_migration_default():
+    from pathlib import Path
+
+    sql = (
+        Path(__file__).resolve().parents[1]
+        / "infra/postgres/migrations/20261118_business_imports.sql"
+    ).read_text()
+    assert f"'{RECIPE_VERSION}'" in sql
+    assert f"'{RECIPE_FINGERPRINT}'" in sql
+
+
 def test_changed_silver_manifest_never_publishes_gold(tmp_path):
     job, silver, gold = source_fixture(tmp_path)
     ref = json.loads(job["silver_manifest_ref"])

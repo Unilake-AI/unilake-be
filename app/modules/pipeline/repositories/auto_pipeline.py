@@ -180,7 +180,9 @@ class AutoPipelineRepository:
             self.fence(connection, job["job_id"], job["lease_token"])
             self._complete(connection, job["job_id"], "QUARANTINED", result)
 
-    def fail(self, job: dict[str, Any], code: str, retryable: bool) -> None:
+    def fail(
+        self, job: dict[str, Any], code: str, retryable: bool, report: dict[str, Any] | None = None
+    ) -> None:
         with self.engine.begin() as connection:
             current = self.fence(connection, job["job_id"], job["lease_token"])
             retry = retryable and current["attempt_number"] < job["policy"]["max_attempts"]
@@ -190,6 +192,7 @@ class AutoPipelineRepository:
             connection.execute(
                 text("""
                 UPDATE app.auto_pipeline_job SET status=:status,error_code=:code,
+                    result=coalesce(CAST(:report AS jsonb),result),
                     lease_token=NULL,lease_expires_at=NULL,
                     next_attempt_at=now()+make_interval(secs=>:delay),
                     finished_at=CASE WHEN :terminal THEN now() ELSE NULL END
@@ -201,6 +204,7 @@ class AutoPipelineRepository:
                     "code": code,
                     "delay": delay,
                     "terminal": not retry,
+                    "report": json.dumps({"error_report": report}) if report else None,
                 },
             )
             connection.execute(

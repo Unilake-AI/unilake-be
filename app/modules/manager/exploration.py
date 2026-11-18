@@ -10,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
-from app.modules.governance.schemas import CatalogTableSchema, FieldDefinitionSchema
+from app.modules.governance.contracts import CatalogTableSchema, FieldDefinitionSchema
 from app.modules.manager.schemas import ReportFilters
 from app.repositories.manager_report_repo import dataset_scope
 

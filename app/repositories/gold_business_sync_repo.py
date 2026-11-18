@@ -7,17 +7,11 @@ hồ sơ vắng mặt trong một file. Bên gọi quản lý transaction và fe
 from __future__ import annotations
 
 import hashlib
-import json
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
-    JSON,
-    Column,
-    DateTime,
-    Index,
-    String,
     Table,
     func,
     insert,
@@ -25,56 +19,27 @@ from sqlalchemy import (
     text,
     update,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.roles import SYSTEM_DEPARTMENT_CODES
-from app.infra.db.base import Base
-from app.modules.users import models as business
+from app.repositories.business_identity import (
+    IDENTITIES as IDENTITIES,
+)
+from app.repositories.business_identity import (
+    MODELS as MODELS,
+)
+from app.repositories.business_identity import (
+    BusinessSyncBlockedError as BusinessSyncBlockedError,
+)
+from app.repositories.business_identity import (
+    _save_identity as _save_identity,
+)
+from app.repositories.business_identity import (
+    canonical as canonical,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
 
-IDENTITIES = Table(
-    "gold_record_identity",
-    Base.metadata,
-    Column("namespace", String(100), primary_key=True),
-    Column("entity", String(100), primary_key=True),
-    Column("source_key", String(1024), primary_key=True),
-    Column("target_key", JSON().with_variant(JSONB(), "postgresql"), nullable=False),
-    Column("target_fingerprint", String(64), nullable=False),
-    Column("last_gold_job_id", String(36), nullable=False),
-    Column("updated_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
-    Index("ix_gold_record_target", "entity", "target_fingerprint"),
-    schema="app",
-)
-
-MODELS = {
-    name: cast("Table", model.__table__)
-    for name, model in {
-        "department": business.Department,
-        "position": business.Position,
-        "qualification": business.Qualification,
-        "employee": business.Employee,
-        "major": business.Major,
-        "program": business.Program,
-        "course": business.Course,
-        "semester": business.Semester,
-        "curriculum": business.Curriculum,
-        "curriculum_course": business.CurriculumCourse,
-        "admission_year": business.AdmissionYear,
-        "admission_method": business.AdmissionMethod,
-        "applicant": business.Applicant,
-        "admission": business.Admission,
-        "student": business.Student,
-        "lecturer": business.Lecturer,
-        "class": business.CourseClass,
-        "class_lecturer": business.ClassLecturer,
-        "enrollment": business.Enrollment,
-        "enrollment_grade": business.EnrollmentGrade,
-        "employee_qualification": business.EmployeeQualification,
-        "assignment": business.Assignment,
-    }.items()
-}
 NATURAL = {
     "department": ("department_code",),
     "position": ("position_code",),
@@ -95,19 +60,6 @@ NATURAL = {
 }
 
 
-class BusinessSyncBlockedError(ValueError):
-    def __init__(self, code: str, entity: str, field: str | None = None) -> None:
-        super().__init__(code)
-        self.code, self.entity, self.field = code, entity, field
-
-    def report(self) -> dict[str, Any]:
-        return {"code": self.code, "entity": self.entity, "field": self.field}
-
-
-def canonical(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, ensure_ascii=False, default=str, separators=(",", ":"))
-
-
 def source_key(table: Table, row: dict[str, Any], entity: str) -> str:
     keys = [column.name for column in table.primary_key]
     if all(row.get(key) is not None for key in keys):
@@ -122,46 +74,37 @@ def source_key(table: Table, row: dict[str, Any], entity: str) -> str:
 
 
 def project_records(entity: str, rows: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
+    if entity == "admission":
+        raise BusinessSyncBlockedError("GOLD_SYNC_ADMISSION_CONTRACT_REQUIRED", entity)
     if entity in MODELS:
         return entity, rows
-    # Projection đã khai báo cho bảng ghi danh phẳng; chỉ tách course khi đủ
-    # đúng cấu trúc này, không suy đoán sinh viên/lớp/chương trình còn thiếu.
-    required = {
-        "enrollment_id",
-        "student_id",
-        "course_code",
-        "course_name",
-        "credits",
-        "semester",
-        "academic_year",
-        "score",
-    }
-    if entity.startswith("file_") and rows and all(required <= row.keys() for row in rows):
-        projected: dict[str, dict[str, Any]] = {}
-        for row in rows:
-            code = row["course_code"]
-            item = {
-                "course_code": code,
-                "course_name": row["course_name"],
-                "credit_hours": row["credits"],
-                "_source_system_id": row.get("_source_system_id"),
-            }
-            if code in projected and projected[code] != item:
-                raise BusinessSyncBlockedError(
-                    "GOLD_SYNC_CONFLICTING_COURSE", "course", "course_code"
-                )
-            projected[code] = item
-        return "course", list(projected.values())
     raise BusinessSyncBlockedError("GOLD_SYNC_ENTITY_MAPPING_REQUIRED", entity)
 
 
 def sync_records(
-    connection: Connection, payload: dict[str, list[dict[str, Any]]], gold_job_id: str
+    connection: Connection,
+    payload: dict[str, list[dict[str, Any]]],
+    gold_job_id: str,
+    *,
+    domain: str | None = None,
+    actor: Any = None,
 ) -> dict[str, int]:
     if connection.dialect.name == "postgresql":
         connection.execute(
             text("SELECT pg_advisory_xact_lock(hashtextextended('gold.business.sync',0))")
         )
+    if any(name.startswith("import_") for name in payload):
+        from app.repositories.business_import_repo import ImportBlockedError, sync_import_records
+
+        if len(payload) != 1:
+            raise ImportBlockedError([{"code": "IMPORT_MIXED_CONTRACTS_NOT_ALLOWED"}])
+        entity, records = next(iter(payload.items()))
+        if domain is not None:
+            from app.modules.ingestion.business_imports import CONTRACTS
+
+            if not any(c.entity == entity and c.domain == domain for c in CONTRACTS.values()):
+                raise ImportBlockedError([{"code": "IMPORT_TYPE_OR_DOMAIN_INVALID"}])
+        return sync_import_records(connection, entity, records, gold_job_id, actor=actor)
     pending: list[tuple[str, dict[str, Any]]] = []
     for entity, rows in payload.items():
         target, projected = project_records(entity, rows)
@@ -350,32 +293,3 @@ def _upsert(connection: Connection, entity: str, row: dict[str, Any], job_id: st
             .values(**values)
         )
     _save_identity(connection, namespace, entity, key, target_key, job_id, identity is not None)
-
-
-def _save_identity(
-    connection: Connection,
-    namespace: str,
-    entity: str,
-    key: str,
-    target_key: dict[str, Any],
-    job_id: str,
-    exists: bool,
-) -> None:
-    identity_condition = (
-        IDENTITIES.c.namespace == namespace,
-        IDENTITIES.c.entity == entity,
-        IDENTITIES.c.source_key == key,
-    )
-    record = {
-        "namespace": namespace,
-        "entity": entity,
-        "source_key": key,
-        "target_key": target_key,
-        "target_fingerprint": hashlib.sha256(canonical(target_key).encode()).hexdigest(),
-        "last_gold_job_id": job_id,
-        "updated_at": datetime.now().astimezone(),
-    }
-    if not exists:
-        connection.execute(insert(IDENTITIES).values(**record))
-    else:
-        connection.execute(update(IDENTITIES).where(*identity_condition).values(**record))

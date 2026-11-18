@@ -322,6 +322,10 @@ def _identity_service(
 
 
 def _bind_profile(context: dict[str, Any], profile: SourceProfile) -> None:
+    if (context.get("upload_input") or {}).get(
+        "business_import"
+    ) and profile.business_import is None:
+        raise ValueError("IMPORT_AUTOMATION_PROFILE_CONFLICT")
     for field in (
         "data_source_id",
         "dataset_id",
@@ -438,18 +442,19 @@ def run_manual_cleaning(
             },
         )
         cleaning = _read_bronze(context, profile)
-        business_fields: dict[str, dict[str, dict[str, str]]] = {}
+        from app.modules.pipeline.services.business_import_profile import (
+            mapped_person_name,
+            operational_fields,
+        )
+
+        business_fields = operational_fields(profile, cleaning.batch)
         if profile.entity in {"employee", "student", "applicant"}:
             for locator, record in zip(
                 cleaning.batch.record_locators, cleaning.batch.records, strict=True
             ):
-                names = [
-                    value
-                    for name, value in record.items()
-                    if re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_") == "full_name"
-                ]
-                if len(names) == 1 and isinstance(names[0], str):
-                    name = unicodedata.normalize("NFC", names[0].strip())
+                value = mapped_person_name(profile, record)
+                if value:
+                    name = unicodedata.normalize("NFC", value)
                     if name and len(name) <= 200 and "\x00" not in name:
                         business_fields.setdefault(profile.entity, {})[locator] = {
                             "full_name": name
@@ -688,6 +693,7 @@ def run_manual_cleaning(
             mode="production",
             profile_approvals=approvals,
             automatic_recipe=automatic_recipe,
+            business_import=profile.business_import,
             business_fields=business_fields,
         )
         # Lựa chọn "active" dùng bộ dữ liệu hiện hành; mã cụ thể dùng đúng bộ dữ liệu đó.

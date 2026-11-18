@@ -110,7 +110,12 @@ def run_once(engine: Engine, worker_id: str) -> bool:
     except Exception as exc:
         code, retryable = classify_failure(exc)
         try:
-            repository.fail(job, code, retryable)
+            from app.modules.ingestion.contracts.business_imports import ImportValidationError
+
+            if isinstance(exc, ImportValidationError):
+                repository.fail(job, str(exc), False, exc.report())
+            else:
+                repository.fail(job, code, retryable)
         except ValueError:
             # Quyền đã hết hoặc kết quả đã công bố; không được ghi đè trạng thái của lượt khác.
             logger.warning("Lượt Silver không còn quyền cập nhật: %s", job["job_id"])

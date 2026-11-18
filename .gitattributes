@@ -1,0 +1,3 @@
+# These files are byte-hashed or compared against the deterministic fixture generator.
+/docs/data-schema/*.json text eol=lf
+/data/samples/*/*.csv text eol=lf

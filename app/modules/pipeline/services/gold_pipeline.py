@@ -18,8 +18,8 @@ from app.modules.governance.contracts import (
 )
 from app.modules.pipeline.repositories.silver_storage import ObjectRef, checksum
 from app.modules.pipeline.services.gold_engine import (
-    RECIPE_FINGERPRINT,
     RECIPE_VERSION,
+    RECIPES,
     aggregate,
     parquet_rows,
 )
@@ -35,7 +35,10 @@ def build_gold(
     gold: SilverObjectStore,
     repository: GoldRepository,
 ) -> bool:
-    if job["recipe_version"] != RECIPE_VERSION or job["recipe_fingerprint"] != RECIPE_FINGERPRINT:
+    if (
+        job["recipe_version"] not in RECIPES
+        or RECIPES[job["recipe_version"]] != job["recipe_fingerprint"]
+    ):
         raise ValueError("GOLD_RECIPE_VERSION_UNSUPPORTED")
     ref = job["silver_manifest_ref"]
     source_ref = ObjectRef(**(json.loads(ref) if isinstance(ref, str) else ref))
@@ -77,7 +80,14 @@ def build_gold(
         total_records += table.num_rows
         if total_records > 1_000_000:
             raise ValueError("GOLD_INPUT_LIMIT_EXCEEDED")
-        rows.extend(aggregate(job["domain"], entity, table))
+        rows.extend(
+            aggregate(
+                job["domain"],
+                entity,
+                table,
+                business_imports=job["recipe_version"] == RECIPE_VERSION,
+            )
+        )
         source_objects.append(
             {"entity": entity, "object": asdict(object_ref), "rows": table.num_rows}
         )
@@ -114,8 +124,8 @@ def build_gold(
                 transformations=(
                     TransformationEvidence(
                         name="GROUPED_RECORD_COUNTS",
-                        version=RECIPE_VERSION,
-                        fingerprint=RECIPE_FINGERPRINT,
+                        version=job["recipe_version"],
+                        fingerprint=job["recipe_fingerprint"],
                     ),
                 ),
             ),
@@ -131,8 +141,8 @@ def build_gold(
         "silver_snapshot_id": job["silver_snapshot_id"],
         "silver_manifest": asdict(source_ref),
         "source_objects": source_objects,
-        "recipe_version": RECIPE_VERSION,
-        "recipe_fingerprint": RECIPE_FINGERPRINT,
+        "recipe_version": job["recipe_version"],
+        "recipe_fingerprint": job["recipe_fingerprint"],
         "records_read": total_records,
         "aggregate_rows": len(rows),
         "object": asdict(artifact_ref),

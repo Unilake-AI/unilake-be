@@ -174,7 +174,7 @@ def test_cross_source_code_collision_does_not_overwrite_person(engine):
         )
 
 
-def test_declared_flat_enrollment_projects_courses_without_fake_students(engine):
+def test_flat_enrollment_requires_contract_before_any_database_write(engine):
     row = {
         "enrollment_id": "E01",
         "student_id": "S01",
@@ -186,13 +186,13 @@ def test_declared_flat_enrollment_projects_courses_without_fake_students(engine)
         "score": 8,
         "_source_system_id": "2",
     }
-    with engine.begin() as connection:
-        assert sync_records(
-            connection, {"file_2": [row, {**row, "enrollment_id": "E02"}]}, "job-1"
-        ) == {"course": 1}
-        course = connection.execute(select(MODELS["course"])).mappings().one()
-        assert course["course_code"] == "CS001"
-        assert course["credit_hours"] == 3
+    with (
+        pytest.raises(BusinessSyncBlockedError, match="GOLD_SYNC_ENTITY_MAPPING_REQUIRED"),
+        engine.begin() as connection,
+    ):
+        sync_records(connection, {"file_2": [row, {**row, "enrollment_id": "E02"}]}, "job-1")
+    with engine.connect() as connection:
+        assert connection.execute(select(MODELS["course"])).first() is None
 
 
 @pytest.mark.parametrize("entity", ["file_unknown", "app_user", "user_role", "permission"])

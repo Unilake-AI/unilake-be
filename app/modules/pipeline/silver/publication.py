@@ -104,6 +104,7 @@ class SilverPublicationService:
     schema_fingerprint: str
     business_gate: BusinessGate | None
     business_fields: dict[str, dict[str, dict[str, str]]]
+    business_import: dict[str, Any] | None
 
     def __init__(
         self,
@@ -117,6 +118,7 @@ class SilverPublicationService:
         profile_approvals: list[dict[str, Any]] | None = None,
         automatic_recipe: dict[str, Any] | None = None,
         business_fields: dict[str, dict[str, dict[str, str]]] | None = None,
+        business_import: dict[str, Any] | None = None,
     ) -> None:
         if (
             mode not in {"production", "test"}
@@ -160,11 +162,13 @@ class SilverPublicationService:
                     "additional_gate": business_gate.version if business_gate else None,
                     **({"profile_approvals": profile_approvals} if profile_approvals else {}),
                     **({"automatic_recipe": automatic_recipe} if automatic_recipe else {}),
+                    **({"business_import": business_import} if business_import else {}),
                 },
                 sort_keys=True,
             ),
             "business_gate": business_gate,
             "business_fields": deepcopy(business_fields or {}),
+            "business_import": deepcopy(business_import),
         }.items():
             object.__setattr__(self, name, value)
 
@@ -522,8 +526,10 @@ class SilverPublicationService:
                         )
                     )
                     extra = self.business_fields.get(entity, {}).get(row.locator, {})
-                    if set(extra) - {"full_name"}:
+                    if set(extra) - {"full_name", "_business_import_row"}:
                         raise SilverError("GOLD_BUSINESS_FIELDS_NOT_ALLOWED")
+                    if "_business_import_row" in extra and not self.business_import:
+                        raise SilverError("IMPORT_CONTRACT_EVIDENCE_REQUIRED")
                     if extra:
                         exported_fields.setdefault(entity, {})[record_id] = extra
                     records.append(
@@ -588,6 +594,8 @@ class SilverPublicationService:
                 manifest["quarantine_report"] = asdict(quarantine_report)
                 if partial_check is not None:
                     manifest["partial_key_check"] = partial_check
+            if self.business_import:
+                manifest["business_import"] = self.business_import
             # Kiểm tra điều kiện phê duyệt và chất lượng trước khi lưu tệp; nguồn gốc của dữ liệu mới đã được ghi nhận.
             manifest["business_issues"] = [asdict(issue) for issue in self._gate(tables, manifest)]
             prefix = f"silver/{self.mode}/{checksum(self.scope.encode())}/{run_id}"
@@ -603,9 +611,12 @@ class SilverPublicationService:
                         BytesIO(self.storage.get(ObjectRef(**previous_artifact["business_object"])))
                     )
                     extras = {
-                        str(row["_source_record_id"]): {"full_name": row["full_name"]}
+                        str(row["_source_record_id"]): {
+                            name: row[name]
+                            for name in ("full_name", "_business_import_row")
+                            if row.get(name) is not None
+                        }
                         for row in previous_table.to_pylist()
-                        if row.get("full_name") is not None
                     }
                 extras.update(exported_fields.get(entity, {}))
                 entities[entity] = {
@@ -615,8 +626,9 @@ class SilverPublicationService:
                 }
                 if extras:
                     schema = arrow_schema(specs[entity])
-                    if "full_name" not in schema.names:
-                        schema = schema.append(pa.field("full_name", pa.string()))
+                    for name in {n for fields in extras.values() for n in fields}:
+                        if name not in schema.names:
+                            schema = schema.append(pa.field(name, pa.string()))
                     operational_rows = [
                         {**row, **extras.get(str(row["_source_record_id"]), {})} for row in records
                     ]

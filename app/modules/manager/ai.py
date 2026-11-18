@@ -19,7 +19,7 @@ from sqlglot import exp
 
 from app.core.config import settings
 from app.core.exceptions import AppException
-from app.modules.pipeline.services.gold_engine import DIMENSIONS
+from app.modules.pipeline.contracts.gold import DIMENSIONS
 from app.repositories.manager_report_repo import dataset_scope
 
 if TYPE_CHECKING:

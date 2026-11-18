@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import codecs
 import hashlib
+import json
 import re
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -197,6 +198,7 @@ async def receive_upload(
     description: str | None = None,
     domain: UploadDomain | None = None,
     quality_issue_id: str | None = None,
+    import_options: str | None = None,
 ) -> IngestionJobRead:
     allowed_domains = upload_domains(user)
     try:
@@ -215,6 +217,20 @@ async def receive_upload(
     )
     filename, source_type = file_type(file.filename)
     options = parse_options(parser_options, source_type)
+    business_import = None
+    if import_options is not None:
+        from app.modules.ingestion.business_imports import ImportOptions
+
+        try:
+            business_import = ImportOptions.model_validate(json.loads(import_options)).model_dump(
+                mode="json"
+            )
+        except (ValueError, TypeError):
+            raise AppException(
+                "Cấu hình nhập nghiệp vụ không hợp lệ",
+                code="IMPORT_OPTIONS_INVALID",
+                status_code=422,
+            ) from None
     actor = str(user.get("sub", ""))[:100]
     try:
         with TemporaryDirectory(prefix="unilake_upload_") as directory:
@@ -252,6 +268,22 @@ async def receive_upload(
                     description=destination.description,
                 )
             dataset_id = dataset.dataset_id
+            if business_import is not None:
+                from app.modules.ingestion.business_imports import (
+                    ImportOptions,
+                    ImportValidationError,
+                    contract_for,
+                )
+
+                try:
+                    contract_for(ImportOptions.model_validate(business_import), dataset.domain)
+                except ImportValidationError as exc:
+                    raise AppException(
+                        "Nghiệp vụ chưa được phép nhập trong lĩnh vực này",
+                        code=str(exc),
+                        status_code=422,
+                        details=exc.report(),
+                    ) from None
             reference = await run_io(
                 stage_file, path, dataset_id=dataset_id, sha256=digest.hexdigest(), options=options
             )
@@ -276,6 +308,8 @@ async def receive_upload(
         if quality_issue_id is not None:
             # Chỉ luồng sửa lỗi đã kiểm tra người phụ trách mới được gắn yêu cầu vào file.
             reference["quality_issue_id"] = quality_issue_id
+        if business_import is not None:
+            reference["business_import"] = business_import
         job = await IngestionRepository(db).create(
             job_type=UPLOAD_JOB_TYPE,
             data_source_id=source.data_source_id,
@@ -301,6 +335,7 @@ async def upload_file(
     dataset_name: str | None = None,
     description: str | None = None,
     domain: UploadDomain | None = None,
+    import_options: str | None = None,
 ) -> IngestionJobRead:
     """Tiếp nhận file và hoàn tác đăng ký khi bước lưu không thành công."""
     try:
@@ -313,6 +348,7 @@ async def upload_file(
             dataset_name=dataset_name,
             description=description,
             domain=domain,
+            import_options=import_options,
         )
     except SQLAlchemyError:
         await db.rollback()

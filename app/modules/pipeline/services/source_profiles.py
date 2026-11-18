@@ -66,10 +66,13 @@ class SourceProfile(BaseModel):
     effective_at: AwareDatetime
     collapse_exact_duplicates: bool = False
     source_preview_columns: list[str] = Field(default_factory=list)
+    business_import: dict[str, Any] | None = None
 
     @property
     def fingerprint(self) -> str:
         payload = self.model_dump(mode="json")
+        if self.business_import is None:
+            payload.pop("business_import")
         # Cấu hình cũ chưa có lựa chọn này; giữ mã kiểm chứng cũ để vẫn đọc lại được.
         if self.identity_mode == "canonical":
             payload.pop("identity_mode")
@@ -143,7 +146,12 @@ class SourceProfile(BaseModel):
             version=self.rule_version,
             crosswalk=crosswalk,
             dictionaries={
-                name: ValueDictionary(self.rule_version, tuple(aliases.items()))
+                name: ValueDictionary(
+                    self.rule_version,
+                    tuple(aliases.items()),
+                    trim=self.business_import is not None,
+                    case="casefold" if self.business_import is not None else "preserve",
+                )
                 for name, aliases in self.dictionaries.items()
             },
             reference_namespaces=self.reference_namespaces,
