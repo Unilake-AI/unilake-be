@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import unicodedata
 from typing import Any
 
 import duckdb
@@ -81,11 +82,29 @@ RECIPES = {RECIPE_VERSION: RECIPE_FINGERPRINT, LEGACY_RECIPE_VERSION: LEGACY_REC
 
 
 def aggregate(
-    domain: str, entity: str, table: Any, *, business_imports: bool = True
+    domain: str,
+    entity: str,
+    table: Any,
+    *,
+    business_imports: bool = True,
+    import_context: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Số dòng là số bản ghi Silver, không mặc định là số người duy nhất toàn trường."""
     if domain not in DIMENSIONS:
         raise ValueError("GOLD_DOMAIN_UNSUPPORTED")
+    if business_imports and import_context:
+        # The upload context supplies fixed dimensions without modifying the source artifact.
+        for field in IMPORT_DIMENSIONS.get(entity, ()):
+            if field not in import_context:
+                continue
+            value = unicodedata.normalize("NFC", import_context[field].strip())
+            column = pa.array([value] * table.num_rows, type=pa.string())
+            index = table.schema.get_field_index(field)
+            table = (
+                table.set_column(index, field, column)
+                if index >= 0
+                else table.append_column(field, column)
+            )
     result = [
         {"entity": entity, "metric": "record_count", "dimensions": {}, "value": table.num_rows}
     ]

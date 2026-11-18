@@ -8,6 +8,7 @@ from typing import Any
 from app.modules.ingestion.contracts.business_imports import (
     VALUE_ALIASES,
     ImportOptions,
+    ImportValidationError,
     contract_for,
     detect_contract,
     fingerprint,
@@ -24,7 +25,8 @@ from app.modules.pipeline.services.source_schema_builder import generic_schema
 def build_import_profile(
     context: dict[str, Any], parsed: Any, contracts: dict[str, Any]
 ) -> SourceProfile | None:
-    supplied = (context.get("upload_input") or {}).get("business_import")
+    upload_input = context.get("upload_input") or {}
+    supplied = upload_input.get("business_import")
     options = (
         ImportOptions.model_validate(supplied)
         if supplied
@@ -33,6 +35,10 @@ def build_import_profile(
     if options is None:
         return None
     contract = contract_for(options, context["domain"])
+    current_fingerprint = fingerprint(contract.describe())
+    pinned = upload_input.get("business_import_contract_fingerprint") or current_fingerprint
+    if pinned not in supported_contract_fingerprints(contract):
+        raise ImportValidationError([{"code": "IMPORT_CONTRACT_VERSION_CHANGED"}])
     mapping = resolve_layout(contract, parsed.columns, options)
     # Operational personal data stays in the separate business artifact.
     analytic = {
@@ -53,10 +59,10 @@ def build_import_profile(
         prop = schema["$defs"][contract.entity]["properties"][name]
         prop["enum"] = sorted(set(aliases.values())) + ([None] if "null" in prop["type"] else [])
     evidence = {
-        "options": options.model_dump(mode="json"),
+        "options": options.metadata(),
         "field_mapping": mapping,
         "columns": parsed.columns,
-        "contract_fingerprint": fingerprint(contract.describe()),
+        "contract_fingerprint": pinned,
         "layout_fingerprint": fingerprint(
             {"columns": parsed.columns, "parser": context["parser_options"]}
         ),
@@ -105,8 +111,6 @@ def operational_fields(profile: SourceProfile, batch: Any) -> dict[str, dict[str
     mapping = evidence["field_mapping"]
     result = {}
     errors = []
-    from app.modules.ingestion.contracts.business_imports import ImportValidationError
-
     for locator, raw in zip(batch.record_locators, batch.records, strict=True):
         try:
             values = normalize_row(contract, raw, mapping, options, locator)

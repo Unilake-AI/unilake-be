@@ -87,12 +87,17 @@ quy tắc biến đổi riêng; không tự đoán hoặc tự ghép trong luồ
    điện thoại, ngày sinh, CCCD không đưa vào bảng phân tích của các contract mới.
    Mã nguồn vẫn được giữ để tra cứu và đếm thực thể theo phạm vi file/nguồn.
 6. Gold tổng hợp và Gold chi tiết được ghi/đọc lại bằng đúng version và checksum.
-7. Bộ lập kế hoạch đọc toàn bộ dòng nghiệp vụ, gom thực thể theo khóa, phát hiện
-   dữ liệu mâu thuẫn, tra các danh mục hiện có, kiểm tra bắt buộc/kiểu/unique/FK và
-   khoảng ngày. Giá trị trống được giữ nguyên theo chính sách đã xác nhận.
-8. Trong transaction có khóa và kiểm tra Gold head/lease, ghi cha trước con, dùng
-   PK do DB sinh cho FK của con. Ghi định danh nguồn, audit và kết quả cùng transaction.
-   Chỉ đánh dấu SYNCED sau khi tất cả bảng hoàn tất.
+7. Hồ sơ nhân viên, hồ sơ đăng ký tuyển sinh và khung chương trình có bước lập kế
+   hoạch trong transaction chỉ đọc. Worker gom dòng theo khóa, tra mã danh mục theo
+   lô, kiểm tra bản ghi đích và lưu bản xem trước cùng Gold sync job. Kế hoạch đầy đủ
+   lưu trong MinIO, gắn phiên bản/checksum với artifact nguồn đã đọc. Kế hoạch chứa
+   khóa, tham chiếu, thao tác dự kiến và vị trí dòng nguồn. Giá trị nghiệp vụ nằm
+   trong artifact nguồn đã ghim. API trả số liệu theo bảng, tên trường cần ghi và
+   vị trí dòng nguồn.
+8. Luồng đồng bộ tự động kiểm tra lại quyền và lập lại kế hoạch trong transaction ghi.
+   Nếu kế hoạch thay đổi sau lúc chuẩn bị, lần ghi bị chặn với `IMPORT_PLAN_STALE`.
+   Khi hợp lệ, ghi cha trước con, dùng PK do DB sinh cho FK của con, rồi ghi định danh,
+   audit và kết quả trong cùng transaction. Chỉ đánh dấu SYNCED khi mọi bảng hoàn tất.
 
 Gold SUCCEEDED và database SYNCED là hai trạng thái khác nhau. Khi danh mục bị thiếu,
 bản Gold tổng hợp có thể đã được công bố nhưng bước ghi bảng nghiệp vụ là BLOCKED.
@@ -133,6 +138,12 @@ Giữ `POST /api/v1/ingestion/uploads` với các trường multipart hiện có
 `import_options` là chuỗi JSON chứa options bên trên. `date_format` nhận `%Y-%m-%d`,
 `%d/%m/%Y` hoặc `%m/%d/%Y`. Mặc định ISO. blank_update mặc định và chỉ nhận preserve.
 
+`context` là các mã dùng chung cho lượt nhập. Tuyển sinh chấp nhận `program_code`,
+`year_label`, `method_code`. Đào tạo chấp nhận `program_code`, `version`. Giá trị
+ngữ cảnh được dùng khi file thiếu cột hoặc ô để trống. Nếu file có giá trị khác,
+bước chuẩn bị báo `IMPORT_CONTEXT_MISMATCH` tại dòng và cột nguồn. Upload ghim
+phiên bản, fingerprint quy tắc và cấu hình ngữ cảnh vào job.
+
 Không gửi import_options vẫn nhận diện được các file có đủ cột định danh của một
 nghiệp vụ và tên tương đương đã khai báo. Ví dụ file hr_employee cần employee_code
 và is_lecturer dưới một tên được chấp nhận. File tên lạ cần options tường minh.
@@ -144,6 +155,14 @@ business_import; cấu hình xung đột bị chặn, không âm thầm bỏ yê
 `GET /api/v1/ingestion/jobs/{ingestion_job_id}/business-import` dùng quyền đọc
 ingestion hiện có. Trả bronze_status, silver_status, gold_status, database_status,
 database_committed, error_report và database_result.
+
+`GET /api/v1/ingestion/jobs/{ingestion_job_id}/business-import/preview` dùng cùng
+phạm vi truy cập. Kết quả có `status` là `PENDING`, `READY`, `BLOCKED` hoặc
+`NOT_AVAILABLE` và có trạng thái ghi DB riêng. Bản xem trước `READY` hiển thị
+tổng số thao tác theo bảng và tối đa 100 thao tác, mỗi thao tác hiển thị tối đa 20
+vị trí dòng. `READY` xác nhận bước chuẩn bị đã hoàn tất. Luồng hiện hành tự tiếp tục
+đồng bộ khi kiểm tra trước ghi thành công. Sau khi xử lý lỗi tham chiếu hoặc kế hoạch
+cũ, dùng endpoint retry database-sync của Gold để lập kế hoạch mới.
 
 Ví dụ kết quả:
 
@@ -188,6 +207,11 @@ Migration `20261118_business_imports.sql` thêm bảng audit, chỉ mục/FK đ�
 job group-counts-v1 bằng fingerprint và phép đếm cũ, không đổi job đang chờ hoặc
 lịch sử. Migration được đăng ký vào upgrade.psql. Chạy chuỗi nâng cấp DB theo quy trình
 `make db-upgrade` của dự án trước khi bật worker sử dụng contract mới.
+
+Migration `20261118_business_import_preparation.sql` bổ sung metadata kế hoạch
+vào Gold sync job. Áp dụng cùng chuỗi `make db-upgrade` trước khi cập nhật API
+và Gold worker. Các job cũ vẫn đọc được. Job đồng bộ đã kết thúc trước khi nâng cấp
+có trạng thái xem trước `NOT_AVAILABLE`.
 
 Các file ví dụ nằm ở `data/samples/imports/`. Mã chương trình, môn, năm và phương
 thức trong file ví dụ phải tồn tại trong DB thực tế trước khi nạp. Đây là dữ liệu

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-from sqlalchemy import create_engine, event, func, insert, select
+from sqlalchemy import create_engine, event, func, insert, select, update
 from sqlalchemy.pool import StaticPool
 
 from app.modules.ingestion.business_imports import (
@@ -16,7 +16,12 @@ from app.modules.ingestion.business_imports import (
     packed,
     resolve_layout,
 )
-from app.repositories.business_import_repo import CHANGES, ImportBlockedError
+from app.repositories.business_import_repo import (
+    CHANGES,
+    ImportBlockedError,
+    describe_import_plan,
+    plan_import_records,
+)
 from app.repositories.gold_business_sync_repo import IDENTITIES, MODELS, sync_records
 
 
@@ -79,6 +84,56 @@ def employee(**changes):
 
 def count(connection, entity):
     return connection.execute(select(func.count()).select_from(MODELS[entity])).scalar_one()
+
+
+def test_plan_employee_is_read_only_and_rejects_changes_after_preview(engine):
+    data = payload("hr_employee", [employee()])
+    entity, rows = next(iter(data.items()))
+
+    with engine.begin() as conn:
+        planner = plan_import_records(conn, entity, rows, lock_rows=False)
+        preview = describe_import_plan(planner, len(rows))
+        assert preview["tables"] == {
+            table: {"inserted": 1, "updated": 0, "unchanged": 0}
+            for table in ("employee", "lecturer")
+        }
+        assert all(count(conn, table) == 0 for table in ("employee", "lecturer"))
+        assert conn.execute(select(func.count()).select_from(CHANGES)).scalar_one() == 0
+        assert "Nguyễn Văn An" not in packed(preview)
+        sync_records(conn, data, "first", expected_plan=preview["plan_fingerprint"])
+
+    with engine.begin() as conn:
+        preview = describe_import_plan(plan_import_records(conn, entity, rows, lock_rows=False), 1)
+        assert preview["tables"]["lecturer"]["unchanged"] == 1
+        conn.execute(update(MODELS["employee"]).values(full_name="Đã cập nhật"))
+        with pytest.raises(ImportBlockedError, match="IMPORT_PLAN_STALE"):
+            sync_records(conn, data, "stale", expected_plan=preview["plan_fingerprint"])
+        assert conn.execute(select(MODELS["employee"].c.full_name)).scalar_one() == "Đã cập nhật"
+        assert count(conn, "lecturer") == 1
+
+
+def test_registration_context_supplies_missing_fields_and_checks_matching_columns():
+    contract = CONTRACTS["admissions_registration"]
+    options = ImportOptions(
+        import_type=contract.name, context={"year_label": "2026", "method_code": "THPT"}
+    )
+    columns = ["Mã thí sinh", "Mã chương trình", "Năm tuyển sinh"]
+    mapping = resolve_layout(contract, columns, options)
+    row = dict(zip(columns, ("TS001", "CNTT", ""), strict=True))
+    values = normalize_row(contract, row, mapping, options, "csv:row:2")
+    assert values["method_code"] == "THPT"
+    assert values["year_label"] == "2026"
+    row["Năm tuyển sinh"] = "2027"
+    with pytest.raises(ImportValidationError) as caught:
+        normalize_row(contract, row, mapping, options, "csv:row:2")
+    assert caught.value.issues == [
+        {
+            "code": "IMPORT_CONTEXT_MISMATCH",
+            "field": "year_label",
+            "locator": "csv:row:2",
+            "column": "Năm tuyển sinh",
+        }
+    ]
 
 
 def masters(connection):

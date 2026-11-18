@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import gzip
 import json
 from dataclasses import asdict
+from datetime import UTC, datetime
 from io import BytesIO
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -13,8 +15,16 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
+from app.core.roles import DATA_WRITE_ROLES, UPLOAD_STAFF_DOMAINS
+from app.modules.admissions.contracts import AdmissionRuleError
 from app.modules.pipeline.repositories.silver_storage import MinioSilverStore, ObjectRef, checksum
 from app.providers import gold_writer_client
+from app.repositories.admission_workflow_repo import actor_roles, load_import_actor
+from app.repositories.business_import_repo import (
+    PREPARATION_ENTITIES,
+    describe_import_plan,
+    plan_import_records,
+)
 from app.repositories.gold_business_sync_repo import BusinessSyncBlockedError, sync_records
 
 if TYPE_CHECKING:
@@ -140,6 +150,124 @@ def _records(
     return payload
 
 
+def _actor(
+    conn: Any,
+    job: dict[str, Any],
+    entity: str | None,
+    namespace: str | None,
+    *,
+    lock: bool = True,
+) -> Any:
+    if entity in {
+        "import_admissions_registration_v1",
+        "import_admissions_results_v1",
+        "import_admissions_enrollment_v1",
+    }:
+        try:
+            actor = load_import_actor(conn, job, lock=lock)
+            if namespace is not None and actor.namespace != namespace:
+                raise AdmissionRuleError("ADMISSION_DATASET_FORBIDDEN")
+            return actor
+        except AdmissionRuleError as exc:
+            raise BusinessSyncBlockedError(exc.code, "admission", exc.field) from None
+    if entity not in PREPARATION_ENTITIES:
+        return None
+    row = conn.execute(
+        text(
+            """
+            SELECT ij.requested_by
+            FROM app.cleaning_run c
+            JOIN app.ingestion_job ij ON ij.ingestion_job_id=c.ingestion_job_id
+            JOIN app.dataset d ON d.dataset_id=ij.dataset_id
+            JOIN app.source_system s ON s.source_system_id=d.source_system_id
+            WHERE c.silver_snapshot_id=:silver_snapshot_id AND ij.dataset_id=:dataset_id
+                AND d.domain=:domain AND d.status='ACTIVE' AND s.is_active
+                AND d.source_system_id=CAST(:namespace AS bigint)
+                AND c.publication_status IN ('PUBLISHED','PUBLISHED_WITH_QUARANTINE')
+            ORDER BY c.finished_at DESC NULLS LAST LIMIT 1
+        """
+            + (" FOR SHARE OF d,s" if lock else "")
+        ),
+        {**job, "namespace": namespace},
+    ).first()
+    if row is not None and str(row[0]).isdecimal():
+        try:
+            roles = actor_roles(conn, int(row[0]), lock=lock)
+            if roles & DATA_WRITE_ROLES or any(
+                UPLOAD_STAFF_DOMAINS.get(role) == job["domain"] for role in roles
+            ):
+                return None
+        except AdmissionRuleError:
+            pass
+    raise BusinessSyncBlockedError("IMPORT_ACTOR_FORBIDDEN", entity)
+
+
+def _prepare_import(
+    engine: Engine,
+    job: dict[str, Any],
+    gold: MinioSilverStore,
+    source_ref: ObjectRef,
+    entity: str,
+    records: list[dict[str, Any]],
+) -> str | None:
+    preview: dict[str, Any] = {
+        "attempt_number": job["attempt_number"],
+        "silver_snapshot_id": job["silver_snapshot_id"],
+    }
+    preparation: dict[str, Any] = {"preview": preview}
+    expected_plan = None
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
+            namespace = str(records[0]["_source_system_id"])
+            actor = _actor(conn, job, entity, namespace, lock=False)
+            planner = plan_import_records(conn, entity, records, actor=actor, lock_rows=False)
+        buffer = BytesIO()
+        with gzip.GzipFile(fileobj=buffer, mode="wb", mtime=0) as archive:
+            archive.write((json.dumps(asdict(source_ref), sort_keys=True) + "\n").encode())
+            summary = describe_import_plan(planner, len(records), archive)
+        expected_plan = summary.pop("plan_fingerprint")
+        preview.update(summary)
+        data = buffer.getvalue()
+        prefix = source_ref.key.rsplit("/", 1)[0]
+        plan_ref = gold.put(f"{prefix}/plan-{checksum(data)}.gz", data)
+        gold.get(plan_ref)
+        preparation["plan_ref"] = asdict(plan_ref)
+        preparation["plan_fingerprint"] = expected_plan
+        preview["status"] = "READY"
+    except BusinessSyncBlockedError as exc:
+        preview.update(status="BLOCKED", error_report=exc.report())
+
+    preview["prepared_at"] = datetime.now(UTC).isoformat()
+    with engine.begin() as conn:
+        failed = preview.get("error_report")
+        changed = conn.execute(
+            text("""
+                UPDATE app.gold_sync_job
+                SET preparation=CAST(:preparation AS jsonb),
+                    source_manifest_ref=CAST(:source_ref AS jsonb),
+                    status=CASE WHEN :blocked THEN 'BLOCKED' ELSE status END,
+                    error_code=:error_code,error_report=CAST(:error_report AS jsonb),
+                    finished_at=CASE WHEN :blocked THEN now() ELSE finished_at END,
+                    lease_token=CASE WHEN :blocked THEN NULL ELSE lease_token END,
+                    lease_until=CASE WHEN :blocked THEN NULL ELSE now()+interval '5 minutes' END
+                WHERE gold_job_id=:gold_job_id AND status='RUNNING'
+                    AND lease_token=:token AND lease_until>clock_timestamp()
+            """),
+            {
+                **job,
+                "preparation": json.dumps(preparation),
+                "source_ref": json.dumps(asdict(source_ref)),
+                "blocked": failed is not None,
+                "error_code": failed["code"] if failed else None,
+                "error_report": json.dumps(failed) if failed else None,
+            },
+        ).rowcount
+        if changed != 1:
+            raise ValueError("GOLD_SYNC_LEASE_EXPIRED")
+    return expected_plan
+
+
 def run_once(engine: Engine) -> bool:
     with engine.begin() as conn:
         conn.execute(
@@ -166,9 +294,10 @@ def run_once(engine: Engine) -> bool:
             return False
         job = dict(row)
         job["token"] = str(uuid4())
+        job["attempt_number"] += 1
         conn.execute(
             text(
-                "UPDATE app.gold_sync_job SET status='RUNNING',lease_token=:token,lease_until=now()+interval '5 minutes',attempt_number=attempt_number+1,error_code=NULL,error_report=NULL WHERE gold_job_id=:gold_job_id"
+                "UPDATE app.gold_sync_job SET status='RUNNING',lease_token=:token,lease_until=now()+interval '5 minutes',attempt_number=:attempt_number,error_code=NULL,error_report=NULL,preparation=NULL WHERE gold_job_id=:gold_job_id"
             ),
             job,
         )
@@ -184,6 +313,17 @@ def run_once(engine: Engine) -> bool:
             else _prepare(job, silver, gold)
         )
         payload = _records(job, gold, ref)
+        entity = next(iter(payload)) if len(payload) == 1 else None
+        namespace = (
+            str(payload[entity][0]["_source_system_id"])
+            if entity and entity.startswith("import_") and payload[entity]
+            else None
+        )
+        expected_plan = None
+        if entity is not None and entity in PREPARATION_ENTITIES and payload[entity]:
+            expected_plan = _prepare_import(engine, job, gold, ref, entity, payload[entity])
+            if expected_plan is None:
+                return True
         with engine.begin() as conn:
             current = conn.execute(
                 text(
@@ -215,27 +355,14 @@ def run_once(engine: Engine) -> bool:
             )
             try:
                 with conn.begin_nested():
-                    actor = None
-                    if any(
-                        name
-                        in {
-                            "import_admissions_registration_v1",
-                            "import_admissions_results_v1",
-                            "import_admissions_enrollment_v1",
-                        }
-                        for name in payload
-                    ):
-                        from app.modules.admissions.contracts import AdmissionRuleError
-                        from app.repositories.admission_workflow_repo import load_import_actor
-
-                        try:
-                            actor = load_import_actor(conn, job)
-                        except AdmissionRuleError as exc:
-                            raise BusinessSyncBlockedError(
-                                exc.code, "admission", exc.field
-                            ) from None
+                    actor = _actor(conn, job, entity if namespace is not None else None, namespace)
                     counts = sync_records(
-                        conn, payload, job["gold_job_id"], domain=job["domain"], actor=actor
+                        conn,
+                        payload,
+                        job["gold_job_id"],
+                        domain=job["domain"],
+                        actor=actor,
+                        expected_plan=expected_plan,
                     )
                 changed = conn.execute(
                     text(

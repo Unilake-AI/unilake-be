@@ -218,13 +218,12 @@ async def receive_upload(
     filename, source_type = file_type(file.filename)
     options = parse_options(parser_options, source_type)
     business_import = None
+    contract_fingerprint = None
     if import_options is not None:
         from app.modules.ingestion.business_imports import ImportOptions
 
         try:
-            business_import = ImportOptions.model_validate(json.loads(import_options)).model_dump(
-                mode="json"
-            )
+            business_import = ImportOptions.model_validate(json.loads(import_options)).metadata()
         except (ValueError, TypeError):
             raise AppException(
                 "Cấu hình nhập nghiệp vụ không hợp lệ",
@@ -273,10 +272,14 @@ async def receive_upload(
                     ImportOptions,
                     ImportValidationError,
                     contract_for,
+                    fingerprint,
                 )
 
                 try:
-                    contract_for(ImportOptions.model_validate(business_import), dataset.domain)
+                    contract = contract_for(
+                        ImportOptions.model_validate(business_import), dataset.domain
+                    )
+                    contract_fingerprint = fingerprint(contract.describe())
                 except ImportValidationError as exc:
                     raise AppException(
                         "Nghiệp vụ chưa được phép nhập trong lĩnh vực này",
@@ -310,6 +313,7 @@ async def receive_upload(
             reference["quality_issue_id"] = quality_issue_id
         if business_import is not None:
             reference["business_import"] = business_import
+            reference["business_import_contract_fingerprint"] = contract_fingerprint
         job = await IngestionRepository(db).create(
             job_type=UPLOAD_JOB_TYPE,
             data_source_id=source.data_source_id,

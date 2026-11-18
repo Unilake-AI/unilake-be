@@ -20,34 +20,44 @@ from app.repositories.business_identity import IDENTITIES, canonical
 TABLE = cast("Table", Admission.__table__)
 
 
-def actor_roles(connection: Any, user_id: int) -> frozenset[str]:
+def actor_roles(connection: Any, user_id: int, *, lock: bool = True) -> frozenset[str]:
     active = connection.execute(
-        text("SELECT app_user_id FROM app.app_user WHERE app_user_id=:id AND is_active FOR SHARE"),
+        text(
+            "SELECT app_user_id FROM app.app_user WHERE app_user_id=:id AND is_active"
+            + (" FOR SHARE" if lock else "")
+        ),
         {"id": user_id},
     ).first()
     if active is None:
         raise AdmissionRuleError("ADMISSION_ACTOR_FORBIDDEN")
     return frozenset(
         connection.execute(
-            text("""
+            text(
+                """
         SELECT r.role_code FROM app.user_role ur JOIN app.role r ON r.role_id=ur.role_id
-        WHERE ur.app_user_id=:id FOR SHARE OF ur
-    """),
+        WHERE ur.app_user_id=:id
+    """
+                + (" FOR SHARE OF ur" if lock else "")
+            ),
             {"id": user_id},
         ).scalars()
     )
 
 
-def dataset_scope(connection: Any, dataset_id: int, roles: frozenset[str]) -> dict[str, Any]:
+def dataset_scope(
+    connection: Any, dataset_id: int, roles: frozenset[str], *, lock: bool = True
+) -> dict[str, Any]:
     row = (
         connection.execute(
-            text("""
+            text(
+                """
         SELECT d.dataset_id,d.source_system_id,dep.department_code,dep.status AS department_status
         FROM app.dataset d JOIN app.source_system s USING(source_system_id)
         LEFT JOIN app.department dep ON dep.department_id=d.owner_department_id
         WHERE d.dataset_id=:id AND d.domain='admissions' AND d.status='ACTIVE' AND s.is_active
-        FOR SHARE OF d,s
-    """),
+    """
+                + (" FOR SHARE OF d,s" if lock else "")
+            ),
             {"id": dataset_id},
         )
         .mappings()
@@ -73,7 +83,7 @@ def api_actor(connection: Any, user: dict[str, Any], dataset_id: int) -> Admissi
     return AdmissionActor(user_id, roles, dataset_id, str(dataset["source_system_id"]), "")
 
 
-def load_import_actor(connection: Any, job: dict[str, Any]) -> AdmissionActor:
+def load_import_actor(connection: Any, job: dict[str, Any], *, lock: bool = True) -> AdmissionActor:
     row = (
         connection.execute(
             text("""
@@ -92,10 +102,10 @@ def load_import_actor(connection: Any, job: dict[str, Any]) -> AdmissionActor:
     if row is None or not str(row["requested_by"]).isdecimal():
         raise AdmissionRuleError("ADMISSION_ACTOR_FORBIDDEN")
     user_id = int(row["requested_by"])
-    roles = actor_roles(connection, user_id)
+    roles = actor_roles(connection, user_id, lock=lock)
     if roles.isdisjoint(STAFF_ROLES):
         raise AdmissionRuleError("ADMISSION_ACTOR_FORBIDDEN")
-    dataset_scope(connection, job["dataset_id"], roles)
+    dataset_scope(connection, job["dataset_id"], roles, lock=lock)
     source = row["upload_input"] or {}
     request_key = fingerprint(
         {

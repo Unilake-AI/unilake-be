@@ -52,6 +52,7 @@ def build_gold(
     ):
         raise ValueError("GOLD_SILVER_MANIFEST_INVALID")
     rows: list[dict[str, Any]] = []
+    import_context = ((manifest.get("business_import") or {}).get("options") or {}).get("context")
     source_objects = []
     total_records = 0
     total_bytes = 0
@@ -86,6 +87,7 @@ def build_gold(
                 entity,
                 table,
                 business_imports=job["recipe_version"] == RECIPE_VERSION,
+                import_context=import_context,
             )
         )
         source_objects.append(
