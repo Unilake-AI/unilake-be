@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.core.exceptions import AppException, app_exception_handler
 from app.core.logging import request_id_middleware
 from app.domains.registry import get_domain_registry
+from app.modules.admissions.router import router as admissions_router
 from app.modules.auth.router import router as auth_router
 from app.modules.datasources.datasets_router import router as datasets_router
 from app.modules.datasources.router import router as datasources_router
@@ -51,6 +52,7 @@ def create_app() -> FastAPI:
     application.include_router(datasources_router, prefix=api_prefix)
     application.include_router(datasets_router, prefix=api_prefix)
     application.include_router(ingestion_router, prefix=api_prefix)
+    application.include_router(admissions_router, prefix=api_prefix)
     application.include_router(pipeline_router, prefix=api_prefix)
     application.include_router(auto_pipeline_router, prefix=api_prefix)
     application.include_router(gold_router, prefix=api_prefix)
@@ -72,7 +74,7 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["X-Request-ID"],
+        expose_headers=["X-Request-ID", "X-Total-Count", "X-Next-Offset"],
     )
     return application
 

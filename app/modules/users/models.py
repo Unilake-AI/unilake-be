@@ -184,6 +184,7 @@ class Admission(Base):
         Index("ix_admission_program_id", "program_id"),
         Index("ix_admission_admission_year_id", "admission_year_id"),
         Index("ix_admission_admission_status", "admission_status"),
+        Index("ix_admission_enrollment_status", "enrollment_status"),
         {"schema": "app"},
     )
 
@@ -206,6 +207,9 @@ class Admission(Base):
     application_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     admission_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 2), nullable=True)
     admission_status: Mapped[str] = mapped_column(String(30), nullable=False)
+    enrollment_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    enrollment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    revision: Mapped[int] = mapped_column(BigInteger, server_default=text("1"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
 
 

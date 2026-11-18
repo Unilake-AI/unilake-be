@@ -2,22 +2,18 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Path, Query
 
 from app.core.config import settings
-from app.core.deps import require_role
 from app.core.exceptions import AppException
 from app.core.responses import COMMON_ERROR_RESPONSES
-from app.core.roles import MANAGER_SCOPES
-from app.dependencies import get_db
 from app.modules.manager import exploration, history
-from app.modules.manager.access import ManagerAccess, manager_access
+from app.modules.manager.dependencies import DB as DB  # noqa: TC001
+from app.modules.manager.dependencies import Manager as Manager  # noqa: TC001
+from app.modules.manager.dependencies import current_manager as current_manager
 from app.modules.manager.schemas import (
     AnalyticsFilters,
     ManagerContext,
@@ -30,28 +26,6 @@ from app.modules.staff.contracts import schemas as staff_schemas
 from app.repositories import manager_report_repo as repository
 
 router = APIRouter(prefix="/manager", tags=["manager"], responses=COMMON_ERROR_RESPONSES)
-User = Annotated[dict[str, Any], Depends(require_role(*MANAGER_SCOPES))]
-
-
-async def manager_db(db: Annotated[AsyncSession, Depends(get_db)]) -> AsyncIterator[AsyncSession]:
-    try:
-        yield db
-    except SQLAlchemyError:
-        raise AppException(
-            "Không thể đọc báo cáo. Kiểm tra kết nối DB và migration Gold.",
-            code="MANAGER_UNAVAILABLE",
-            status_code=503,
-        ) from None
-
-
-DB = Annotated[AsyncSession, Depends(manager_db)]
-
-
-async def current_manager(db: DB, user: User) -> ManagerAccess:
-    return await manager_access(db, user)
-
-
-Manager = Annotated[ManagerAccess, Depends(current_manager)]
 
 
 @router.get("/context", response_model=ManagerContext)

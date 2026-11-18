@@ -55,9 +55,15 @@ def _prepare(job: dict[str, Any], silver: MinioSilverStore, gold: MinioSilverSto
             core = pq.read_table(BytesIO(silver.get(ObjectRef(**artifact["object"]))))
             operational = pq.read_table(BytesIO(data))
             if (
-                set(operational.column_names) - set(core.column_names) - {"full_name"}
+                set(operational.column_names)
+                - set(core.column_names)
+                - {"full_name", "_business_import_row"}
                 or not set(core.column_names) <= set(operational.column_names)
                 or not core.equals(operational.select(core.column_names))
+            ):
+                raise ValueError("GOLD_SYNC_BUSINESS_EVIDENCE_MISMATCH")
+            if "_business_import_row" in operational.column_names and not source.get(
+                "business_import"
             ):
                 raise ValueError("GOLD_SYNC_BUSINESS_EVIDENCE_MISMATCH")
         if pq.read_metadata(BytesIO(data)).num_rows != artifact["rows"]:
@@ -84,6 +90,7 @@ def _prepare(job: dict[str, Any], silver: MinioSilverStore, gold: MinioSilverSto
         "silver_snapshot_id": job["silver_snapshot_id"],
         "source_manifest": asdict(source_ref),
         "entities": entities,
+        **({"business_import": source["business_import"]} if source.get("business_import") else {}),
     }
     payload = json.dumps(manifest, sort_keys=True, ensure_ascii=False).encode()
     result = gold.put(prefix + "manifest-" + checksum(payload) + ".json", payload)
@@ -127,6 +134,9 @@ def _records(
         if table.num_rows != artifact["rows"]:
             raise ValueError("GOLD_SYNC_ROW_COUNT_MISMATCH")
         payload[entity] = table.to_pylist()
+        if manifest.get("business_import"):
+            for record in payload[entity]:
+                record["_business_import_contract"] = manifest["business_import"]
     return payload
 
 
@@ -205,7 +215,28 @@ def run_once(engine: Engine) -> bool:
             )
             try:
                 with conn.begin_nested():
-                    counts = sync_records(conn, payload, job["gold_job_id"])
+                    actor = None
+                    if any(
+                        name
+                        in {
+                            "import_admissions_registration_v1",
+                            "import_admissions_results_v1",
+                            "import_admissions_enrollment_v1",
+                        }
+                        for name in payload
+                    ):
+                        from app.modules.admissions.contracts import AdmissionRuleError
+                        from app.repositories.admission_workflow_repo import load_import_actor
+
+                        try:
+                            actor = load_import_actor(conn, job)
+                        except AdmissionRuleError as exc:
+                            raise BusinessSyncBlockedError(
+                                exc.code, "admission", exc.field
+                            ) from None
+                    counts = sync_records(
+                        conn, payload, job["gold_job_id"], domain=job["domain"], actor=actor
+                    )
                 changed = conn.execute(
                     text(
                         "UPDATE app.gold_sync_job SET status='SYNCED',error_code=NULL,error_report=NULL,result=CAST(:result AS jsonb),finished_at=now(),lease_token=NULL,lease_until=NULL WHERE gold_job_id=:gold_job_id AND lease_token=:token AND lease_until>clock_timestamp()"
@@ -218,6 +249,7 @@ def run_once(engine: Engine) -> bool:
                                 "records_synced": sum(counts.values()),
                                 "source": "GOLD",
                                 "recipe_version": RECIPE,
+                                **getattr(counts, "report", {}),
                             }
                         ),
                     },

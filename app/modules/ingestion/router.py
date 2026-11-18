@@ -5,11 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, require_role
 from app.core.roles import RoleCode
 from app.dependencies import get_db
+from app.modules.ingestion.business_imports import ImportOptions  # noqa: TC001
 from app.modules.ingestion.schemas import (
     IngestionAttemptRead,
     IngestionJobMetrics,
@@ -85,6 +87,13 @@ async def get_job(job_id: int, db: DB, user: User) -> IngestionJobRead:
     return await ingestion_service.get_job(job_id, db, user)
 
 
+@router.get("/jobs/{job_id}/business-import", summary="Trạng thái ghi DB và lỗi theo dòng/cột")
+async def business_import_report(job_id: int, db: DB, user: User) -> dict[str, Any]:
+    from app.modules.ingestion.services.business_imports import import_report
+
+    return await import_report(job_id, db, user)
+
+
 @router.post(
     "/uploads",
     response_model=IngestionJobRead,
@@ -118,7 +127,68 @@ async def upload_ingestion(
             description="Chỉ cần chọn khi tạo mới và tài khoản có nhiều lĩnh vực hoặc là quản trị"
         ),
     ] = None,
+    import_options: Annotated[
+        str | None,
+        Form(
+            description="JSON nghiệp vụ: import_type, version, field_mapping, ignored_columns, date_format, blank_update"
+        ),
+    ] = None,
 ) -> IngestionJobRead:
     return await uploads_service.upload_file(
-        db, user, file, dataset_id, parser_options, dataset_name, description, domain
+        db,
+        user,
+        file,
+        dataset_id,
+        parser_options,
+        dataset_name,
+        description,
+        domain,
+        import_options,
     )
+
+
+@router.get("/import-types", summary="Quy định nhập file nghiệp vụ theo quyền")
+async def import_types(user: User) -> list[dict[str, Any]]:
+    from app.modules.ingestion.business_imports import CONTRACTS
+    from app.modules.ingestion.services.access import upload_domains
+
+    allowed = upload_domains(user)
+    return [c.describe() for c in CONTRACTS.values() if allowed is None or c.domain in allowed]
+
+
+class ImportLayoutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    domain: UploadDomain
+    columns: list[str] = Field(min_length=1, max_length=500)
+    options: ImportOptions
+
+
+@router.post("/imports/analyze", summary="Kiểm tra ánh xạ tiêu đề, chưa ghi dữ liệu")
+async def analyze_import_layout(request: ImportLayoutRequest, user: User) -> dict[str, Any]:
+    from app.core.exceptions import AppException
+    from app.modules.ingestion.business_imports import (
+        ImportValidationError,
+        contract_for,
+        fingerprint,
+        resolve_layout,
+    )
+    from app.modules.ingestion.services.access import upload_domains
+
+    allowed = upload_domains(user)
+    if allowed is not None and request.domain not in allowed:
+        raise AppException(
+            "Bạn không có quyền trong lĩnh vực này", code="UPLOAD_DOMAIN_FORBIDDEN", status_code=403
+        )
+    try:
+        contract = contract_for(request.options, request.domain)
+        mapping = resolve_layout(contract, request.columns, request.options)
+        return {
+            "status": "MAPPED",
+            "field_mapping": mapping,
+            "contract": contract.describe(),
+            "layout_fingerprint": fingerprint(request.model_dump(mode="json")),
+        }
+    except ImportValidationError as exc:
+        raise AppException(
+            "Cần bổ sung hoặc xác nhận ánh xạ", code=str(exc), status_code=422, details=exc.report()
+        ) from None

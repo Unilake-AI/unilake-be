@@ -724,6 +724,11 @@ def automatic_source_profile(engine: Engine, job_id: int) -> SourceProfile:
     """Quy tắc hệ thống theo file thật; không suy đoán khóa, mã hoặc ngày mơ hồ."""
     context, parsed = _capture(engine, job_id)
     source, contracts = _templates(context["domain"])
+    from app.modules.pipeline.services.business_import_profile import build_import_profile
+
+    business_profile = build_import_profile(context, parsed, contracts)
+    if business_profile is not None:
+        return business_profile
     proposals = _entity_proposals(context, parsed, source, contracts)
     protected = {
         _name(name)

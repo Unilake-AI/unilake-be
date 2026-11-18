@@ -11,9 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.exceptions import AppException
 from app.core.responses import COMMON_ERROR_RESPONSES
-from app.modules.manager import ai, history
-from app.modules.manager.router import DB, Manager  # noqa: TC001
-from app.modules.manager.schemas import Domain, ReportFilters
+from app.modules.manager.contracts import DB, Domain, Manager, ReportFilters, ai, history
 
 router = APIRouter(prefix="/nlq", tags=["nlq"], responses=COMMON_ERROR_RESPONSES)
 
