@@ -17,6 +17,10 @@ class RoleCode(StrEnum):
     HR_STAFF = "HR_STAFF"
 
 
+# Danh mục phòng dùng cho phân quyền; dữ liệu nguồn không được mở rộng danh mục này.
+SYSTEM_DEPARTMENT_CODES = frozenset({"PDT", "PNS", "PTS"})
+
+
 DATA_WRITE_ROLES = frozenset({RoleCode.ADMIN, RoleCode.DATA_ADMIN})
 MANAGER_SCOPES = {
     RoleCode.HR_MANAGER: ("hr", "PNS"),

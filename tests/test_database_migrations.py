@@ -35,7 +35,9 @@ def test_upgrade_includes_every_migration_in_dependency_order():
     assert included.index("20261115_auto_silver_pipeline.sql") < included.index(
         "20261116_silver_default_automation.sql"
     )
-    assert included[-1] == "20261116_storage_model_v2.sql"
+    assert included.index("20261116_department_catalog.sql") < included.index(
+        "20261118_system_departments.sql"
+    )
 
 
 @pytest.fixture

@@ -103,6 +103,17 @@ def test_foreign_keys_resolve_by_source_mapping_in_dependency_order(engine):
         ],
     }
     with engine.begin() as connection:
+        connection.execute(
+            MODELS["department"]
+            .insert()
+            .values(
+                department_id=1,
+                department_code="PNS",
+                department_name="Phòng Nhân sự",
+                department_type="Office",
+                status="ACTIVE",
+            )
+        )
         counts = sync_records(connection, payload, "job-1")
         assert counts["assignment"] == 1
         row = connection.execute(select(MODELS["assignment"])).mappings().one()
@@ -200,3 +211,84 @@ def test_business_statuses_match_application_filters(engine):
             connection.execute(select(MODELS["employee"].c.employee_status)).scalar_one()
             == "ACTIVE"
         )
+
+
+def system_department(code="PNS", source_id="099", namespace="17"):
+    return {
+        "department_id": source_id,
+        "department_code": code,
+        "department_name": "Tên từ file không được ghi đè",
+        "department_type": "Faculty",
+        "status": "INACTIVE",
+        "parent_department_id": "unknown-parent",
+        "_source_system_id": namespace,
+    }
+
+
+def seed_system_department(connection):
+    connection.execute(
+        MODELS["department"]
+        .insert()
+        .values(
+            department_id=3,
+            department_code="PNS",
+            department_name="Phòng Nhân sự",
+            department_type="Office",
+            status="ACTIVE",
+        )
+    )
+
+
+def test_upload_can_only_map_existing_system_department_without_changing_it(engine):
+    with engine.begin() as connection:
+        seed_system_department(connection)
+        before = dict(connection.execute(select(MODELS["department"])).mappings().one())
+        for namespace in ("17", "18"):
+            sync_records(
+                connection, {"department": [system_department(namespace=namespace)]}, "job-1"
+            )
+        after = dict(connection.execute(select(MODELS["department"])).mappings().one())
+        assert before == after
+        identities = connection.execute(select(IDENTITIES)).mappings().all()
+        assert len(identities) == 2
+        assert all(row["target_key"] == {"department_id": 3} for row in identities)
+
+
+@pytest.mark.parametrize("code", ["UNI", "KCNTT", "BMCNTT", "HR", "", None, 3])
+def test_source_departments_never_create_system_departments(engine, code):
+    with pytest.raises(BusinessSyncBlockedError) as error, engine.begin() as connection:
+        sync_records(connection, {"department": [system_department(code=code)]}, "job-1")
+    assert error.value.code == "GOLD_SYNC_SYSTEM_DEPARTMENT_ONLY"
+    with engine.connect() as connection:
+        assert connection.execute(select(MODELS["department"])).all() == []
+        assert connection.execute(select(IDENTITIES)).all() == []
+
+
+def test_missing_system_department_is_not_created_from_upload(engine):
+    with pytest.raises(BusinessSyncBlockedError) as error, engine.begin() as connection:
+        sync_records(connection, {"department": [system_department()]}, "job-1")
+    assert error.value.code == "GOLD_SYNC_SYSTEM_DEPARTMENT_MISSING"
+
+
+def test_source_id_cannot_be_remapped_to_a_different_system_department(engine):
+    with engine.begin() as connection:
+        seed_system_department(connection)
+        connection.execute(
+            MODELS["department"]
+            .insert()
+            .values(
+                department_id=2,
+                department_code="PDT",
+                department_name="Phòng Đào tạo",
+                department_type="Office",
+                status="ACTIVE",
+            )
+        )
+        sync_records(connection, {"department": [system_department()]}, "job-1")
+    with pytest.raises(BusinessSyncBlockedError) as error, engine.begin() as connection:
+        sync_records(connection, {"department": [system_department(code="PDT")]}, "job-2")
+    assert error.value.code == "GOLD_SYNC_DEPARTMENT_MAPPING_CONFLICT"
+    with engine.connect() as connection:
+        assert connection.execute(select(IDENTITIES.c.target_key)).scalar_one() == {
+            "department_id": 3
+        }

@@ -107,10 +107,20 @@ Kiểm thử hạ tầng tạo database riêng và chỉ dọn object của chí
 
 ## Đồng bộ dữ liệu chi tiết vào PostgreSQL
 
-`gold-business-records-v1` hỗ trợ các bảng nghiệp vụ đã liệt kê trong `gold_business_sync_repo.MODELS`, gồm phòng ban, chức vụ, nhân viên, phân công, học phần, chương trình, sinh viên và các quan hệ liên quan. Không cho phép ghi bảng tài khoản, vai trò hoặc quyền. Bảng `app.gold_record_identity` ánh xạ namespace nguồn + loại thực thể + khóa nguồn sang PK thật của ứng dụng; mã `007` khác `7`, không dùng ID nguồn tùy ý làm FK DB. Mã nghiệp vụ trùng giữa hai nguồn đã quản lý bị chặn để tránh ghi đè nhầm hồ sơ.
+`gold-business-records-v1` hỗ trợ các bảng nghiệp vụ đã liệt kê trong `gold_business_sync_repo.MODELS`, gồm chức vụ, nhân viên, phân công, học phần, chương trình, sinh viên và các quan hệ liên quan. Riêng phòng ban chỉ được ánh xạ tới danh mục hệ thống PDT/PNS/PTS đã có, không được thêm/cập nhật từ nguồn. Không cho phép ghi bảng tài khoản, vai trò hoặc quyền. Bảng `app.gold_record_identity` ánh xạ namespace nguồn + loại thực thể + khóa nguồn sang PK thật của ứng dụng; mã `007` khác `7`, không dùng ID nguồn tùy ý làm FK DB. Mã nghiệp vụ trùng giữa hai nguồn đã quản lý bị chặn để tránh ghi đè nhầm hồ sơ.
 
 Silver phục vụ phân tích tiếp tục loại các trường cá nhân theo hợp đồng. Với employee/student/applicant mới xử lý, họ tên hợp lệ từ đúng Bronze gốc được giữ trong object chi tiết nghiệp vụ riêng; bản kê chỉ dẫn object này cho Gold. Dữ liệu phân tích/xem trước không tự thêm họ tên. Không suy ra ngày sinh từ năm sinh, không tự đặt tên hoặc tạo chức vụ còn thiếu.
 
 Trạng thái đồng bộ: QUEUED, RUNNING, SYNCED, BLOCKED, FAILED, SUPERSEDED. `BLOCKED` trả mã lỗi, thực thể và trường bị thiếu, không trả bản ghi cá nhân. Sau khi bổ sung dữ liệu liên kết cùng namespace, các lượt BLOCKED cùng lĩnh vực được xếp lại tự động. Data Admin cũng có thể gọi `POST /api/v1/pipeline/gold/jobs/{job_id}/database-sync/retry` cho bản Gold hiện hành đang BLOCKED/FAILED. API jobs/sources trả `database_sync_status` và `database_sync_error`; chi tiết trả thêm `database_sync_report` và số dòng theo bảng trong `database_sync_result`.
 
 Đồng bộ là upsert, không xóa hồ sơ chỉ vì vắng trong một file. File không nhận diện được thực thể cần ánh xạ; riêng cấu trúc ghi danh phẳng đầy đủ đã khai báo được tách danh mục học phần, không tự tạo sinh viên/lớp chưa đủ dữ liệu. Dữ liệu nghiệp vụ ở DB là kết quả sau Gold; dữ liệu Silver và toàn bộ metadata Silver nằm trên MinIO.
+
+### Phòng hệ thống và đơn vị trong dữ liệu nguồn
+
+`app.department` là danh mục phân quyền cố định gồm `PDT`, `PNS`, `PTS`; đây không phải bảng nhập cây tổ chức của file nguồn. Gold business sync chỉ ánh xạ bản ghi nguồn có đúng mã tới phòng đã tồn tại và đang ACTIVE. Không thêm phòng, ghi đè tên/trạng thái/loại phòng hoặc thay quan hệ phòng cha từ dữ liệu nạp.
+
+Mã trường, khoa, bộ môn hoặc mã phòng khác vẫn được lưu trong Bronze/Silver/Gold, nhưng không tự đồng bộ vào `app.department`. Bước đồng bộ chi tiết PostgreSQL trả `BLOCKED / GOLD_SYNC_SYSTEM_DEPARTMENT_ONLY` khi gặp mã ngoài danh mục, thay vì tự gán vào một trong ba phòng. Nếu cần khai thác các đơn vị nguồn ở PostgreSQL, phải thiết kế danh mục tổ chức nghiệp vụ riêng; không dùng chung danh mục RBAC.
+
+`GOLD_SYNC_SYSTEM_DEPARTMENT_MISSING` báo phòng chuẩn chưa cấu hình/không ACTIVE. `GOLD_SYNC_DEPARTMENT_MAPPING_CONFLICT` chặn việc tái dùng ID nguồn đã ánh xạ để đổi sang phòng khác. Hai nguồn được phép cùng ánh xạ tới một phòng chuẩn nhưng không được sửa phòng đó.
+
+Migration `20261118_system_departments.sql` thêm CHECK ở PostgreSQL để chặn mã khác trên mọi đường ghi. Migration dừng nếu database cũ còn phòng ngoài danh mục, không tự xóa hoặc thay đổi các liên kết nghiệp vụ cũ.
