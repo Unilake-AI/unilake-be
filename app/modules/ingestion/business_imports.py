@@ -55,6 +55,11 @@ class ImportField:
     aliases: tuple[str, ...] = ()
     kind: str = "string"
     private: bool = False
+    values: dict[str, str] | None = None
+
+    @property
+    def accepted_values(self) -> dict[str, str]:
+        return self.values if self.values is not None else VALUE_ALIASES.get(self.name, {})
 
 
 @dataclass(frozen=True)
@@ -89,7 +94,7 @@ class ImportContract:
                     "aliases": f.aliases,
                     "kind": f.kind,
                     "private": f.private,
-                    "accepted_values": VALUE_ALIASES.get(f.name, {}),
+                    "accepted_values": f.accepted_values,
                 }
                 for f in self.fields
             ],
@@ -97,10 +102,13 @@ class ImportContract:
 
 
 F = ImportField
-PERSON = (
+PERSON_DETAILS = (
     F("full_name", ("Họ Và Tên", "Họ Tên", "Họ và tên", "Full Name"), private=True),
     F("date_of_birth", ("Ngày sinh",), "date", True),
     F("gender", ("Giới tính",)),
+)
+PERSON = (
+    *PERSON_DETAILS,
     F("email", ("Email", "Thư điện tử"), private=True),
     F("phone", ("Số điện thoại", "Điện thoại", "SĐT"), private=True),
 )
@@ -109,10 +117,32 @@ APPLICANT_CODE = F("applicant_code", ("Mã thí sinh", "Mã TS"))
 PROGRAM_CODE = F("program_code", ("Mã chương trình",))
 YEAR = F("year_label", ("Năm tuyển sinh", "Niên khóa"))
 METHOD = F("method_code", ("Mã phương thức", "Phương thức xét tuyển"))
+POSITION_CODE = F("position_code", ("Mã chức vụ", "Mã vị trí"))
+QUALIFICATION_NAME = F("qualification_name", ("Tên bằng cấp", "Tên chứng chỉ"))
+QUALIFICATION_TYPE = F("qualification_type", ("Loại bằng cấp", "Loại chứng chỉ"))
 REVISION = F(
     "expected_revision", ("Phiên bản hiện tại", "Phiên bản bản ghi", "Revision"), "integer"
 )
 REGISTRATION_KEYS = (APPLICANT_CODE, PROGRAM_CODE, YEAR, METHOD)
+STUDENT_CODE = F("student_code", ("Mã sinh viên", "Mã SV", "MSSV"))
+CLASS_CODE = F("class_code", ("Mã lớp học phần", "Mã lớp"))
+COURSE_CODE = F("course_code", ("Mã học phần", "Mã môn", "Mã môn học"))
+SEMESTER_CODE = F("semester_code", ("Mã học kỳ",))
+CLASS_REGISTRATION_KEYS = ("student_code", "class_code")
+ACADEMIC_RECORD_IMPORTS = frozenset(
+    {"academic_student", "academic_class", "academic_enrollment", "academic_enrollment_grade"}
+)
+CATALOG_IMPORTS = frozenset(
+    {
+        "hr_position_catalog",
+        "hr_qualification_catalog",
+        "admissions_year_catalog",
+        "admissions_method_catalog",
+    }
+)
+EXPLICIT_IMPORTS = (
+    ACADEMIC_RECORD_IMPORTS | CATALOG_IMPORTS | {"admissions_results", "admissions_enrollment"}
+)
 CONTRACTS = {
     c.name: c
     for c in (
@@ -141,7 +171,7 @@ CONTRACTS = {
                 F("assignment_code", ("Mã phân công",)),
                 EMPLOYEE_CODE,
                 F("department_code", ("Mã phòng", "Mã phòng ban")),
-                F("position_code", ("Mã chức vụ", "Mã vị trí")),
+                POSITION_CODE,
                 F("start_date", ("Ngày bắt đầu",), "date"),
                 F("end_date", ("Ngày kết thúc",), "date"),
                 F("is_primary", ("Là phân công chính",), "boolean"),
@@ -157,14 +187,48 @@ CONTRACTS = {
             "Bằng cấp nhân viên",
             (
                 EMPLOYEE_CODE,
-                F("qualification_name", ("Tên bằng cấp", "Tên chứng chỉ")),
-                F("qualification_type", ("Loại bằng cấp", "Loại chứng chỉ")),
+                QUALIFICATION_NAME,
+                QUALIFICATION_TYPE,
                 F("institution", ("Cơ sở cấp", "Nơi cấp")),
                 F("year_obtained", ("Năm cấp",), "integer"),
             ),
             ("employee_code", "qualification_name"),
             ("employee_qualification",),
             ("employee", "qualification"),
+        ),
+        ImportContract(
+            "hr_position_catalog",
+            "hr",
+            "Danh mục chức vụ",
+            (
+                POSITION_CODE,
+                F("position_name", ("Tên chức vụ", "Tên vị trí")),
+                F(
+                    "position_level",
+                    ("Cấp chức vụ", "Cấp bậc"),
+                    values={
+                        "leadership": "Leadership",
+                        "management": "Management",
+                        "staff": "Staff",
+                        "lãnh đạo": "Leadership",
+                        "quản lý": "Management",
+                        "nhân viên": "Staff",
+                    },
+                ),
+            ),
+            ("position_code",),
+            ("position",),
+        ),
+        ImportContract(
+            "hr_qualification_catalog",
+            "hr",
+            "Danh mục văn bằng, chứng chỉ",
+            (
+                F("qualification_name", (*QUALIFICATION_NAME.aliases, "Tên văn bằng")),
+                F("qualification_type", (*QUALIFICATION_TYPE.aliases, "Loại văn bằng")),
+            ),
+            ("qualification_name",),
+            ("qualification",),
         ),
         ImportContract(
             "admissions_registration",
@@ -214,6 +278,45 @@ CONTRACTS = {
             ("admission",),
         ),
         ImportContract(
+            "admissions_year_catalog",
+            "admissions",
+            "Danh mục năm tuyển sinh",
+            (
+                YEAR,
+                F("start_date", ("Ngày bắt đầu", "Ngày mở tuyển sinh"), "date"),
+                F("end_date", ("Ngày kết thúc", "Ngày đóng tuyển sinh"), "date"),
+                F(
+                    "status",
+                    ("Trạng thái năm tuyển sinh", "Trạng thái"),
+                    values={
+                        "upcoming": "UPCOMING",
+                        "open": "OPEN",
+                        "closed": "CLOSED",
+                        "sắp mở": "UPCOMING",
+                        "đang mở": "OPEN",
+                        "đã đóng": "CLOSED",
+                    },
+                ),
+            ),
+            ("year_label",),
+            ("admission_year",),
+        ),
+        ImportContract(
+            "admissions_method_catalog",
+            "admissions",
+            "Danh mục phương thức xét tuyển",
+            (
+                METHOD,
+                F("method_name", ("Tên phương thức", "Tên phương thức xét tuyển")),
+                F("max_score", ("Điểm tối đa", "Thang điểm"), "decimal"),
+                F("description", ("Mô tả",)),
+                F("is_active", ("Đang áp dụng", "Đang sử dụng", "Hoạt động"), "boolean"),
+            ),
+            ("method_code",),
+            ("admission_method",),
+            ("admission",),
+        ),
+        ImportContract(
             "academic_curriculum",
             "academic",
             "Khung chương trình kèm học phần",
@@ -225,7 +328,7 @@ CONTRACTS = {
                 F("effective_from", ("Hiệu lực từ",), "date"),
                 F("effective_to", ("Hiệu lực đến",), "date"),
                 F("status", ("Trạng thái khung",)),
-                F("course_code", ("Mã học phần", "Mã môn", "Mã môn học")),
+                COURSE_CODE,
                 F("semester_no", ("Học kỳ", "Học kỳ dự kiến"), "integer"),
                 F("course_type", ("Loại học phần",)),
                 F("is_required", ("Bắt buộc",), "boolean"),
@@ -234,6 +337,113 @@ CONTRACTS = {
             ("program_code", "version", "course_code"),
             ("curriculum", "curriculum_course"),
             ("program", "course"),
+        ),
+        ImportContract(
+            "academic_student",
+            "academic",
+            "Hồ sơ sinh viên",
+            (
+                STUDENT_CODE,
+                *PERSON_DETAILS,
+                PROGRAM_CODE,
+                F("year_label", (*YEAR.aliases, "Khóa tuyển sinh", "Năm nhập học")),
+                F(
+                    "student_status",
+                    ("Trạng thái sinh viên", "Tình trạng sinh viên"),
+                    values={
+                        "active": "Active",
+                        "graduated": "Graduated",
+                        "suspended": "Suspended",
+                        "dropped": "Dropped",
+                        "đang học": "Active",
+                        "đã tốt nghiệp": "Graduated",
+                        "tạm dừng học": "Suspended",
+                        "đã thôi học": "Dropped",
+                    },
+                ),
+            ),
+            ("student_code", "program_code", "year_label"),
+            ("student",),
+            ("program", "admission_year"),
+        ),
+        ImportContract(
+            "academic_class",
+            "academic",
+            "Danh sách lớp học phần",
+            (
+                CLASS_CODE,
+                COURSE_CODE,
+                SEMESTER_CODE,
+                F("max_capacity", ("Sĩ số tối đa",), "integer"),
+                F("room", ("Phòng học",)),
+                F(
+                    "class_status",
+                    ("Trạng thái lớp học phần", "Trạng thái lớp"),
+                    values={
+                        "open": "Open",
+                        "inprogress": "InProgress",
+                        "completed": "Completed",
+                        "cancelled": "Cancelled",
+                        "đang mở": "Open",
+                        "đang học": "InProgress",
+                        "đã hoàn thành": "Completed",
+                        "đã hủy": "Cancelled",
+                    },
+                ),
+            ),
+            ("class_code", "course_code", "semester_code"),
+            ("class",),
+            ("course", "semester"),
+        ),
+        ImportContract(
+            "academic_enrollment",
+            "academic",
+            "Danh sách đăng ký học phần",
+            (
+                STUDENT_CODE,
+                CLASS_CODE,
+                F("enrollment_date", ("Ngày đăng ký học phần", "Ngày đăng ký"), "date"),
+                F(
+                    "enrollment_status",
+                    ("Trạng thái đăng ký học phần", "Trạng thái đăng ký"),
+                    values={
+                        "registered": "Registered",
+                        "withdrawn": "Withdrawn",
+                        "completed": "Completed",
+                        "đã đăng ký": "Registered",
+                        "đã rút": "Withdrawn",
+                        "đã hoàn thành": "Completed",
+                    },
+                ),
+            ),
+            CLASS_REGISTRATION_KEYS,
+            ("enrollment",),
+            ("student", "class", "semester"),
+        ),
+        ImportContract(
+            "academic_enrollment_grade",
+            "academic",
+            "Bảng điểm học phần",
+            (
+                STUDENT_CODE,
+                CLASS_CODE,
+                F("midterm_score", ("Điểm giữa kỳ",), "decimal"),
+                F("final_score", ("Điểm cuối kỳ",), "decimal"),
+                F("total_score", ("Điểm tổng kết", "Điểm hệ 10"), "decimal"),
+                F("grade_value", ("Điểm hệ 4",), "decimal"),
+                F(
+                    "letter_grade",
+                    ("Điểm chữ",),
+                    values={
+                        grade.lower(): grade
+                        for grade in ("A", "B+", "B", "C+", "C", "D+", "D", "F")
+                    },
+                ),
+                F("registration_date", ("Ngày đăng ký học phần", "Ngày đăng ký"), "date"),
+            ),
+            CLASS_REGISTRATION_KEYS,
+            ("enrollment_grade",),
+            ("student", "class", "enrollment"),
         ),
     )
 }
@@ -329,17 +539,27 @@ def supported_contract_fingerprints(contract: ImportContract) -> set[str]:
 def resolve_layout(
     contract: ImportContract, columns: list[str], options: ImportOptions
 ) -> dict[str, str]:
+    mapping, errors = inspect_layout(contract, columns, options)
+    if errors:
+        raise ImportValidationError(errors)
+    return mapping
+
+
+def inspect_layout(
+    contract: ImportContract, columns: list[str], options: ImportOptions
+) -> tuple[dict[str, str], list[dict[str, Any]]]:
     fields = {f.name: f for f in contract.fields}
     mapping = dict(options.field_mapping)
     errors = []
     for name in mapping:
         if name not in fields or mapping[name] not in columns:
             errors.append(issue("IMPORT_MAPPING_INVALID", name, column=mapping[name]))
+    ignored = set(options.ignored_columns)
     for name, field in fields.items():
         if name in mapping:
             continue
         accepted = {header(n) for n in (name, *field.aliases)}
-        matches = [c for c in columns if header(c) in accepted]
+        matches = [c for c in columns if c not in ignored and header(c) in accepted]
         if len(matches) > 1:
             errors.append(issue("IMPORT_MAPPING_AMBIGUOUS", name, columns=matches))
         elif matches:
@@ -351,20 +571,14 @@ def resolve_layout(
     if len(set(covered)) != len(covered) or not set(covered) <= set(columns):
         errors.append(issue("IMPORT_COLUMN_USED_TWICE_OR_UNKNOWN"))
     errors.extend(issue("IMPORT_MAPPING_REQUIRED", column=c) for c in columns if c not in covered)
-    if errors:
-        raise ImportValidationError(errors)
-    return mapping
+    return mapping, errors
 
 
 def detect_contract(domain: str, columns: list[str]) -> ImportOptions | None:
     candidates = []
     names = {header(c) for c in columns}
     for c in CONTRACTS.values():
-        if (
-            c.domain != domain
-            or not c.enabled
-            or c.name in {"admissions_results", "admissions_enrollment"}
-        ):
+        if c.domain != domain or not c.enabled or c.name in EXPLICIT_IMPORTS:
             continue
         fields = {f.name: f for f in c.fields}
         if all(names & {header(v) for v in (n, *fields[n].aliases)} for n in c.anchors):
@@ -430,8 +644,8 @@ def normalize_row(
                         issue("IMPORT_CONTEXT_MISMATCH", field.name, locator=locator, column=column)
                     )
                 value = expected
-            if value is not None and field.name in VALUE_ALIASES:
-                value = VALUE_ALIASES[field.name][value.casefold()]
+            if value is not None and (accepted := field.accepted_values):
+                value = accepted[value.casefold()]
             result[field.name] = value
         except (ValueError, KeyError, InvalidOperation, OverflowError):
             errors.append(issue("IMPORT_VALUE_INVALID", field.name, locator=locator, column=column))

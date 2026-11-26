@@ -6,7 +6,6 @@ from datetime import UTC
 from typing import Any
 
 from app.modules.ingestion.contracts.business_imports import (
-    VALUE_ALIASES,
     ImportOptions,
     ImportValidationError,
     contract_for,
@@ -54,7 +53,11 @@ def build_import_profile(
     source, schema = generic_schema(
         context["domain"], contract.entity, analytic, {}, set(), set(), [], audit
     )
-    dictionaries = {name: VALUE_ALIASES[name] for name in analytic if name in VALUE_ALIASES}
+    dictionaries = {
+        field.name: aliases
+        for field in contract.fields
+        if field.name in analytic and (aliases := field.accepted_values)
+    }
     for name, aliases in dictionaries.items():
         prop = schema["$defs"][contract.entity]["properties"][name]
         prop["enum"] = sorted(set(aliases.values())) + ([None] if "null" in prop["type"] else [])

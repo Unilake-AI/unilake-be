@@ -69,6 +69,12 @@ class IngestionJob(Base):
         value = (self.upload_input or {}).get("quality_issue_id")
         return value if isinstance(value, str) else None
 
+    @property
+    def import_type(self) -> str | None:
+        options = (self.upload_input or {}).get("business_import")
+        value = options.get("import_type") if isinstance(options, dict) else None
+        return value if isinstance(value, str) else None
+
 
 class IngestionWorkerHeartbeat(Base):
     """Dấu hiệu worker còn kết nối được hàng đợi, kể cả lúc không có job."""

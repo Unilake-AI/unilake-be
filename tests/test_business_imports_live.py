@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from datetime import date
+from decimal import Decimal
 from io import BytesIO
 
 import pytest
@@ -90,6 +92,11 @@ def publish(system, job_id):
             .one()
         )
     return profile, silver, result
+
+
+def import_csv(system, kind, content):
+    job = upload(system, content, filename=f"{kind}.csv", options={"import_type": kind})
+    return publish(system, job)[2]
 
 
 def test_staff_vietnamese_file_to_employee_and_lecturer_reimport(automatic):
@@ -195,6 +202,10 @@ def test_api_contracts_and_mapping_follow_staff_domain(automatic):
     response = asyncio.run(system["request"]("GET", "/ingestion/import-types"))
     assert response.status_code == 200
     assert {c["domain"] for c in response.json()} == {"hr"}
+    assert {c["import_type"] for c in response.json()} >= {
+        "hr_position_catalog",
+        "hr_qualification_catalog",
+    }
     response = asyncio.run(
         system["request"](
             "POST",
@@ -413,3 +424,276 @@ def test_department_multi_table_file_and_reimport(automatic, domain, kind, conte
                 ).all()
             )
             assert metrics == {"distinct_applicant_count": 1, "registration_count": 2}
+
+
+def test_academic_records_import_in_dependency_order_and_reuse_database_keys(automatic):
+    system = automatic
+    with system["engine"].begin() as conn:
+        conn.execute(text("UPDATE app.dataset SET domain='academic' WHERE dataset_id=31"))
+        conn.execute(
+            text("""
+                WITH major AS (
+                    INSERT INTO app.major(major_code,major_name,department_id)
+                    SELECT 'CNTT','CNTT',department_id FROM app.department WHERE department_code='PDT'
+                    RETURNING major_id
+                )
+                INSERT INTO app.program(program_code,program_name,major_id,degree_level)
+                SELECT 'CNTT','Công nghệ thông tin',major_id,'BACHELOR' FROM major
+            """)
+        )
+        conn.execute(
+            text("""
+                INSERT INTO app.admission_year(year_label,start_date,end_date,status)
+                VALUES ('2026','2026-01-01','2026-12-31','OPEN');
+                INSERT INTO app.course(course_code,course_name,credit_hours) VALUES ('CS001','Cơ sở',3);
+                INSERT INTO app.semester(semester_code,academic_year,start_date,end_date,status)
+                VALUES ('2026-1','2026-2027','2026-09-01','2026-12-31','Completed')
+            """)
+        )
+
+    def import_file(kind, content):
+        return import_csv(system, kind, content)
+
+    students = (
+        "MSSV,Họ và tên,Mã chương trình,Năm nhập học,Trạng thái sinh viên\n"
+        "2026010001,Nguyễn An,CNTT,2026,Đang học\n"
+        "2026010002,Trần Bình,CNTT,2026,Đang học\n"
+    )
+    classes = (
+        "Mã lớp học phần,Mã môn,Mã học kỳ,Sĩ số tối đa,Trạng thái lớp\n"
+        "CS001-2026-1-01,CS001,2026-1,40,Đã hoàn thành\n"
+    )
+    enrollment = (
+        "Mã SV,Mã lớp,Ngày đăng ký,Trạng thái đăng ký\n"
+        "2026010001,CS001-2026-1-01,2026-08-21,Đã hoàn thành\n"
+        "2026010002,CS001-2026-1-01,2026-08-22,Registered\n"
+    )
+    grades = (
+        "Mã SV,Mã lớp,Điểm giữa kỳ,Điểm tổng kết,Điểm hệ 4,Điểm chữ,Ngày đăng ký\n"
+        "2026010001,CS001-2026-1-01,7,8.2,3.5,b+,2026-08-21\n"
+        "2026010002,CS001-2026-1-01,0,4.9,1,D,\n"
+    )
+    for kind, content, table, total in (
+        ("academic_student", students, "student", 2),
+        ("academic_class", classes, "class", 1),
+    ):
+        result = import_file(kind, content)
+        assert result["status"] == "SYNCED", result
+        assert result["result"]["entities"] == {table: total}
+
+    before_enrollment = import_file("academic_enrollment_grade", grades)
+    assert before_enrollment["status"] == "BLOCKED", before_enrollment
+    assert before_enrollment["error_code"] == "IMPORT_ACADEMIC_ENROLLMENT_REQUIRED"
+    assert [item["column"] for item in before_enrollment["error_report"]["issues"]] == [
+        "Mã lớp"
+    ] * 2
+
+    late_enrollment = import_file(
+        "academic_enrollment", enrollment.replace("2026-08-22", "2027-01-01")
+    )
+    assert late_enrollment["status"] == "BLOCKED", late_enrollment
+    assert late_enrollment["error_code"] == "IMPORT_DATE_RANGE_INVALID"
+    with system["engine"].connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM app.enrollment")).scalar_one() == 0
+
+    result = import_file("academic_enrollment", enrollment)
+    assert result["status"] == "SYNCED", result
+    assert result["result"]["entities"] == {"enrollment": 2}
+
+    invalid_grades = import_file(
+        "academic_enrollment_grade",
+        grades.replace("2026-08-21", "2026-08-22").replace("4.9,1,D", "4.9,5,D"),
+    )
+    assert invalid_grades["status"] == "BLOCKED", invalid_grades
+    assert {
+        issue["code"]: issue["column"] for issue in invalid_grades["error_report"]["issues"]
+    } == {
+        "IMPORT_GRADE_REGISTRATION_DATE_MISMATCH": "Ngày đăng ký",
+        "IMPORT_VALUE_OUT_OF_RANGE": "Điểm hệ 4",
+    }
+    with system["engine"].connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM app.enrollment_grade")).scalar_one() == 0
+
+    result = import_file("academic_enrollment_grade", grades)
+    assert result["status"] == "SYNCED", result
+    assert result["result"]["entities"] == {"enrollment_grade": 2}
+    repeated = import_file("academic_enrollment_grade", grades)
+    assert repeated["status"] == "SYNCED", repeated
+    assert repeated["preparation"]["preview"]["tables"]["enrollment_grade"]["unchanged"] == 2
+    correction = import_file(
+        "academic_enrollment_grade", grades.replace(",7,8.2,3.5,b+", ",,8.7,4,A")
+    )
+    assert correction["status"] == "SYNCED", correction
+    assert correction["preparation"]["preview"]["tables"]["enrollment_grade"]["updated"] == 1
+
+    with system["engine"].connect() as conn:
+        records = conn.execute(
+            text("""
+                SELECT s.student_code, s.student_status, s.admission_id, s.applicant_id,
+                       c.class_status, e.enrollment_status, g.midterm_score, g.total_score,
+                       g.letter_grade, g.registration_date
+                FROM app.enrollment_grade g
+                JOIN app.enrollment e USING (enrollment_id)
+                JOIN app.student s USING (student_id)
+                JOIN app.class c USING (class_id)
+                ORDER BY s.student_code
+            """)
+        ).all()
+    assert records == [
+        (
+            "2026010001",
+            "Active",
+            None,
+            None,
+            "Completed",
+            "Completed",
+            7,
+            Decimal("8.7"),
+            "A",
+            date(2026, 8, 21),
+        ),
+        (
+            "2026010002",
+            "Active",
+            None,
+            None,
+            "Completed",
+            "Registered",
+            0,
+            Decimal("4.9"),
+            "D",
+            None,
+        ),
+    ]
+
+
+def test_hr_catalogs_are_reused_by_assignment_and_employee_qualification(automatic):
+    system = automatic
+    positions = "Mã chức vụ,Tên chức vụ,Cấp chức vụ\nCV-QT,Chuyên viên quản trị,Nhân viên\n"
+    qualifications = "Tên văn bằng,Loại văn bằng\nChứng chỉ Kiểm thử,Chứng chỉ\n"
+    for kind, table, content in (
+        ("hr_position_catalog", "position", positions),
+        ("hr_qualification_catalog", "qualification", qualifications),
+    ):
+        result = import_csv(system, kind, content)
+        assert result["status"] == "SYNCED", result
+        assert result["result"]["entities"] == {table: 1}
+        replay = import_csv(system, kind, content)
+        assert replay["status"] == "SYNCED", replay
+        assert replay["preparation"]["preview"]["tables"][table]["unchanged"] == 1
+
+    for kind, content in (
+        (
+            "hr_employee",
+            "Mã NV,Họ Tên,Là giảng viên,Trạng thái nhân viên\nNV-CAT,Nguyễn An,Không,ACTIVE\n",
+        ),
+        (
+            "hr_assignment",
+            "Mã phân công,Mã NV,Mã phòng,Mã chức vụ,Ngày bắt đầu,Trạng thái phân công\n"
+            "PC-CAT,NV-CAT,PNS,CV-QT,2026-01-01,ACTIVE\n",
+        ),
+        (
+            "hr_qualification",
+            "Mã NV,Tên chứng chỉ,Loại chứng chỉ,Cơ sở cấp,Năm cấp\n"
+            "NV-CAT,Chứng chỉ Kiểm thử,Chứng chỉ,Trường A,2026\n",
+        ),
+    ):
+        result = import_csv(system, kind, content)
+        assert result["status"] == "SYNCED", result
+
+    change = import_csv(
+        system, "hr_qualification_catalog", qualifications.replace(",Chứng chỉ\n", ",Bằng cấp\n")
+    )
+    assert change["status"] == "BLOCKED", change
+    assert change["error_code"] == "IMPORT_QUALIFICATION_TYPE_IN_USE"
+    assert change["error_report"]["issues"][0]["column"] == "Loại văn bằng"
+    with system["engine"].connect() as conn:
+        linked = conn.execute(
+            text("""
+            SELECT p.position_code, p.position_level, q.qualification_name, q.qualification_type
+            FROM app.assignment a JOIN app.position p USING (position_id)
+            JOIN app.employee_qualification eq USING (employee_id)
+            JOIN app.qualification q USING (qualification_id)
+        """)
+        ).all()
+    assert linked == [("CV-QT", "Staff", "Chứng chỉ Kiểm thử", "Certificate")]
+
+
+def test_admissions_catalogs_support_registration_and_protect_published_scores(automatic):
+    system = automatic
+    with system["engine"].begin() as conn:
+        conn.execute(text("UPDATE app.dataset SET domain='admissions' WHERE dataset_id=31"))
+        conn.execute(
+            text("""
+            WITH major AS (
+                INSERT INTO app.major(major_code,major_name,department_id)
+                SELECT 'CNTT','CNTT',department_id FROM app.department WHERE department_code='PDT'
+                RETURNING major_id
+            )
+            INSERT INTO app.program(program_code,program_name,major_id,degree_level)
+            SELECT 'CNTT','CNTT',major_id,'BACHELOR' FROM major
+        """)
+        )
+    years = (
+        "Năm tuyển sinh,Ngày bắt đầu,Ngày kết thúc,Trạng thái\n2026,2026-01-01,2026-12-31,Đang mở\n"
+    )
+    methods = (
+        "Mã phương thức,Tên phương thức,Thang điểm,Đang áp dụng\nTHPT-CAT,Điểm thi THPT,30,Có\n"
+    )
+    for kind, table, content in (
+        ("admissions_year_catalog", "admission_year", years),
+        ("admissions_method_catalog", "admission_method", methods),
+    ):
+        result = import_csv(system, kind, content)
+        assert result["status"] == "SYNCED", result
+        assert result["result"]["entities"] == {table: 1}
+        replay = import_csv(system, kind, content)
+        assert replay["status"] == "SYNCED", replay
+        assert replay["preparation"]["preview"]["tables"][table]["unchanged"] == 1
+
+    overlap = import_csv(system, "admissions_year_catalog", years.replace("\n2026,", "\n2026-2,"))
+    assert overlap["status"] == "BLOCKED", overlap
+    assert overlap["error_code"] == "IMPORT_ADMISSION_YEARS_OVERLAP"
+    assert overlap["error_report"]["issues"][0]["column"] == "Năm tuyển sinh"
+
+    registration_file = (
+        "Mã TS,Họ và tên,Mã chương trình,Năm tuyển sinh,Mã phương thức,Nguyện vọng,Ngày đăng ký,Trạng thái đăng ký\n"
+        "TS-CAT,Nguyễn An,CNTT,2026,THPT-CAT,1,2026-07-01,APPLIED\n"
+    )
+    registration = import_csv(system, "admissions_registration", registration_file)
+    assert registration["status"] == "SYNCED", registration
+
+    disabled = import_csv(system, "admissions_method_catalog", methods.replace(",Có\n", ",Không\n"))
+    assert disabled["status"] == "SYNCED", disabled
+    new_registration = import_csv(
+        system, "admissions_registration", registration_file.replace("TS-CAT,", "TS-CAT-NEW,")
+    )
+    assert new_registration["status"] == "BLOCKED", new_registration
+    assert new_registration["error_code"] == "IMPORT_ADMISSION_METHOD_INACTIVE"
+    assert new_registration["error_report"]["issues"][0]["column"] == "Mã phương thức"
+    replay = import_csv(system, "admissions_registration", registration_file)
+    assert replay["status"] == "SYNCED", replay
+
+    results = import_csv(
+        system,
+        "admissions_results",
+        "Mã TS,Mã chương trình,Năm tuyển sinh,Mã phương thức,Phiên bản hiện tại,Điểm xét tuyển,Kết quả xét tuyển\n"
+        "TS-CAT,CNTT,2026,THPT-CAT,1,25.5,ACCEPTED\n",
+    )
+    assert results["status"] == "SYNCED", results
+
+    incompatible = import_csv(system, "admissions_method_catalog", methods.replace(",30,", ",20,"))
+    assert incompatible["status"] == "BLOCKED", incompatible
+    assert incompatible["error_code"] == "IMPORT_ADMISSION_METHOD_SCORE_IN_USE"
+    assert incompatible["error_report"]["issues"][0]["column"] == "Thang điểm"
+    with system["engine"].connect() as conn:
+        linked = conn.execute(
+            text("""
+                SELECT y.year_label, m.method_code, m.max_score, m.is_active, a.admission_score
+            FROM app.admission a JOIN app.admission_year y USING (admission_year_id)
+            JOIN app.admission_method m USING (admission_method_id)
+        """)
+        ).all()
+        assert conn.execute(text("SELECT count(*) FROM app.admission_year")).scalar_one() == 1
+        assert conn.execute(text("SELECT count(*) FROM app.applicant")).scalar_one() == 1
+    assert linked == [("2026", "THPT-CAT", 30, False, Decimal("25.5"))]

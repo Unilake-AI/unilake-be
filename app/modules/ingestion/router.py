@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_current_user, require_role
 from app.core.roles import RoleCode
 from app.dependencies import get_db
-from app.modules.ingestion.business_imports import ImportOptions  # noqa: TC001
+from app.modules.ingestion.business_imports import ImportOptions
 from app.modules.ingestion.schemas import (
     BusinessImportPreview,
     IngestionAttemptRead,
@@ -21,6 +21,7 @@ from app.modules.ingestion.schemas import (
     IngestionJobStatus,
     IngestionStart,
     IngestionWorkerRead,
+    UploadFileLayout,
 )
 from app.modules.ingestion.services import jobs as ingestion_service
 from app.modules.ingestion.services import uploads as uploads_service
@@ -180,14 +181,27 @@ class ImportLayoutRequest(BaseModel):
     options: ImportOptions
 
 
+@router.post("/imports/file-layout", response_model=UploadFileLayout)
+async def import_file_layout(
+    user: User,
+    file: Annotated[UploadFile, File()],
+    domain: Annotated[UploadDomain, Form()],
+    parser_options: Annotated[str, Form()] = "{}",
+) -> UploadFileLayout:
+    from app.modules.ingestion.services.upload_layout import inspect_upload_file
+
+    return await inspect_upload_file(file, domain, parser_options, user)
+
+
 @router.post("/imports/analyze", summary="Kiểm tra ánh xạ tiêu đề, chưa ghi dữ liệu")
 async def analyze_import_layout(request: ImportLayoutRequest, user: User) -> dict[str, Any]:
     from app.core.exceptions import AppException
     from app.modules.ingestion.business_imports import (
+        CONTRACTS,
         ImportValidationError,
         contract_for,
         fingerprint,
-        resolve_layout,
+        inspect_layout,
     )
     from app.modules.ingestion.services.access import upload_domains
 
@@ -198,14 +212,34 @@ async def analyze_import_layout(request: ImportLayoutRequest, user: User) -> dic
         )
     try:
         contract = contract_for(request.options, request.domain)
-        mapping = resolve_layout(contract, request.columns, request.options)
-        return {
-            "status": "MAPPED",
-            "field_mapping": mapping,
-            "contract": contract.describe(),
-            "layout_fingerprint": fingerprint(request.model_dump(mode="json")),
-        }
     except ImportValidationError as exc:
         raise AppException(
             "Cần bổ sung hoặc xác nhận ánh xạ", code=str(exc), status_code=422, details=exc.report()
         ) from None
+    mapping, errors = inspect_layout(contract, request.columns, request.options)
+    if errors:
+        matches = [
+            other.label
+            for other in CONTRACTS.values()
+            if other.domain == request.domain
+            and other.enabled
+            and other.name != contract.name
+            and not inspect_layout(other, request.columns, ImportOptions(import_type=other.name))[1]
+        ]
+        report = ImportValidationError(errors).report()
+        raise AppException(
+            "Cần bổ sung hoặc xác nhận ánh xạ",
+            code=report["code"],
+            status_code=422,
+            details={
+                **report,
+                "field_mapping": mapping,
+                "suggested_workflow": matches[0] if len(matches) == 1 else None,
+            },
+        )
+    return {
+        "status": "MAPPED",
+        "field_mapping": mapping,
+        "contract": contract.describe(),
+        "layout_fingerprint": fingerprint(request.model_dump(mode="json")),
+    }

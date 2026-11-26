@@ -18,8 +18,10 @@ from sqlalchemy import (
     String,
     Table,
     UniqueConstraint,
+    and_,
     func,
     insert,
+    or_,
     select,
     tuple_,
     update,
@@ -35,6 +37,8 @@ from app.modules.admissions.policy import (
     result_changes,
 )
 from app.modules.ingestion.business_imports import (
+    ACADEMIC_RECORD_IMPORTS,
+    CATALOG_IMPORTS,
     CONTRACTS,
     ImportContract,
     ImportOptions,
@@ -61,6 +65,10 @@ IMPORT_PLAN_VERSION = 1
 
 PREPARATION_TYPES = {
     "hr_employee": (),
+    "hr_position_catalog": (),
+    "hr_qualification_catalog": (("qualification", "qualification_name", "qualification_name"),),
+    "admissions_year_catalog": (),
+    "admissions_method_catalog": (),
     "admissions_registration": (
         ("program", "program_code", "program_code"),
         ("admission_year", "year_label", "year_label"),
@@ -71,8 +79,25 @@ PREPARATION_TYPES = {
         ("course", "course_code", "course_code"),
         ("course", "course_code", "prerequisite_course_code"),
     ),
+    "academic_student": (
+        ("program", "program_code", "program_code"),
+        ("admission_year", "year_label", "year_label"),
+    ),
+    "academic_class": (
+        ("course", "course_code", "course_code"),
+        ("semester", "semester_code", "semester_code"),
+    ),
+    "academic_enrollment": (
+        ("student", "student_code", "student_code"),
+        ("class", "class_code", "class_code"),
+    ),
+    "academic_enrollment_grade": (
+        ("student", "student_code", "student_code"),
+        ("class", "class_code", "class_code"),
+    ),
 }
 PREPARATION_ENTITIES = {CONTRACTS[name].entity for name in PREPARATION_TYPES}
+GRADE_LIMITS = {"midterm_score": 10, "final_score": 10, "total_score": 10, "grade_value": 4}
 
 CHANGES = Table(
     "business_import_change",
@@ -147,6 +172,7 @@ class Planner:
         self.origin: dict[str, Any] = {}
         self.lookup_cache: dict[str, Any] = {}
         self.row_checks: dict[str, Any] = {}
+        self.inactive_admission_methods: set[int] = set()
         self.actor = actor
         self.lock_rows = lock_rows
 
@@ -167,6 +193,23 @@ class Planner:
                 for target in self.connection.execute(self.lock(query, shared=True)).mappings():
                     key = canonical([entity, {column: target[column]}])
                     self.lookup_cache[key].append(target)
+        if contract.name == "academic_enrollment_grade":
+            self.preload_grade_enrollments(rows)
+
+    def preload_grade_enrollments(self, rows: list[dict[str, Any]]) -> None:
+        fields = ("student_id", "class_id")
+        keys = set()
+        for row in rows:
+            students = self.lookup_cache[
+                canonical(["student", {"student_code": row["student_code"]}])
+            ]
+            classes = self.lookup_cache[canonical(["class", {"class_code": row["class_code"]}])]
+            if len(students) == len(classes) == 1:
+                keys.add((students[0]["student_id"], classes[0]["class_id"]))
+        matches = self.matching_rows(MODELS["enrollment"], fields, keys, shared=True)
+        for key in keys:
+            token = canonical(["enrollment", dict(zip(fields, key, strict=True))])
+            self.lookup_cache[token] = [matches[key]] if key in matches else []
 
     def matching_rows(
         self,
@@ -175,6 +218,7 @@ class Planner:
         keys: set[tuple[Any, ...]],
         *conditions: Any,
         lock: bool = True,
+        shared: bool = False,
     ) -> dict[tuple[Any, ...], Any]:
         columns = [table.c[name] for name in fields]
         result = {}
@@ -186,7 +230,9 @@ class Planner:
                 else tuple_(*columns).in_(batch)
             )
             query = select(table).where(*conditions, match).order_by(*table.primary_key)
-            for row in self.connection.execute(self.lock(query) if lock else query).mappings():
+            for row in self.connection.execute(
+                self.lock(query, shared=shared) if lock else query
+            ).mappings():
                 result[tuple(row[name] for name in fields)] = row
         return result
 
@@ -250,7 +296,14 @@ class Planner:
             )
         )
 
-    def lookup(self, entity: str, filters: dict[str, Any], source_field: str) -> Any:
+    def lookup_row(
+        self,
+        entity: str,
+        filters: dict[str, Any],
+        source_field: str,
+        *,
+        missing_code: str = "IMPORT_REFERENCE_MISSING",
+    ) -> Any:
         token = canonical([entity, filters])
         table = MODELS[entity]
         if token not in self.lookup_cache:
@@ -267,12 +320,16 @@ class Planner:
         targets = self.lookup_cache[token]
         if len(targets) != 1:
             self.error(
-                "IMPORT_REFERENCE_MISSING" if not targets else "IMPORT_REFERENCE_AMBIGUOUS",
+                missing_code if not targets else "IMPORT_REFERENCE_AMBIGUOUS",
                 entity,
                 source_field,
             )
             return None
-        return targets[0][next(iter(table.primary_key)).name]
+        return targets[0]
+
+    def lookup(self, entity: str, filters: dict[str, Any], source_field: str) -> Any:
+        target = self.lookup_row(entity, filters, source_field)
+        return target[next(iter(MODELS[entity].primary_key)).name] if target is not None else None
 
     def operation(
         self, entity: str, key: Any, values: dict[str, Any], natural: tuple[str, ...] = ()
@@ -432,9 +489,12 @@ class Planner:
         elif contract.name == "admissions_registration":
             program = self.lookup("program", {"program_code": row["program_code"]}, "program_code")
             year = self.lookup("admission_year", {"year_label": row["year_label"]}, "year_label")
-            method = self.lookup(
+            method = self.lookup_row(
                 "admission_method", {"method_code": row["method_code"]}, "method_code"
             )
+            method_id = method["admission_method_id"] if method is not None else None
+            if method is not None and not method["is_active"]:
+                self.inactive_admission_methods.add(method["admission_method_id"])
             applicant = self.operation(
                 "applicant", [row["applicant_code"]], self.fields("applicant", row)
             )
@@ -447,7 +507,7 @@ class Planner:
                     "applicant_id": applicant_id,
                     "program_id": program,
                     "admission_year_id": year,
-                    "admission_method_id": method,
+                    "admission_method_id": method_id,
                 },
                 ("applicant_id", "program_id", "admission_year_id", "admission_method_id"),
             )
@@ -512,6 +572,72 @@ class Planner:
                 },
                 ("curriculum_id", "course_id"),
             )
+        elif contract.name in ACADEMIC_RECORD_IMPORTS:
+            self.add_academic_row(contract, row)
+        elif contract.name in CATALOG_IMPORTS:
+            self.add_catalog_row(contract, row)
+
+    def add_catalog_row(self, contract: ImportContract, row: dict[str, Any]) -> None:
+        entity = contract.writes[0]
+        key = [row[field] for field in contract.anchors]
+        if entity == "qualification":
+            matches = self.lookup_cache[canonical([entity, {"qualification_name": key[0]}])]
+            if len(matches) > 1:
+                self.error("IMPORT_QUALIFICATION_NAME_AMBIGUOUS", entity, "qualification_name")
+                return
+        self.operation(entity, {"natural": key}, self.fields(entity, row), contract.anchors)
+
+    def add_academic_row(self, contract: ImportContract, row: dict[str, Any]) -> None:
+        entity = contract.writes[0]
+        references = {
+            target: self.lookup_row(target, {column: row[field]}, field)
+            for target, column, field in PREPARATION_TYPES[contract.name]
+        }
+        if any(target is None for target in references.values()):
+            return
+        foreign_keys = {f"{name}_id": target[f"{name}_id"] for name, target in references.items()}
+
+        if entity == "student":
+            natural = key = ("student_code",)
+        elif entity == "class":
+            natural = key = ("class_code",)
+        else:
+            key = contract.anchors
+            natural = ("student_id", "class_id")
+        if entity == "enrollment_grade":
+            enrollment = self.lookup_row(
+                "enrollment",
+                foreign_keys,
+                "class_code",
+                missing_code="IMPORT_ACADEMIC_ENROLLMENT_REQUIRED",
+            )
+            if enrollment is None:
+                return
+            if not any(row.get(name) is not None for name in (*GRADE_LIMITS, "letter_grade")):
+                self.error("IMPORT_GRADE_REQUIRED", entity)
+                return
+            registration_date = row.get("registration_date")
+            if registration_date is not None and registration_date != enrollment["enrollment_date"]:
+                self.error("IMPORT_GRADE_REGISTRATION_DATE_MISMATCH", entity, "registration_date")
+            natural = ("enrollment_id",)
+            foreign_keys = {"enrollment_id": enrollment["enrollment_id"]}
+        if entity == "enrollment" and (registered_at := row.get("enrollment_date")):
+            semester = self.lookup_row(
+                "semester", {"semester_id": references["class"]["semester_id"]}, "class_code"
+            )
+            if semester is not None and registered_at > semester["end_date"]:
+                self.error(
+                    "IMPORT_DATE_RANGE_INVALID",
+                    entity,
+                    "enrollment_date",
+                    message="Ngày đăng ký học phần phải trước hoặc bằng ngày kết thúc học kỳ.",
+                )
+        self.operation(
+            entity,
+            {"natural": [row[field] for field in key]},
+            {**self.fields(entity, row), **foreign_keys},
+            natural,
+        )
 
     def _workflow(self, ref: Ref, name: str, expected_revision: int | None) -> None:
         op = self.operations[ref.operation]
@@ -575,11 +701,150 @@ class Planner:
         table = MODELS[entity]
         return {n: v for n, v in row.items() if n in table.c and n not in (exclude or set())}
 
+    def validate_academic_row(self, op: Operation) -> None:
+        if op.entity == "class":
+            capacity = op.values.get("max_capacity")
+            if capacity is not None and not 1 <= capacity <= 200:
+                self.error(
+                    "IMPORT_VALUE_OUT_OF_RANGE",
+                    op.entity,
+                    "max_capacity",
+                    message="Sĩ số tối đa phải từ 1 đến 200.",
+                )
+            if op.target:
+                for field, column in (
+                    ("course_code", "course_id"),
+                    ("semester_code", "semester_id"),
+                ):
+                    if op.values[column] != op.target[column]:
+                        self.error(
+                            "IMPORT_CLASS_REFERENCE_CHANGE",
+                            op.entity,
+                            field,
+                            message="Mã lớp học phần đã gắn với học phần hoặc học kỳ khác.",
+                        )
+        elif op.entity == "enrollment_grade":
+            for field, bound in GRADE_LIMITS.items():
+                score = op.values.get(field)
+                if score is not None and not 0 <= score <= bound:
+                    self.error(
+                        "IMPORT_VALUE_OUT_OF_RANGE",
+                        op.entity,
+                        field,
+                        message=f"Điểm phải từ 0 đến {bound}.",
+                    )
+        elif op.entity == "student" and op.target and op.target["admission_id"] is not None:
+            for field, column in (
+                ("program_code", "program_id"),
+                ("year_label", "admission_year_id"),
+            ):
+                if op.values[column] != op.target[column]:
+                    self.error(
+                        "IMPORT_STUDENT_REFERENCE_CHANGE",
+                        op.entity,
+                        field,
+                        message="Hồ sơ sinh viên đã có liên kết tuyển sinh với chương trình hoặc khóa khác.",
+                    )
+
+    def validate_qualification_catalog(self, op: Operation) -> None:
+        new_type = op.values.get("qualification_type")
+        if not op.target or not new_type:
+            return
+        previous_type = op.target["qualification_type"]
+        if not previous_type or previous_type.casefold() == new_type.casefold():
+            return
+        links = MODELS["employee_qualification"]
+        if self.connection.execute(
+            select(links.c.qualification_id)
+            .where(links.c.qualification_id == op.target["qualification_id"])
+            .limit(1)
+        ).first():
+            self.error("IMPORT_QUALIFICATION_TYPE_IN_USE", op.entity, "qualification_type")
+
+    def validate_admission_method(self, op: Operation) -> None:
+        maximum = op.values.get("max_score")
+        if maximum is None:
+            return
+        if maximum < 0:
+            self.error(
+                "IMPORT_VALUE_OUT_OF_RANGE",
+                op.entity,
+                "max_score",
+                message="Điểm tối đa phải từ 0 trở lên.",
+            )
+            return
+        if op.target is None or maximum == op.target["max_score"]:
+            return
+        previous = op.target["max_score"]
+        admissions = MODELS["admission"].c
+        score = admissions.admission_score
+        if maximum == 0:
+            incompatible = score.is_not(None)
+        elif previous == 0:
+            incompatible = or_(
+                score > maximum,
+                and_(
+                    score.is_(None),
+                    func.upper(admissions.admission_status).in_(("ACCEPTED", "REJECTED")),
+                ),
+            )
+        elif maximum < previous:
+            incompatible = score > maximum
+        else:
+            return
+        if self.connection.execute(
+            select(admissions.admission_id)
+            .where(admissions.admission_method_id == op.target["admission_method_id"], incompatible)
+            .limit(1)
+        ).first():
+            self.error("IMPORT_ADMISSION_METHOD_SCORE_IN_USE", op.entity, "max_score")
+
+    def validate_open_admission_years(self) -> None:
+        years = MODELS["admission_year"].c
+        updated_ids = {
+            op.target["admission_year_id"] for op in self.operations.values() if op.target
+        }
+        windows = []
+        for op in self.operations.values():
+            effective = {
+                **(op.target or {}),
+                **{k: v for k, v in op.values.items() if v is not None},
+            }
+            start, end = effective.get("start_date"), effective.get("end_date")
+            if str(effective.get("status")).upper() == "OPEN" and start and end and start < end:
+                windows.append((op, start, end))
+        if not windows:
+            return
+        existing = [
+            (start, end)
+            for year_id, start, end in self.connection.execute(
+                select(years.admission_year_id, years.start_date, years.end_date).where(
+                    func.upper(years.status) == "OPEN"
+                )
+            )
+            if year_id not in updated_ids
+        ]
+        for op, start, end in windows:
+            if any(
+                start <= other_end and other_start <= end for other_start, other_end in existing
+            ) or any(
+                op is not other and start <= other_end and other_start <= end
+                for other, other_start, other_end in windows
+            ):
+                self.origin = op.origins[0]
+                self.error("IMPORT_ADMISSION_YEARS_OVERLAP", op.entity, "year_label")
+
     def validate(self) -> None:
         unique_values: dict[str, Operation] = {}
         for op in self.operations.values():
             self.origin = op.origins[0]
             table = MODELS[op.entity]
+            if self.options.import_type in ACADEMIC_RECORD_IMPORTS:
+                self.validate_academic_row(op)
+            if self.options.import_type == "hr_qualification_catalog":
+                self.validate_qualification_catalog(op)
+            if self.options.import_type == "admissions_method_catalog":
+                self.validate_admission_method(op)
             if op.entity == "admission":
                 try:
                     self._validate_admission(op)
@@ -638,9 +903,9 @@ class Planner:
                         getattr(column.type, "scale", 0),
                         getattr(column.type, "precision", 0),
                     )
-                    if value != value.quantize(Decimal(1).scaleb(-scale)) or abs(value) >= Decimal(
-                        10
-                    ) ** (precision - scale):
+                    if value.copy_abs() >= Decimal(10) ** (
+                        precision - scale
+                    ) or value != value.quantize(Decimal(1).scaleb(-scale)):
                         self.error("IMPORT_DECIMAL_OUT_OF_RANGE", op.entity, name)
             for constraint in table.constraints:
                 if not isinstance(constraint, UniqueConstraint):
@@ -682,20 +947,25 @@ class Planner:
                 self.error(
                     "IMPORT_STATUS_TRANSITION_POLICY_REQUIRED", op.entity, "admission_status"
                 )
-            if (
-                op.workflow == "admissions_registration"
-                and op.target is None
-                and op.values.get("admission_status") not in {None, "APPLIED"}
-            ):
-                self.error("IMPORT_RESULT_POLICY_REQUIRED", op.entity, "admission_status")
+            if op.workflow == "admissions_registration" and op.target is None:
+                if op.values.get("admission_status") not in {None, "APPLIED"}:
+                    self.error("IMPORT_RESULT_POLICY_REQUIRED", op.entity, "admission_status")
+                if op.values.get("admission_method_id") in self.inactive_admission_methods:
+                    self.error("IMPORT_ADMISSION_METHOD_INACTIVE", op.entity, "method_code")
             for n in ("preference_rank", "semester_no"):
                 if op.values.get(n) is not None and op.values[n] < 1:
                     self.error("IMPORT_POSITIVE_INTEGER_REQUIRED", op.entity, n)
             for start, end in (("start_date", "end_date"), ("effective_from", "effective_to")):
                 left = op.values.get(start) or (op.target or {}).get(start)
                 right = op.values.get(end) or (op.target or {}).get(end)
-                if left and right and left > right:
+                if (
+                    left
+                    and right
+                    and (left > right or (op.entity == "admission_year" and left == right))
+                ):
                     self.error("IMPORT_DATE_RANGE_INVALID", op.entity, end)
+        if self.options.import_type == "admissions_year_catalog":
+            self.validate_open_admission_years()
         if self.errors:
             raise ImportBlockedError(self.errors)
 
@@ -892,9 +1162,6 @@ def plan_import_records(
                 options.model_copy(update={"date_format": "%Y-%m-%d"}),
                 encoded["locator"],
             )
-            for n in normalized:
-                if (n == "status" or n.endswith("_status")) and isinstance(normalized[n], str):
-                    normalized[n] = normalized[n].upper()
             rows.append((encoded["locator"], normalized))
         except ImportValidationError as exc:
             errors.extend(exc.issues)

@@ -92,7 +92,7 @@ class ExcelReader:
 
             if any(cell.data_type in {"f", "e"} for cell in header_values):
                 raise ValueError("EXCEL_UNSUPPORTED_HEADER_CELL")
-            columns = _normalize_columns(tuple(cell.value for cell in header_values))
+            columns = excel_column_names(tuple(cell.value for cell in header_values))
 
             if not columns or any(not col for col in columns):
                 raise ValueError("Header chứa tên cột trống")
@@ -163,7 +163,7 @@ def _required_int(config: dict[str, Any], key: str, *, minimum: int) -> int:
     return value
 
 
-def _normalize_columns(values: tuple[Any, ...]) -> list[str]:
+def excel_column_names(values: tuple[Any, ...]) -> list[str]:
     """Chuyển dòng header trong Excel thành danh sách tên cột sạch."""
 
     columns = [str(value).strip() if value is not None else "" for value in values]
