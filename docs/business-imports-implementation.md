@@ -1,7 +1,7 @@
 # Nhập file liên quan nhiều bảng — triển khai backend
 
 Đối chiếu phần Giai đoạn 1 trong [đặc tả nghiệp vụ](https://docs.google.com/document/d/1rIOm43Twpna1N2HQKMFeeLPhGFC8IoG65_d-lVrAf8E/edit?tab=t.mcsb7dd1puik).
-Chỉ thay đổi BE. Frontend hiện có vẫn gửi được file qua API upload cũ.
+Form Staff đọc danh mục từ API và gửi nghiệp vụ đã chọn cùng tệp.
 
 ## 1. Quy tắc đã xác nhận
 
@@ -23,8 +23,16 @@ Chỉ thay đổi BE. Frontend hiện có vẫn gửi được file qua API uplo
 | hr_employee | employee, lecturer | employee hiện có | employee_code; lecturer.employee_id |
 | hr_assignment | assignment | employee, department, position | nguồn + assignment_code ổn định |
 | hr_qualification | employee_qualification | employee, qualification | employee_id + qualification_id |
+| hr_position_catalog | position | position hiện có | position_code |
+| hr_qualification_catalog | qualification | qualification hiện có, employee_qualification khi đổi loại | qualification_name |
 | admissions_registration | applicant, admission | program, admission_year, admission_method | nguồn + applicant_code; đăng ký theo tổ hợp 4 FK |
+| admissions_year_catalog | admission_year | admission_year đang mở | year_label |
+| admissions_method_catalog | admission_method | admission khi đổi thang điểm | method_code |
 | academic_curriculum | curriculum, curriculum_course | program, course | program_id + version; curriculum_id + course_id |
+| academic_student | student | program, admission_year | student_code |
+| academic_class | class | course, semester | class_code |
+| academic_enrollment | enrollment | student, class, semester | student_id + class_id |
+| academic_enrollment_grade | enrollment_grade | student, class, enrollment | enrollment_id |
 | admissions_results | admission: điểm/kết quả | Đăng ký và phương thức đã có | Tổ hợp 4 FK + expected_revision |
 | admissions_enrollment | admission: trạng thái/ngày nhập học | Đăng ký ACCEPTED đã có | Tổ hợp 4 FK + expected_revision |
 
@@ -51,8 +59,44 @@ Chỉ các trường trong danh mục của nghiệp vụ mới được nhận 
 | hr_employee | employee_code, full_name, date_of_birth, gender, email, phone, hire_date, employee_status → các cột cùng tên của employee; academic_degree, academic_title, research_field → lecturer; is_lecturer điều khiển tách bản ghi; employee_id DB sinh rồi truyền sang lecturer |
 | hr_assignment | assignment_code → định danh nguồn; employee_code → employee_id; department_code → department_id; position_code → position_id; start_date, end_date, is_primary, assignment_status → assignment; assignment_id DB sinh |
 | hr_qualification | employee_code → employee_id; qualification_name + qualification_type → qualification_id; institution, year_obtained → employee_qualification |
+| hr_position_catalog | position_code, position_name, position_level → position |
+| hr_qualification_catalog | qualification_name, qualification_type → qualification |
 | admissions_registration | applicant_code → định danh nguồn; full_name, national_id, date_of_birth, gender, email, phone, high_school_name, province → applicant; program_code → program_id; year_label → admission_year_id; method_code → admission_method_id; preference_rank, application_date, admission_status → admission; applicant_id/admission_id DB sinh |
+| admissions_year_catalog | year_label, start_date, end_date, status → admission_year |
+| admissions_method_catalog | method_code, method_name, max_score, description, is_active → admission_method |
 | academic_curriculum | program_code → program_id; curriculum_code, curriculum_name, version, effective_from, effective_to, status → curriculum; course_code → course_id; prerequisite_course_code → prerequisite_course_id; semester_no, course_type, is_required → curriculum_course; curriculum_id/link ID DB sinh |
+| academic_student | program_code → program_id; year_label → admission_year_id; student_code, full_name, date_of_birth, gender, student_status → student |
+| academic_class | course_code → course_id; semester_code → semester_id; class_code, max_capacity, room, class_status → class |
+| academic_enrollment | student_code → student_id; class_code → class_id; enrollment_date, enrollment_status → enrollment |
+| academic_enrollment_grade | student_code + class_code → enrollment_id của đăng ký đã có; midterm_score, final_score, total_score, grade_value, letter_grade, registration_date → enrollment_grade |
+
+### Thứ tự nạp danh mục Nhân sự và Tuyển sinh
+
+| Công việc trên Staff | Cột cần có khi thêm mới | Cột tùy chọn |
+| --- | --- | --- |
+| Danh mục chức vụ | Mã chức vụ, Tên chức vụ | Cấp chức vụ |
+| Danh mục văn bằng, chứng chỉ | Tên văn bằng | Loại văn bằng |
+| Danh mục năm tuyển sinh | Năm tuyển sinh, Ngày bắt đầu, Ngày kết thúc, Trạng thái năm tuyển sinh | |
+| Danh mục phương thức xét tuyển | Mã phương thức, Tên phương thức, Điểm tối đa | Mô tả, Đang áp dụng |
+
+- **Nhân sự.** Chờ danh mục chức vụ và văn bằng ghi DB trước khi nạp **Phân công công tác** hoặc **Bằng cấp nhân viên** tham chiếu đến các mục đó. Dùng đúng tên văn bằng đã lưu. Nếu tệp bằng cấp có cột loại, điền cùng loại như danh mục. Tên khớp nhiều bản ghi hoặc yêu cầu đổi loại văn bằng đã gắn với nhân viên sẽ được báo tại dòng và cột nguồn.
+- **Tuyển sinh.** Chờ năm và phương thức ghi DB trước khi nạp hồ sơ đăng ký có các mã tương ứng. Ngày kết thúc phải sau ngày bắt đầu. Các năm ở trạng thái `OPEN` phải có khoảng thời gian riêng. Đóng đợt cũ và mở đợt mới có thể thực hiện trong cùng tệp. Điểm tối đa bằng `0` dành cho phương thức miễn điểm. Tệp sửa thang điểm bị chặn nếu thay đổi xung đột với kết quả đã lưu. Tắt cờ Đang áp dụng sẽ dừng nhận đăng ký mới bằng phương thức đó. Các hồ sơ đã đăng ký tiếp tục được cập nhật kết quả theo quy trình hiện có.
+
+Chọn nghiệp vụ danh mục trong form Staff. Khi cập nhật, dùng lại khóa đã có và điền
+các cột cần sửa. Hệ thống giữ giá trị cũ của các ô trống và giữ mã định danh DB để
+các hồ sơ đang tham chiếu tiếp tục hoạt động.
+
+### Thứ tự nạp cho phòng Đào tạo
+
+Chuẩn bị mã chương trình, năm tuyển sinh, mã học phần và mã học kỳ trong các danh mục.
+Chọn bộ dữ liệu Đào tạo và nghiệp vụ tương ứng trước khi nạp từng tệp.
+
+1. **Hồ sơ sinh viên** có `student_code`, `full_name`, `program_code`, `year_label`, `student_status` khi tạo mới.
+2. **Danh sách lớp học phần** có `class_code`, `course_code`, `semester_code`, `class_status` khi tạo mới.
+3. **Danh sách đăng ký học phần** nạp sau khi hai danh sách trên đã ghi DB. Tệp tạo mới cần `student_code`, `class_code`, `enrollment_date`, `enrollment_status`.
+4. **Bảng điểm học phần** nạp sau khi đăng ký đã ghi DB. Mỗi dòng cần `student_code`, `class_code` và ít nhất một giá trị điểm. Điểm giữa kỳ, cuối kỳ và tổng kết nằm trong khoảng 0–10. Điểm hệ 4 nằm trong khoảng 0–4. Cung cấp kết quả quy đổi sẵn trong tệp nếu cần lưu. `registration_date` là tùy chọn và phải trùng ngày của lượt đăng ký nếu được điền.
+
+Trạng thái đăng ký học phần nhận `Registered`, `Withdrawn`, `Completed` và các tên tiếng Việt trong danh mục cột. Các lựa chọn này thuộc luồng Đào tạo. Hồ sơ sinh viên tạo từ tệp Đào tạo để trống liên kết thí sinh và hồ sơ tuyển sinh.
 
 Trường DB bắt buộc được kiểm tra theo schema và theo bản ghi sắp tạo. Ví dụ tạo
 employee cần employee_code, full_name, employee_status; tạo admission cần đủ bốn FK,
@@ -87,7 +131,7 @@ quy tắc biến đổi riêng; không tự đoán hoặc tự ghép trong luồ
    điện thoại, ngày sinh, CCCD không đưa vào bảng phân tích của các contract mới.
    Mã nguồn vẫn được giữ để tra cứu và đếm thực thể theo phạm vi file/nguồn.
 6. Gold tổng hợp và Gold chi tiết được ghi/đọc lại bằng đúng version và checksum.
-7. Hồ sơ nhân viên, hồ sơ đăng ký tuyển sinh và khung chương trình có bước lập kế
+7. Hồ sơ nhân viên, hồ sơ đăng ký tuyển sinh, các nghiệp vụ Đào tạo và bốn danh mục của Nhân sự/Tuyển sinh có bước lập kế
    hoạch trong transaction chỉ đọc. Worker gom dòng theo khóa, tra mã danh mục theo
    lô, kiểm tra bản ghi đích và lưu bản xem trước cùng Gold sync job. Kế hoạch đầy đủ
    lưu trong MinIO, gắn phiên bản/checksum với artifact nguồn đã đọc. Kế hoạch chứa
@@ -138,8 +182,8 @@ Giữ `POST /api/v1/ingestion/uploads` với các trường multipart hiện có
 `import_options` là chuỗi JSON chứa options bên trên. `date_format` nhận `%Y-%m-%d`,
 `%d/%m/%Y` hoặc `%m/%d/%Y`. Mặc định ISO. blank_update mặc định và chỉ nhận preserve.
 
-`context` là các mã dùng chung cho lượt nhập. Tuyển sinh chấp nhận `program_code`,
-`year_label`, `method_code`. Đào tạo chấp nhận `program_code`, `version`. Giá trị
+`context` là các mã dùng chung cho lượt nhập. Hồ sơ đăng ký tuyển sinh chấp nhận `program_code`,
+`year_label`, `method_code`. Khung chương trình chấp nhận `program_code`, `version`. Giá trị
 ngữ cảnh được dùng khi file thiếu cột hoặc ô để trống. Nếu file có giá trị khác,
 bước chuẩn bị báo `IMPORT_CONTEXT_MISMATCH` tại dòng và cột nguồn. Upload ghim
 phiên bản, fingerprint quy tắc và cấu hình ngữ cảnh vào job.
@@ -149,6 +193,9 @@ nghiệp vụ và tên tương đương đã khai báo. Ví dụ file hr_employe
 và is_lecturer dưới một tên được chấp nhận. File tên lạ cần options tường minh.
 Dataset đang có profile tự chạy tùy chỉnh phải dùng profile tương thích với
 business_import; cấu hình xung đột bị chặn, không âm thầm bỏ yêu cầu nghiệp vụ.
+Chọn tường minh nghiệp vụ khi nạp hồ sơ sinh viên, lớp học phần, đăng ký học phần,
+bảng điểm hoặc các danh mục Nhân sự và Tuyển sinh. Đăng ký học phần và bảng điểm
+cùng định danh theo mã sinh viên và mã lớp.
 
 ### Theo dõi ghi DB
 
@@ -189,7 +236,7 @@ hoặc sau khi bổ sung danh mục, quản trị dùng endpoint retry database-
 
 ## 6. Gold và lịch sử
 
-Các contract mới có chiều thống kê theo mã chương trình/năm/phương thức, trạng thái
+Các contract được liệt kê trong công thức Gold có chiều thống kê theo mã chương trình/năm/phương thức, trạng thái
 hoặc học vị tương ứng. Với tuyển sinh, distinct_applicant_count phân biệt số thí
 sinh và registration_count phân biệt số đăng ký. Với khung, có curriculum_count
 và curriculum_course_count. Các chỉ số này đếm trong một scope/snapshot nguồn,

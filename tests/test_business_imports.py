@@ -238,6 +238,84 @@ def test_dates_and_codes_are_not_guessed():
     assert row["date_of_birth"] == date(2026, 2, 1)
 
 
+def test_academic_registration_status_does_not_use_admissions_dictionary():
+    contract = CONTRACTS["academic_enrollment"]
+    options = ImportOptions(import_type=contract.name)
+    row = {
+        "student_code": "2026010001",
+        "class_code": "CS001-2026-1-01",
+        "enrollment_status": "Đã rút",
+    }
+    assert detect_contract("academic", list(row)) is None
+    mapping = resolve_layout(contract, list(row), options)
+    assert (
+        normalize_row(contract, row, mapping, options, "row:2")["enrollment_status"] == "Withdrawn"
+    )
+    with pytest.raises(ImportValidationError, match="IMPORT_VALUE_INVALID"):
+        normalize_row(contract, {**row, "enrollment_status": "PENDING"}, mapping, options, "row:2")
+    admissions = CONTRACTS["admissions_enrollment"]
+    status = next(f for f in admissions.fields if f.name == "enrollment_status")
+    assert status.accepted_values["đã rút"] == "WITHDRAWN"
+
+
+def test_qualification_catalog_blocks_existing_duplicate_names_and_rolls_back_file(engine):
+    with engine.begin() as conn:
+        conn.execute(
+            insert(MODELS["qualification"]),
+            [
+                {
+                    "qualification_id": 1,
+                    "qualification_name": "CNTT",
+                    "qualification_type": "Degree",
+                },
+                {
+                    "qualification_id": 2,
+                    "qualification_name": "CNTT",
+                    "qualification_type": "Certificate",
+                },
+            ],
+        )
+    rows = [
+        {"qualification_name": "Cử nhân", "qualification_type": "Degree"},
+        {"qualification_name": "CNTT", "qualification_type": "Certificate"},
+    ]
+    with (
+        pytest.raises(ImportBlockedError, match="IMPORT_QUALIFICATION_NAME_AMBIGUOUS") as error,
+        engine.begin() as conn,
+    ):
+        sync_records(conn, payload("hr_qualification_catalog", rows), "catalog-job")
+    assert error.value.report()["issues"][0]["column"] == "qualification_name"
+    with engine.connect() as conn:
+        assert count(conn, "qualification") == 2
+
+
+def test_admission_year_catalog_can_close_and_open_overlapping_years_in_one_file(engine):
+    with engine.begin() as conn:
+        masters(conn)
+        conn.execute(update(MODELS["admission_year"]).values(status="Open"))
+    rows = [
+        {
+            "year_label": "2026-2",
+            "start_date": "2026-07-01",
+            "end_date": "2026-10-01",
+            "status": "Đang mở",
+        },
+        {"year_label": "2026", "status": "Đã đóng"},
+    ]
+    with engine.begin() as conn:
+        result = sync_records(conn, payload("admissions_year_catalog", rows), "catalog-job")
+        assert result.report["tables"]["admission_year"] == {
+            "inserted": 1,
+            "updated": 1,
+            "unchanged": 0,
+        }
+        years = MODELS["admission_year"]
+        assert dict(conn.execute(select(years.c.year_label, years.c.status)).all()) == {
+            "2026": "CLOSED",
+            "2026-2": "OPEN",
+        }
+
+
 def test_employee_lecturer_reimport_update_blank_and_false_preserve(engine):
     with engine.begin() as conn:
         result = sync_records(conn, payload("hr_employee", [employee(phone="0123")]), "job1")

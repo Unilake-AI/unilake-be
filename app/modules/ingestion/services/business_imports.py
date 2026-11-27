@@ -16,8 +16,9 @@ async def import_report(job_id: int, db: Any, user: dict[str, Any]) -> dict[str,
             await db.execute(
                 text("""
         SELECT a.status AS silver_status,a.error_code AS silver_error,a.result AS silver_result,
-               g.status AS gold_status,g.job_id AS gold_job_id,
-               q.status AS database_status,q.error_report,q.result AS database_result,
+               g.status AS gold_status,g.job_id AS gold_job_id,g.error_code AS gold_error,
+               q.status AS database_status,q.error_code AS database_error,
+               q.error_report,q.result AS database_result,
                q.preparation->'preview' AS preparation
         FROM app.auto_pipeline_job a
         LEFT JOIN app.gold_job g ON g.silver_snapshot_id=a.result->'publication'->>'snapshot_id'

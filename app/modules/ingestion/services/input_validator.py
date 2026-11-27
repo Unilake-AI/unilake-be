@@ -8,7 +8,7 @@ import time
 from itertools import islice
 from typing import TYPE_CHECKING, Any, Literal
 from uuid import uuid4
-from zipfile import BadZipFile
+from zipfile import BadZipFile, ZipFile
 
 import psycopg
 import pyarrow as pa
@@ -17,6 +17,7 @@ from minio.error import S3Error
 from openpyxl import load_workbook
 from psycopg import sql
 
+from app.modules.ingestion.readers.excel_reader import excel_column_names
 from app.modules.ingestion.validation import (
     CSVOptions,
     ErrorCode,
@@ -29,7 +30,9 @@ from app.modules.ingestion.validation import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
     from pathlib import Path
+    from typing import BinaryIO, TextIO
 
     from app.modules.ingestion.readers.contract import ReadRequest
 
@@ -48,6 +51,23 @@ class ValidationBlockedError(Exception):
     def __init__(self, report: ValidationReport) -> None:
         super().__init__("BRONZE_INPUT_VALIDATION_BLOCKED")
         self.report = report
+
+
+def csv_records(
+    stream: TextIO, parser: CSVOptions, check_budget: Callable[[], None]
+) -> Iterator[list[str]]:
+    rows = csv.reader(stream, delimiter=parser.delimiter, quotechar=parser.quote_char, strict=True)
+    for _ in range(parser.skip_rows):
+        if next(rows, None) is None:
+            break
+        check_budget()
+    return rows
+
+
+def check_excel_size(source: Path | BinaryIO, max_expanded_bytes: int) -> None:
+    with ZipFile(source) as archive:
+        if sum(item.file_size for item in archive.infolist()) > max_expanded_bytes:
+            raise InputValidationError("IN-COM-005", "RESOURCE_LIMIT_EXCEEDED")
 
 
 def required_rule_ids(source_type: str) -> tuple[str, ...]:
@@ -239,12 +259,7 @@ class InputValidator:
         # Báo lỗi khi tên cột trùng hoặc thiếu ô; không tự đổi tên hay bổ sung ô còn thiếu.
         # Giữ dấu xuống dòng bên trong ô để đếm đúng số bản ghi.
         with path.open(encoding=parser.encoding, newline="") as stream:
-            reader = csv.reader(
-                stream, delimiter=parser.delimiter, quotechar=parser.quote_char, strict=True
-            )
-            for _ in range(parser.skip_rows):
-                next(reader, None)
-                self.budget()
+            reader = csv_records(stream, parser, self.budget)
             self.pass_rules("IN-CSV-001")
             names = next(reader, []) if parser.has_header else list(parser.positional_columns)
             self.columns(names)
@@ -273,9 +288,7 @@ class InputValidator:
             header = next(iterator, ())
             self.row_number = parser.skip_rows + parser.header_row
             self.excel_cells(header)
-            names = [str(c.value).strip() if c.value is not None else "" for c in header]
-            while names and not names[-1]:
-                names.pop()
+            names = excel_column_names(tuple(cell.value for cell in header))
             self.columns(names)
             self.pass_rules("IN-XLS-004")
             for number, cells in enumerate(iterator, self.row_number + 1):

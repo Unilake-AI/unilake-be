@@ -1,0 +1,4 @@
+Mã NV,Họ Và Tên,Là giảng viên,Trạng thái nhân viên,Học vị,Email,Số điện thoại,Ngày vào làm
+E2E26-NV01,Nguyễn Minh An,Có,ACTIVE,Tiến sĩ,e2e26-nv01@example.test,0012345678,2026-01-05
+E2E26-NV02,Trần Thanh Bình,Không,ACTIVE,,e2e26-nv02@example.test,0098765432,2026-02-09
+E2E26-NV03,Lê Hải Chi,Có,ACTIVE,Thạc sĩ,e2e26-nv03@example.test,0012345003,2026-03-02

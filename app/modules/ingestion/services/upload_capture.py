@@ -9,7 +9,6 @@ from pathlib import Path
 from time import monotonic
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
-from zipfile import ZipFile
 
 from openpyxl import load_workbook
 
@@ -21,6 +20,7 @@ from app.modules.ingestion.services.input_validator import (
     InputValidationError,
     InputValidator,
     ValidationBlockedError,
+    check_excel_size,
 )
 from app.modules.ingestion.validation import ValidationPolicy
 from app.providers import upload_reader_client
@@ -178,11 +178,9 @@ class UploadCapture(BronzeCapture):
                 response.release_conn()
             if request.source_type == "EXCEL":
                 # Chặn file Excel giải nén quá lớn trước khi mở bảng tính.
-                with ZipFile(path) as archive:
-                    if sum(item.file_size for item in archive.infolist()) > min(
-                        evidence["max_expanded_bytes"], settings.upload_max_expanded_bytes
-                    ):
-                        raise InputValidationError("IN-COM-005", "RESOURCE_LIMIT_EXCEEDED")
+                check_excel_size(
+                    path, min(evidence["max_expanded_bytes"], settings.upload_max_expanded_bytes)
+                )
                 if not options.get("sheet_name"):
                     workbook = load_workbook(path, read_only=True, data_only=False)
                     try:

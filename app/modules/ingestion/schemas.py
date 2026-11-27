@@ -44,6 +44,13 @@ class IngestionJobRead(BaseModel):
     # Job cũ chỉ xuất hiện trước khi migration hoàn tất mới có thể chưa mang số lần chạy.
     attempt_number: int | None = None
     quality_issue_id: str | None = None
+    import_type: str | None = None
+
+
+class UploadFileLayout(BaseModel):
+    columns: list[str] = Field(default_factory=list)
+    sheet_names: list[str] = Field(default_factory=list)
+    sheet_name: str | None = None
 
 
 class ImportActionCounts(BaseModel):
