@@ -285,8 +285,10 @@ def test_manager_preview_apply_history_and_concurrent_revision_guard(workflow):
         )
 
 
-@pytest.mark.parametrize("role", ["ADMISSIONS_STAFF", "HR_MANAGER", "ACADEMIC_STAFF", "DATA_ADMIN"])
-def test_only_admissions_manager_or_admin_can_prepare_corrections(workflow, role):
+@pytest.mark.parametrize(
+    "role", ["ADMISSIONS_STAFF", "HR_MANAGER", "ACADEMIC_STAFF", "DATA_ADMIN", "ADMIN"]
+)
+def test_only_admissions_manager_can_prepare_corrections(workflow, role):
     system = workflow
     current = register(system)[0]
     system["as_role"](role)

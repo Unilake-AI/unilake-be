@@ -232,7 +232,7 @@ async def test_create_data_source_rejects_missing_source_system() -> None:
     _repo(service).create_data_source = create_mock
 
     with pytest.raises(AppException) as exc_info:
-        await service.create_data_source({"roles": ["ADMIN"], "sub": "7"}, _create_request())
+        await service.create_data_source({"roles": ["DATA_ADMIN"], "sub": "7"}, _create_request())
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.code == "SOURCE_SYSTEM_NOT_FOUND"
@@ -250,7 +250,7 @@ async def test_create_data_source_rejects_duplicate_source_name() -> None:
     _repo(service).create_data_source = create_mock
 
     with pytest.raises(AppException) as exc_info:
-        await service.create_data_source({"roles": ["ADMIN"], "sub": "7"}, _create_request())
+        await service.create_data_source({"roles": ["DATA_ADMIN"], "sub": "7"}, _create_request())
 
     assert exc_info.value.status_code == 409
     assert exc_info.value.code == "SOURCE_NAME_EXIST"
@@ -272,7 +272,7 @@ async def test_create_data_source_rejects_invalid_configuration() -> None:
     _repo(service).create_data_source = create_mock
 
     with pytest.raises(AppException) as exc_info:
-        await service.create_data_source({"roles": ["ADMIN"], "sub": "7"}, _create_request())
+        await service.create_data_source({"roles": ["DATA_ADMIN"], "sub": "7"}, _create_request())
 
     assert exc_info.value.status_code == 422
     assert exc_info.value.code == "CONFIGURATION_INVALID"
@@ -302,7 +302,7 @@ async def test_update_data_source_merges_current_values_and_updates_partial_payl
     _repo(service).get_with_source_system = detail_mock
 
     response = await service.update_data_source(
-        {"roles": ["ADMIN"], "sub": "7"},
+        {"roles": ["DATA_ADMIN"], "sub": "7"},
         10,
         _update_request(),
     )
@@ -333,7 +333,9 @@ async def test_update_data_source_rejects_missing_record() -> None:
     _repo(service).update_data_source = update_mock
 
     with pytest.raises(AppException) as exc_info:
-        await service.update_data_source({"roles": ["ADMIN"], "sub": "7"}, 999, _update_request())
+        await service.update_data_source(
+            {"roles": ["DATA_ADMIN"], "sub": "7"}, 999, _update_request()
+        )
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.code == "DATA_SOURCE_NOT_FOUND"
@@ -364,7 +366,7 @@ async def test_update_data_source_validates_effective_source_type_and_configurat
     _repo(service).update_data_source = update_mock
     _repo(service).get_with_source_system = detail_mock
 
-    await service.update_data_source({"roles": ["ADMIN"], "sub": "7"}, 10, req)
+    await service.update_data_source({"roles": ["DATA_ADMIN"], "sub": "7"}, 10, req)
 
     validate_mock.assert_called_once_with(
         "EXCEL",
@@ -412,7 +414,7 @@ async def test_update_data_source_empty_payload_returns_current_public_payload()
     _repo(service).check_source_name = duplicate_mock
 
     response = await service.update_data_source(
-        {"roles": ["ADMIN"], "sub": "7"},
+        {"roles": ["DATA_ADMIN"], "sub": "7"},
         10,
         DataSourceUpdate(),
     )
@@ -442,7 +444,7 @@ async def test_update_data_source_rejects_duplicate_effective_name() -> None:
 
     with pytest.raises(AppException) as exc_info:
         await service.update_data_source(
-            {"roles": ["ADMIN"], "sub": "7"},
+            {"roles": ["DATA_ADMIN"], "sub": "7"},
             10,
             DataSourceUpdate(source_name="Existing Source Name"),
         )
@@ -474,7 +476,7 @@ async def test_update_data_source_rejects_unsupported_source_type() -> None:
 
     with pytest.raises(AppException) as exc_info:
         await service.update_data_source(
-            {"roles": ["ADMIN"], "sub": "7"},
+            {"roles": ["DATA_ADMIN"], "sub": "7"},
             10,
             DataSourceUpdate(source_type="KAFKA"),
         )
@@ -503,7 +505,7 @@ async def test_update_data_source_rejects_invalid_effective_configuration() -> N
 
     with pytest.raises(AppException) as exc_info:
         await service.update_data_source(
-            {"roles": ["ADMIN"], "sub": "7"},
+            {"roles": ["DATA_ADMIN"], "sub": "7"},
             10,
             DataSourceUpdate(source_type="EXCEL", configuration={"sheet_name": "Sheet1"}),
         )

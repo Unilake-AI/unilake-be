@@ -9,10 +9,8 @@ from uuid import UUID
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import AppException
 from app.modules.manager.schemas import (
     AnalyticsFilters,
-    GoldMetric,
     ManagerIssueFilters,
     MetricPage,
     ReportFilters,
@@ -27,7 +25,7 @@ from app.modules.staff.schemas import (
     IssueStats,
 )
 from app.modules.users.models import Department
-from app.repositories import quality_issue_repo
+from app.repositories import quality_issue_repo, report_read_repo
 
 if TYPE_CHECKING:
     from app.modules.manager.access import ManagerAccess
@@ -69,44 +67,7 @@ def dataset_scope(access: ManagerAccess, filters: ReportFilters) -> tuple[str, d
 
 
 async def metrics(db: AsyncSession, access: ManagerAccess, filters: AnalyticsFilters) -> MetricPage:
-    clause, params = dataset_scope(access, filters)
-    if filters.dimension_value is not None and not filters.metric.startswith("record_count_by_"):
-        raise AppException(
-            "Bộ lọc nhóm cần phép thống kê theo chiều tương ứng",
-            code="INVALID_ANALYTICS_FILTER",
-            status_code=422,
-        )
-    params.update(
-        entity=filters.entity,
-        metric=filters.metric,
-        limit=filters.limit,
-        offset=filters.offset,
-        dimension=filters.metric.removeprefix("record_count_by_"),
-        dimension_value=filters.dimension_value,
-    )
-    query = (
-        " FROM gold.current_metrics m JOIN app.dataset d ON d.dataset_id=m.dataset_id AND d.domain=m.domain WHERE "
-        + clause
-        + " AND (CAST(:entity AS text) IS NULL OR m.entity=:entity) AND m.metric=:metric"
-        " AND (CAST(:dimension_value AS text) IS NULL OR m.dimensions->>:dimension=:dimension_value)"
-    )
-    total = (await db.execute(text("SELECT count(*)" + query), params)).scalar_one()
-    rows = (
-        await db.execute(
-            text(
-                "SELECT m.*,d.dataset_name"
-                + query
-                + " ORDER BY m.scope,m.entity,m.metric,m.dimensions LIMIT :limit OFFSET :offset"
-            ),
-            params,
-        )
-    ).mappings()
-    return MetricPage(
-        items=[GoldMetric.model_validate(row) for row in rows],
-        total=total,
-        limit=filters.limit,
-        offset=filters.offset,
-    )
+    return await report_read_repo.metrics(db, dataset_scope(access, filters), filters)
 
 
 async def dataset_count(db: AsyncSession, access: ManagerAccess, filters: ReportFilters) -> int:

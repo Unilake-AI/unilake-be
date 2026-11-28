@@ -3,13 +3,30 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.staff.contracts import schemas as staff_schemas
+from app.shared.reporting import (
+    AnalyticsFilters,
+    Domain,
+    GoldMetric,
+    MetricPage,
+    ReportFilters,
+)
 
-Domain = Literal["hr", "academic", "admissions"]
+__all__ = [
+    "AnalyticsFilters",
+    "Domain",
+    "GoldMetric",
+    "ManagerContext",
+    "ManagerIssueFilters",
+    "ManagerOverview",
+    "MetricPage",
+    "ReportFilters",
+    "SourceStats",
+]
 
 
 class ManagerContext(BaseModel):
@@ -24,48 +41,10 @@ class ManagerContext(BaseModel):
     note: str
 
 
-class ReportFilters(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    domain: Domain | None = None
-    dataset_id: int | None = Field(default=None, gt=0)
-    limit: int = Field(default=20, ge=1, le=100)
-    offset: int = Field(default=0, ge=0)
-
-
-class AnalyticsFilters(ReportFilters):
-    entity: str | None = Field(default=None, min_length=1, max_length=150)
-    metric: str = Field(default="record_count", min_length=1, max_length=100)
-    dimension_value: str | None = Field(default=None, max_length=150)
-
-
 class ManagerIssueFilters(staff_schemas.IssueFilters):
     model_config = ConfigDict(extra="forbid")
     domain: Domain | None = None
     dataset_id: int | None = Field(default=None, gt=0)
-
-
-class GoldMetric(BaseModel):
-    dataset_id: int
-    dataset_name: str
-    domain: str
-    scope: str
-    gold_snapshot_id: str
-    silver_snapshot_id: str
-    recipe_version: str
-    finished_at: datetime
-    entity: str
-    metric: str
-    dimensions: dict[str, Any]
-    value: int
-    unit: Literal["records"] = "records"
-
-
-class MetricPage(BaseModel):
-    items: list[GoldMetric]
-    total: int
-    limit: int
-    offset: int
 
 
 class SourceStats(BaseModel):

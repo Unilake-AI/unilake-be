@@ -61,6 +61,7 @@ COPY --from=builder /opt/venv /opt/venv
 
 # Sao chép mã nguồn ứng dụng, migration và cấu hình
 COPY app ./app
+COPY infra/postgres/seed/05-department-datasets.sql ./infra/postgres/seed/
 COPY config ./config
 COPY docs/data-schema ./docs/data-schema
 COPY docs/standardization/silver-schemas ./docs/standardization/silver-schemas

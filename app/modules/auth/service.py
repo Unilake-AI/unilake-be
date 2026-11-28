@@ -189,10 +189,14 @@ class AuthService:
         app_user_id: int,
     ) -> LoginSession | None:
         # Tìm đúng phiên ACTIVE bằng user id và hash của refresh token.
-        query = select(LoginSession).where(
-            LoginSession.app_user_id == app_user_id,
-            LoginSession.refresh_token_hash == self._hash_refresh_token(refresh_token),
-            LoginSession.session_status == "ACTIVE",
+        query = (
+            select(LoginSession)
+            .where(
+                LoginSession.app_user_id == app_user_id,
+                LoginSession.refresh_token_hash == self._hash_refresh_token(refresh_token),
+                LoginSession.session_status == "ACTIVE",
+            )
+            .with_for_update()
         )
         result = await self.db.execute(query)
         return result.scalar_one_or_none()

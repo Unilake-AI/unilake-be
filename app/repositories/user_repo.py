@@ -12,6 +12,8 @@ class UserRepository(BaseRepository[User]):
         super().__init__(User, db)
 
     async def get_by_username(self, username: str) -> User | None:
-        query = select(self.model).where(self.model.username == username)
+        # Hold a shared lock until the login session is written. Account locking can
+        # then revoke every session created before the account change commits.
+        query = select(self.model).where(self.model.username == username).with_for_update(read=True)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()

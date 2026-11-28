@@ -236,7 +236,7 @@ def test_only_administrators_can_trigger_gold(role):
         ("HR_STAFF", ["hr"]),
         ("ACADEMIC_MANAGER", ["academic"]),
         ("ADMISSIONS_STAFF", ["admissions"]),
-        ("ADMIN", ["academic", "admissions", "hr"]),
+        ("ADMIN", []),
     ],
 )
 def test_gold_read_scope_comes_from_authenticated_roles(role, domains):

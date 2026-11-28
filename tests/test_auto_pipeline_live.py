@@ -167,7 +167,7 @@ def system(monkeypatch):
         app.add_exception_handler(AppException, app_exception_handler)
         app.include_router(ingestion_router)
         app.include_router(auto_router)
-        user = {"sub": "live-admin", "roles": ["ADMIN"]}
+        user = {"sub": "live-admin", "roles": ["DATA_ADMIN"]}
         app.dependency_overrides[get_current_user] = lambda: user
         app.dependency_overrides[management_engine] = lambda: engine
 

@@ -23,7 +23,7 @@ from app.repositories.department_access_repo import active_departments
 router = APIRouter(tags=["datasets"])
 DB = Annotated[AsyncSession, Depends(get_db)]
 User = Annotated[dict[str, Any], Depends(get_current_user)]
-Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.ADMIN, RoleCode.DATA_ADMIN))]
+Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.DATA_ADMIN))]
 
 
 class DatasetCreate(BaseModel):

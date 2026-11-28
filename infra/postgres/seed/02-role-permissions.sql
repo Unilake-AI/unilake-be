@@ -20,8 +20,10 @@ WHERE role_id IN (SELECT role_id FROM app.role WHERE role_code IN ('ADMIN', 'DAT
 INSERT INTO app.role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id
 FROM app.role r
-CROSS JOIN app.permission p
-WHERE r.role_code IN ('ADMIN')
+JOIN app.permission p ON p.permission_code IN (
+    'auth.login', 'user.read', 'user.manage', 'system.config', 'system.log.read'
+)
+WHERE r.role_code = 'ADMIN'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 INSERT INTO app.role_permission (role_id, permission_id)

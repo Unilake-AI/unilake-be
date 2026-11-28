@@ -28,7 +28,7 @@ Tiền tố `/api/v1`; tất cả yêu cầu Bearer token.
 | `POST /pipeline/profiles/{id}/approve` | Duyệt revision/fingerprint chính xác với grant hợp lệ và căn cứ nghiệp vụ |
 | `POST /pipeline/profiles/{id}/revisions/{revision}/revoke` | Thu hồi quyết định theo quyền governance hiện có |
 
-API dùng chung cho DATA_ADMIN/ADMIN/STAFF được giữ nguyên. Các API cấp/thu hồi grant tiếp tục chỉ dành cho ADMIN. Phê duyệt cấu hình không đồng nghĩa phê duyệt từng file upload hoặc từng snapshot.
+API dùng chung cho DATA_ADMIN/STAFF được giữ nguyên. Các API cấp/thu hồi grant tiếp tục chỉ dành cho ADMIN. Phê duyệt cấu hình không đồng nghĩa phê duyệt từng file upload hoặc từng snapshot.
 
 ## API và code đã bỏ
 

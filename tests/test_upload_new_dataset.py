@@ -215,7 +215,9 @@ def test_roles_without_upload_rights_cannot_create_dataset(environment, role):
     assert not environment.store.writes
 
 
-@pytest.mark.parametrize("roles", [["ADMIN"], ["DATA_ADMIN"], ["HR_STAFF", "ACADEMIC_STAFF"]])
+@pytest.mark.parametrize(
+    "roles", [["ADMIN", "DATA_ADMIN"], ["DATA_ADMIN"], ["HR_STAFF", "ACADEMIC_STAFF"]]
+)
 def test_accounts_with_multiple_choices_must_choose_an_allowed_domain(environment, roles):
     environment.user["roles"] = roles
     missing = upload(environment, dataset_name="Nhân viên")

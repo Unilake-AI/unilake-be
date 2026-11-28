@@ -134,7 +134,9 @@ async def admission_history(
 
 
 @router.post(
-    "/corrections", status_code=201, summary="Manager/Admin tạo và xem trước yêu cầu đính chính"
+    "/corrections",
+    status_code=201,
+    summary="Trưởng phòng Tuyển sinh tạo và xem trước yêu cầu đính chính",
 )
 async def create_correction(request: CorrectionCreate, db: DB, user: User) -> Any:
     return await _run(db, lambda conn: repo.create_correction(conn, user, request))
@@ -147,7 +149,7 @@ async def correction(correction_id: UUID, db: DB, user: User) -> Any:
 
 @router.post(
     "/corrections/{correction_id}/apply",
-    summary="Manager/Admin xác nhận áp dụng yêu cầu đính chính",
+    summary="Trưởng phòng Tuyển sinh xác nhận áp dụng yêu cầu đính chính",
 )
 async def apply_correction(correction_id: UUID, db: DB, user: User) -> Any:
     return await _run(db, lambda conn: repo.apply_correction(conn, user, str(correction_id)))

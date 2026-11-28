@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Kiến trúc hệ thống UniLake BE",
+    "quality_profile": "showcase",
+    "viewBox": [1390, 620],
+    "legend": {
+      "entries": {
+        "frontend": {"label": "Ứng dụng web"},
+        "backend": {"label": "Dịch vụ xử lý"},
+        "cloud": {"label": "Lưu trữ đối tượng"},
+        "database": {"label": "Cơ sở dữ liệu"},
+        "external": {"label": "Nguồn bên ngoài"}
+      }
+    }
+  },
+  "components": [
+    {"id": "web", "type": "frontend", "label": "Ứng dụng web", "sublabel": "Staff, Data Admin, Manager, Viewer", "pos": [80, 64], "size": [270, 80]},
+    {"id": "api", "type": "backend", "label": "FastAPI", "sublabel": "Quyền, nghiệp vụ và truy vấn", "pos": [560, 64], "size": [270, 80]},
+    {"id": "postgres", "type": "database", "label": "PostgreSQL", "sublabel": "Hàng đợi, nghiệp vụ và báo cáo", "pos": [1040, 64], "size": [270, 80]},
+    {"id": "ingestion", "type": "backend", "label": "Ingestion worker", "sublabel": "Xác thực đầu vào và ghi Bronze", "pos": [80, 270], "size": [270, 80]},
+    {"id": "silver", "type": "backend", "label": "Silver worker", "sublabel": "DuckDB, chuẩn hóa và cách ly", "pos": [560, 270], "size": [270, 80]},
+    {"id": "gold", "type": "backend", "label": "Gold worker", "sublabel": "Tổng hợp và đồng bộ nghiệp vụ", "pos": [1040, 270], "size": [270, 80]},
+    {"id": "source", "type": "external", "label": "Nguồn dữ liệu", "sublabel": "Tệp CSV/Excel hoặc PostgreSQL", "pos": [80, 476], "size": [270, 80]},
+    {"id": "minio", "type": "cloud", "label": "MinIO", "sublabel": "Bronze, Silver, Gold và bằng chứng", "pos": [560, 476], "size": [270, 80]}
+  ],
+  "connections": [
+    {"from": "web", "to": "api", "label": "REST và JWT", "variant": "emphasis"},
+    {"from": "api", "to": "postgres", "label": "Đọc và ghi qua SQL"},
+    {"from": "api", "to": "ingestion", "label": "Tạo ingestion job", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v"},
+    {"from": "source", "to": "ingestion", "label": "Dữ liệu đầu vào"},
+    {"from": "ingestion", "to": "silver", "label": "Bronze đã công bố", "variant": "emphasis"},
+    {"from": "silver", "to": "gold", "label": "Snapshot Silver", "variant": "emphasis"},
+    {"from": "silver", "to": "minio", "label": "Đọc và ghi artifact", "labelDy": 66},
+    {"from": "gold", "to": "postgres", "label": "Công bố và đồng bộ", "labelDy": -57},
+    {"from": "gold", "to": "minio", "label": "Lưu dữ liệu Gold"}
+  ]
+}

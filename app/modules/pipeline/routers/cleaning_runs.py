@@ -28,7 +28,7 @@ from app.providers import silver_writer_client
 router = APIRouter(
     prefix="/cleaning-runs",
     tags=["cleaning-runs"],
-    dependencies=[Depends(require_role(RoleCode.ADMIN, RoleCode.DATA_ADMIN))],
+    dependencies=[Depends(require_role(RoleCode.DATA_ADMIN))],
 )
 DB = Annotated[AsyncSession, Depends(get_db)]
 CleaningStatus = Literal["RUNNING", "COMPLETED", "FAILED"]

@@ -52,6 +52,12 @@ docker compose exec -T postgres psql \
   -v ON_ERROR_STOP=1 \
   -U unilake \
   -d unilake \
+  < infra/postgres/seed/00-departments.sql
+
+docker compose exec -T postgres psql \
+  -v ON_ERROR_STOP=1 \
+  -U unilake \
+  -d unilake \
   < infra/postgres/seed/01-permissions.sql
 
 docker compose exec -T postgres psql \
@@ -71,6 +77,12 @@ docker compose exec -T postgres psql \
   -U unilake \
   -d unilake \
   < infra/postgres/seed/04-source-systems.sql
+
+docker compose exec -T postgres psql \
+  -v ON_ERROR_STOP=1 \
+  -U unilake \
+  -d unilake \
+  < infra/postgres/seed/05-department-datasets.sql
 ```
 
 ## 4. Chạy riêng seed source system
@@ -105,15 +117,33 @@ Kết quả mong đợi:
                 4 | FILE_SHARE  | Shared File Storage    | FILE_STORAGE | t
 ```
 
+### Chạy riêng seed bộ dữ liệu phòng ban
+
+Với PostgreSQL local đã có schema và ba phòng PTS, PDT, PNS đang hoạt động,
+chạy riêng phần seed bộ dữ liệu để giữ nguyên cấu hình tài khoản và phân quyền:
+
+```bash
+docker compose exec -T postgres sh -c \
+  'psql -X -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+  < infra/postgres/seed/05-department-datasets.sql
+```
+
+Lệnh thêm các bộ còn thiếu theo mã. Nếu đã seed ba bộ Nhân sự với mã cũ
+`PNS_HO_SO_NHAN_VIEN`, `PNS_PHAN_CONG_CONG_TAC` và `PNS_BANG_CAP`, lệnh
+chuyển sang các mã HR tương ứng khi mã mới chưa có và giữ ID bộ dữ liệu.
+Tải lại **Nạp dữ liệu** trong không gian Staff để thấy các bộ theo lĩnh vực của tài khoản.
+
 ## 5. Lệnh một dòng để đồng bộ schema và seed
 
 ```bash
 docker compose up -d postgres
 docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U unilake -d unilake < infra/postgres/init/02-schema.sql
+docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U unilake -d unilake < infra/postgres/seed/00-departments.sql
 docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U unilake -d unilake < infra/postgres/seed/01-permissions.sql
 docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U unilake -d unilake < infra/postgres/seed/02-role-permissions.sql
 docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U unilake -d unilake < infra/postgres/seed/03-users-and-roles.sql
 docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U unilake -d unilake < infra/postgres/seed/04-source-systems.sql
+docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U unilake -d unilake < infra/postgres/seed/05-department-datasets.sql
 ```
 
 ## 6. Reset DB local từ đầu
@@ -125,7 +155,8 @@ docker compose down -v
 docker compose up -d postgres
 ```
 
-Sau khi reset, Docker sẽ tự chạy các file trong `infra/postgres/init` lúc volume Postgres được tạo mới. Các file trong `infra/postgres/seed` không tự chạy, nên vẫn cần chạy seed ở bước 3 nếu muốn có user/role/source system mẫu.
+Khi volume PostgreSQL được tạo mới, `infra/postgres/init/03-seed.sh` tự chạy các
+file trong `infra/postgres/seed`, bao gồm seed bộ dữ liệu phòng ban.
 
 ## 7. Tài khoản seed mặc định
 

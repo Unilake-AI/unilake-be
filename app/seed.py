@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from sqlalchemy import text
 
 from app.infra.db.session import async_session_factory
+
+DEPARTMENT_DATASETS_SQL = (
+    Path(__file__).resolve().parents[1] / "infra/postgres/seed/05-department-datasets.sql"
+)
 
 DEPARTMENTS_SEED_SQL = """
 INSERT INTO app.department (department_code, department_name, department_type, status) VALUES
@@ -69,8 +74,10 @@ WHERE role_id IN (SELECT role_id FROM app.role WHERE role_code IN ('ADMIN', 'DAT
 INSERT INTO app.role_permission (role_id, permission_id)
 SELECT r.role_id, p.permission_id
 FROM app.role r
-CROSS JOIN app.permission p
-WHERE r.role_code IN ('ADMIN')
+JOIN app.permission p ON p.permission_code IN (
+    'auth.login', 'user.read', 'user.manage', 'system.config', 'system.log.read'
+)
+WHERE r.role_code = 'ADMIN'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
     """,
     """
@@ -170,7 +177,7 @@ ON CONFLICT (app_user_id, role_id) DO NOTHING;
 
 async def seed_data() -> None:
     """Thực thi các script nạp dữ liệu ban đầu."""
-    print("Seeding database roles, permissions, and users...")
+    print("Seeding database roles, permissions, users, and department datasets...")
     async with async_session_factory() as db:
         # Chuẩn bị danh mục phòng thật; không tự tạo hồ sơ nhân viên hay cấp phân công giả.
         await db.execute(text(DEPARTMENTS_SEED_SQL))
@@ -181,8 +188,9 @@ async def seed_data() -> None:
         await db.execute(text(USERS_SEED_SQL))
         for query in USER_ROLES_SQL_LIST:
             await db.execute(text(query))
+        await db.execute(text(DEPARTMENT_DATASETS_SQL.read_text(encoding="utf-8")))
         await db.commit()
-    print("Seed roles, permissions, users, and user_roles successfully completed!")
+    print("Seed completed.")
 
 
 if __name__ == "__main__":

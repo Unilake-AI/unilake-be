@@ -483,21 +483,35 @@ def test_rbac_staff_domain_isolation_and_immediate_revocation_via_http() -> None
             )
             assert client.get("/api/v1/cleaning-runs", headers=hr_headers).status_code == 403
 
-            # 4. ADMIN và DATA_ADMIN vẫn hoạt động đúng quyền.
+            # 4. Quyền vận hành dữ liệu yêu cầu DATA_ADMIN.
+            admin_headers = {"Authorization": f"Bearer {admin_token}"}
+            data_admin_headers = {"Authorization": f"Bearer {data_admin_token}"}
+            for path in (
+                "/api/v1/ingestion/workers",
+                "/api/v1/ingestion/jobs",
+                "/api/v1/datasources",
+                "/api/v1/datasets",
+                "/api/v1/cleaning-runs",
+                "/api/v1/quarantine-records",
+                "/api/v1/pipeline/profiles",
+            ):
+                assert client.get(path, headers=admin_headers).status_code == 403, path
             assert (
-                client.get(
-                    "/api/v1/ingestion/workers",
-                    headers={"Authorization": f"Bearer {admin_token}"},
-                ).status_code
+                client.get("/api/v1/ingestion/workers", headers=data_admin_headers).status_code
                 == 200
             )
             assert (
-                client.get(
-                    "/api/v1/ingestion/jobs",
-                    headers={"Authorization": f"Bearer {data_admin_token}"},
-                ).status_code
-                == 200
+                client.get("/api/v1/ingestion/jobs", headers=data_admin_headers).status_code == 200
             )
+            assert client.get("/api/v1/users", headers=data_admin_headers).status_code == 403
+
+            with Session(engine) as session, session.begin():
+                session.add(UserRole(app_user_id=2, role_id=role_ids[RoleCode.DATA_ADMIN.value]))
+            dual_token = create_access_token(
+                "2", claims={"roles": ["ADMIN", "DATA_ADMIN"], "sid": 2}
+            )
+            dual_headers = {"Authorization": f"Bearer {dual_token}"}
+            assert client.get("/api/v1/ingestion/workers", headers=dual_headers).status_code == 200
 
             # 5. Thu hồi role HR_STAFF trong DB -> token cũ bị từ chối ngay ở request tiếp theo.
             with Session(engine) as session, session.begin():

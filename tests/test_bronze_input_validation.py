@@ -327,7 +327,7 @@ async def test_enqueue_rejects_invalid_policy_without_leaking_input():
             IngestionStart(
                 data_source_id=1, dataset_id=2, source_table="input.csv", validation_policy=raw
             ),
-            {"roles": ["ADMIN"]},
+            {"roles": ["DATA_ADMIN"]},
         )
     assert exc.value.code == "VALIDATION_POLICY_INVALID"
     assert "secret" not in str(exc.value)

@@ -139,12 +139,13 @@ def test_batch_rejects_inaccessible_event_without_marking_anything(environment):
     assert client.get("/notifications?workspace=DATA_ADMIN").status_code == 403
 
 
-@pytest.mark.parametrize("role", ["ADMIN", "DATA_ADMIN"])
-def test_administrators_see_all_events_and_read_state_is_per_user(environment, role):
+@pytest.mark.parametrize("roles", [["DATA_ADMIN"], ["ADMIN", "DATA_ADMIN"]])
+def test_data_administrators_see_all_events_and_read_state_is_per_user(environment, roles):
     client, user, state, _ = environment
-    user.update(sub="20", roles=[role])
+    user.update(sub="20", roles=roles)
     state["actor"] = IssueActor(20, True, frozenset(), frozenset())
-    data = client.get(f"/notifications?workspace={role}&limit=1&offset=1").json()
+    assert client.get("/notifications?workspace=ADMIN").status_code == 403
+    data = client.get("/notifications?workspace=DATA_ADMIN&limit=1&offset=1").json()
     assert data["total"] == data["unread_count"] == 3
     assert data["items"][0]["event_id"] == 2
     assert client.post("/notifications/read", json={"event_ids": [1]}).status_code == 204

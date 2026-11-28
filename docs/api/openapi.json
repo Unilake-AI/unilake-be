@@ -280,6 +280,54 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Create Account",
+        "operationId": "create_account_api_v1_users_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "title": "Response Create Account Api V1 Users Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/users/employees": {
@@ -648,7 +696,7 @@
             }
           },
           "403": {
-            "description": "Forbidden - requires one of roles: ADMIN, DATA_ADMIN, VIEWER.",
+            "description": "Forbidden - requires one of roles: DATA_ADMIN, VIEWER.",
             "content": {
               "application/json": {
                 "schema": {
@@ -736,7 +784,7 @@
             }
           },
           "403": {
-            "description": "Forbidden - requires one of roles: ADMIN, DATA_ADMIN, VIEWER.",
+            "description": "Forbidden - requires one of roles: DATA_ADMIN, VIEWER.",
             "content": {
               "application/json": {
                 "schema": {
@@ -832,7 +880,7 @@
             }
           },
           "403": {
-            "description": "Forbidden - requires one of roles: ADMIN, DATA_ADMIN.",
+            "description": "Forbidden - requires one of roles: DATA_ADMIN.",
             "content": {
               "application/json": {
                 "schema": {
@@ -914,7 +962,7 @@
             }
           },
           "403": {
-            "description": "Forbidden - requires one of roles: ADMIN, DATA_ADMIN.",
+            "description": "Forbidden - requires one of roles: DATA_ADMIN.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3303,6 +3351,34 @@
       }
     },
     "/api/v1/pipeline/profiles/owners/grants": {
+      "get": {
+        "tags": [
+          "silver-profiles"
+        ],
+        "summary": "List Owner Grants",
+        "operationId": "list_owner_grants_api_v1_pipeline_profiles_owners_grants_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DomainOwnerGrant"
+                  },
+                  "type": "array",
+                  "title": "Response List Owner Grants Api V1 Pipeline Profiles Owners Grants Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
       "post": {
         "tags": [
           "silver-profiles"
@@ -8507,6 +8583,357 @@
                   },
                   "type": "object",
                   "title": "Response Health Check Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{user_id}/access": {
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Update Access",
+        "operationId": "update_access_api_v1_users__user_id__access_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountAccessUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/summary": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Account Summary",
+        "operationId": "account_summary_api_v1_users_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Account Summary Api V1 Users Summary Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/audit": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Audit",
+        "operationId": "audit_api_v1_users_audit_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IAMAuditEvent"
+                  },
+                  "title": "Response Audit Api V1 Users Audit Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admissions/corrections": {
+      "post": {
+        "tags": [
+          "admissions"
+        ],
+        "summary": "Trưởng phòng Tuyển sinh tạo và xem trước yêu cầu đính chính",
+        "operationId": "create_correction_api_v1_admissions_corrections_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Create Correction Api V1 Admissions Corrections Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admissions/corrections/{correction_id}": {
+      "get": {
+        "tags": [
+          "admissions"
+        ],
+        "summary": "Xem yêu cầu đính chính đã tạo",
+        "operationId": "correction_api_v1_admissions_corrections__correction_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "correction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Correction Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Correction Api V1 Admissions Corrections  Correction Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admissions/corrections/{correction_id}/apply": {
+      "post": {
+        "tags": [
+          "admissions"
+        ],
+        "summary": "Trưởng phòng Tuyển sinh xác nhận áp dụng yêu cầu đính chính",
+        "operationId": "apply_correction_api_v1_admissions_corrections__correction_id__apply_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "correction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Correction Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Apply Correction Api V1 Admissions Corrections  Correction Id  Apply Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pipeline/profiles/owners/grants/audit": {
+      "get": {
+        "tags": [
+          "silver-profiles"
+        ],
+        "summary": "Domain Owner Audit",
+        "operationId": "domain_owner_audit_api_v1_pipeline_profiles_owners_grants_audit_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DomainOwnerAuditEvent"
+                  },
+                  "title": "Response Domain Owner Audit Api V1 Pipeline Profiles Owners Grants Audit Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -14034,6 +14461,289 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "AccountCreate": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 3,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.@-]+$",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "title": "Password",
+            "writeOnly": true
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/RoleCode"
+            },
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "title": "Roles"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "username",
+          "password",
+          "roles"
+        ],
+        "title": "AccountCreate"
+      },
+      "AccountAccessUpdate": {
+        "properties": {
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/RoleCode"
+            },
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "title": "Roles"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "expected_roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Expected Roles"
+          },
+          "expected_is_active": {
+            "type": "boolean",
+            "title": "Expected Is Active"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "roles",
+          "is_active",
+          "expected_roles",
+          "expected_is_active"
+        ],
+        "title": "AccountAccessUpdate"
+      },
+      "CorrectionCreate": {
+        "properties": {
+          "correction_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Correction Id"
+          },
+          "dataset_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Dataset Id"
+          },
+          "admission_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Admission Id"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "exclusiveMaximum": 9.223372036854776e+18,
+            "exclusiveMinimum": 0.0,
+            "title": "Expected Revision"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "RESULT_CORRECTION",
+              "ENROLLMENT_CORRECTION",
+              "RESTORE_ENROLLMENT",
+              "RECONCILE_LEGACY"
+            ],
+            "title": "Operation"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "changes": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Changes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "admission_id",
+          "expected_revision",
+          "operation",
+          "reason",
+          "changes"
+        ],
+        "title": "CorrectionCreate"
+      },
+      "DomainOwnerGrant": {
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Grant Id"
+          },
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grant_id",
+          "domain",
+          "user_id"
+        ],
+        "title": "DomainOwnerGrant"
+      },
+      "IAMAuditEvent": {
+        "properties": {
+          "event_id": {
+            "type": "integer",
+            "title": "Event Id"
+          },
+          "actor_id": {
+            "type": "integer",
+            "title": "Actor Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "SUCCESS",
+              "REJECTED"
+            ],
+            "title": "Outcome"
+          },
+          "changes": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changes"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "actor_id",
+          "username",
+          "target_id",
+          "action",
+          "occurred_at",
+          "outcome",
+          "changes",
+          "error_code"
+        ],
+        "title": "IAMAuditEvent"
+      },
+      "DomainOwnerAuditEvent": {
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Grant Id"
+          },
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "actor_id": {
+            "type": "string",
+            "title": "Actor Id"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "GRANTED",
+              "REVOKED"
+            ],
+            "title": "Action"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "outcome": {
+            "type": "string",
+            "const": "SUCCESS",
+            "title": "Outcome",
+            "default": "SUCCESS"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grant_id",
+          "domain",
+          "user_id",
+          "actor_id",
+          "action",
+          "occurred_at"
+        ],
+        "title": "DomainOwnerAuditEvent"
       }
     },
     "securitySchemes": {

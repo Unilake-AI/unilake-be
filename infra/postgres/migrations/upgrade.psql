@@ -119,6 +119,18 @@ INSERT INTO app.schema_migration (migration_name) VALUES ('20261118_system_depar
 INSERT INTO app.schema_migration (migration_name) VALUES ('20261118_update_admissions_workflows.sql') ON CONFLICT DO NOTHING;
 
 -- Không báo hoàn tất khi mới chỉ có bảng metadata nhưng thiếu nền tảng pipeline.
+\echo Applying 20261119_admin_permissions.sql
+\ir 20261119_admin_permissions.sql
+INSERT INTO app.schema_migration (migration_name) VALUES ('20261119_admin_permissions.sql') ON CONFLICT DO NOTHING;
+
+\echo Applying 20261119_iam_audit.sql
+\ir 20261119_iam_audit.sql
+INSERT INTO app.schema_migration (migration_name) VALUES ('20261119_iam_audit.sql') ON CONFLICT DO NOTHING;
+
+\echo Applying 20261119_iam_audit_outcomes.sql
+\ir 20261119_iam_audit_outcomes.sql
+INSERT INTO app.schema_migration (migration_name) VALUES ('20261119_iam_audit_outcomes.sql') ON CONFLICT DO NOTHING;
+
 DO $$
 DECLARE relation_name text;
 BEGIN

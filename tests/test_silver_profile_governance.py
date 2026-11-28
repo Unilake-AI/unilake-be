@@ -28,17 +28,25 @@ def governance(environment):  # noqa: F811 - imported pytest fixture
     client, engine, user = environment
     with engine.begin() as connection:
         connection.exec_driver_sql(
-            "CREATE TABLE app_user (app_user_id INTEGER PRIMARY KEY, is_active BOOLEAN)"
+            "CREATE TABLE app_user (app_user_id INTEGER PRIMARY KEY, is_active BOOLEAN, employee_id INTEGER)"
         )
         connection.exec_driver_sql(
             "CREATE TABLE role (role_id INTEGER PRIMARY KEY, role_code TEXT)"
         )
         connection.exec_driver_sql("CREATE TABLE user_role (app_user_id INTEGER, role_id INTEGER)")
-        connection.exec_driver_sql("INSERT INTO app_user VALUES (1, 1), (2, 1), (3, 1)")
+        connection.exec_driver_sql("INSERT INTO app_user VALUES (1, 1, 1), (2, 1, 2), (3, 1, 3)")
         connection.exec_driver_sql(
             "INSERT INTO role VALUES (1, 'HR_MANAGER'), (2, 'ACADEMIC_MANAGER')"
         )
         connection.exec_driver_sql("INSERT INTO user_role VALUES (1, 1), (2, 1), (3, 2)")
+        for statement in (
+            "CREATE TABLE employee (employee_id INTEGER PRIMARY KEY, employee_status TEXT)",
+            "CREATE TABLE assignment (employee_id INTEGER, department_id INTEGER, assignment_status TEXT, start_date DATE, end_date DATE)",
+            "INSERT INTO employee VALUES (1, 'ACTIVE'), (2, 'ACTIVE'), (3, 'ACTIVE')",
+            "INSERT INTO department (department_id, department_code, department_name, department_type, status) VALUES (1, 'PNS', 'HR', 'ROOM', 'ACTIVE'), (2, 'PDT', 'Academic', 'ROOM', 'ACTIVE')",
+            "INSERT INTO assignment VALUES (1, 1, 'ACTIVE', '2000-01-01', NULL), (2, 1, 'ACTIVE', '2000-01-01', NULL), (3, 2, 'ACTIVE', '2000-01-01', NULL)",
+        ):
+            connection.exec_driver_sql(statement)
     created = create_profile(client)
     user.update(sub="1", roles=["ADMIN"])
     response = client.post(
@@ -124,7 +132,9 @@ def test_review_requires_exact_revision_independent_owner_and_delegation(
     assert response.json()["error"]["code"] == code
 
 
-@pytest.mark.parametrize("mutation", ["approval", "grant", "inactive", "role", "definition"])
+@pytest.mark.parametrize(
+    "mutation", ["approval", "grant", "inactive", "role", "definition", "assignment"]
+)
 def test_final_check_rejects_revoked_or_changed_authority(governance, mutation):
     client, engine, user, created, review = governance
     approve(governance)
@@ -153,6 +163,10 @@ def test_final_check_rejects_revoked_or_changed_authority(governance, mutation):
                 connection.exec_driver_sql("UPDATE app_user SET is_active=0 WHERE app_user_id=2")
             elif mutation == "role":
                 connection.exec_driver_sql("DELETE FROM user_role WHERE app_user_id=2")
+            elif mutation == "assignment":
+                connection.exec_driver_sql(
+                    "UPDATE assignment SET end_date='2000-02-01' WHERE employee_id=2"
+                )
             else:
                 connection.execute(update(SilverProfileRevision).values(fingerprint="0" * 64))
     with engine.begin() as connection, pytest.raises(AppException):
@@ -226,6 +240,17 @@ def test_owner_grant_audit_survives_revocation(governance):
         ).status_code
         == 200
     )
+    audit = client.get("/pipeline/profiles/owners/grants/audit")
+    assert audit.status_code == 200, audit.text
+    assert "Retain original delegation evidence" not in audit.text
+    assert "Synthetic delegation for governance test" not in audit.text
+    assert {row["action"] for row in audit.json()} == {"GRANTED", "REVOKED"}
+    assert all(
+        row["actor_id"] == "1" and row["user_id"] == 2 and row["outcome"] == "SUCCESS"
+        for row in audit.json()
+    )
+    user.update(sub="1", roles=["DATA_ADMIN"])
+    assert client.get("/pipeline/profiles/owners/grants/audit").status_code == 403
     with engine.connect() as connection:
         grant = connection.execute(select(SilverDomainOwner)).mappings().one()
         assert grant["reason"] == "Synthetic delegation for governance test"
@@ -413,3 +438,48 @@ def test_manager_review_queue_requires_active_grant_and_matching_role(governance
     )
     user.update(sub="2", roles=["HR_MANAGER"])
     assert client.get("/pipeline/profiles/review-queue").json() == {"grants": [], "items": []}
+
+
+def test_domain_owner_listing_and_mutation_use_separate_roles(governance):
+    client, _, user, _, review = governance
+    path = "/pipeline/profiles/owners/grants"
+    assert client.get(path).status_code == 403
+    user.update(sub="1", roles=["DATA_ADMIN"])
+    assert client.get(path).json() == [
+        {"grant_id": review["grant_id"], "domain": "hr", "user_id": 2}
+    ]
+    reason = {"reason": "Thu hồi quyền được phân công"}
+    revoke = f"{path}/{review['grant_id']}/revoke"
+    assert client.post(revoke, json=reason).status_code == 403
+    assert client.post(path, json={**reason, "domain": "hr", "user_id": 2}).status_code == 403
+    user.update(sub="1", roles=["ADMIN"])
+    assert client.get(path).status_code == 200
+    assert client.get("/pipeline/profiles/positions").status_code == 403
+    assert client.post(revoke, json=reason).status_code == 200
+    assert client.get(path).json() == []
+
+
+@pytest.mark.parametrize(
+    ("domain", "change", "status"),
+    [
+        ("unknown", None, 422),
+        ("academic", None, 403),
+        ("hr", "DELETE FROM assignment WHERE employee_id=2", 403),
+        ("hr", "UPDATE assignment SET end_date='2000-02-01' WHERE employee_id=2", 403),
+        ("hr", "UPDATE assignment SET start_date='2999-01-01' WHERE employee_id=2", 403),
+        ("hr", "UPDATE assignment SET department_id=2 WHERE employee_id=2", 403),
+        ("hr", "UPDATE department SET status='INACTIVE' WHERE department_code='PNS'", 403),
+    ],
+)
+def test_grant_requires_current_assignment_in_domain(governance, domain, change, status):
+    client, engine, user, _, _ = governance
+    if change is not None:
+        with engine.begin() as connection:
+            connection.exec_driver_sql(change)
+    user.update(sub="1", roles=["ADMIN"])
+    response = client.post(
+        "/pipeline/profiles/owners/grants",
+        json={"domain": domain, "user_id": 2, "reason": "Kiểm thử phân công Domain Owner"},
+    )
+    assert response.status_code == status, response.text
+    assert len(client.get("/pipeline/profiles/owners/grants").json()) == 1

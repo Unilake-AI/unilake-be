@@ -162,7 +162,7 @@ async def test_api_queue_worker_storage_failures_and_recovery(tmp_path, monkeypa
         app = FastAPI()
         app.add_exception_handler(AppException, app_exception_handler)
         app.include_router(router)
-        user = {"sub": "test-user", "roles": ["ADMIN"]}
+        user = {"sub": "test-user", "roles": ["DATA_ADMIN"]}
         app.dependency_overrides[get_current_user] = lambda: user
 
         async def db_override():
@@ -181,7 +181,7 @@ async def test_api_queue_worker_storage_failures_and_recovery(tmp_path, monkeypa
         ) as api:
             user["roles"] = ["VIEWER"]
             assert (await api.post("/ingestion/jobs", json=payload)).status_code == 403
-            user["roles"] = ["ADMIN"]
+            user["roles"] = ["DATA_ADMIN"]
             assert (
                 await api.post("/ingestion/jobs", json={**payload, "data_source_id": 999})
             ).status_code == 404
@@ -428,7 +428,7 @@ async def test_validated_excel_and_postgresql_are_written_to_bronze(
             location,
             json.dumps(configuration),
         )
-        user = {"sub": "test-user", "roles": ["ADMIN"]}
+        user = {"sub": "test-user", "roles": ["DATA_ADMIN"]}
         app = _test_app(factory, user)
         payload = {
             "data_source_id": 1,

@@ -63,10 +63,12 @@ async def notifications(
     if workspace is not None:
         allowed = (
             set(DATA_WRITE_ROLES)
-            if workspace in ("ADMIN", "DATA_ADMIN")
+            if workspace == "DATA_ADMIN"
             else set(MANAGER_SCOPES)
             if workspace == "MANAGER"
             else set(UPLOAD_STAFF_DOMAINS)
+            if workspace == "STAFF"
+            else set()
         )
         roles.intersection_update(allowed)
         if not roles:

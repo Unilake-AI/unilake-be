@@ -15,8 +15,8 @@ RESULT_TRANSITIONS = {
     "ACCEPTED": {"ACCEPTED"},
     "REJECTED": {"REJECTED"},
 }
-STAFF_ROLES = frozenset({"ADMISSIONS_STAFF", "ADMIN", "DATA_ADMIN"})
-CORRECTION_ROLES = frozenset({"ADMISSIONS_MANAGER", "ADMIN"})
+STAFF_ROLES = frozenset({"ADMISSIONS_STAFF", "DATA_ADMIN"})
+CORRECTION_ROLES = frozenset({"ADMISSIONS_MANAGER"})
 READ_ROLES = STAFF_ROLES | CORRECTION_ROLES
 
 
@@ -25,13 +25,13 @@ RULE_MESSAGES = {
     "ADMISSION_DATASET_FORBIDDEN": "Cần dataset Tuyển sinh đang hoạt động và thuộc đúng phạm vi được cấp quyền.",
     "ADMISSION_EXPECTED_REVISION_REQUIRED": "Cần expected_revision lấy từ bản đăng ký hiện tại trong DB.",
     "ADMISSION_REVISION_CONFLICT": "Đăng ký đã thay đổi. Hãy đọc revision mới và đối chiếu lại trước khi nộp.",
-    "ADMISSION_FINAL_RESULT_LOCKED": "Kết quả đã chốt. Cần yêu cầu đính chính của Manager hoặc Admin để đổi điểm.",
+    "ADMISSION_FINAL_RESULT_LOCKED": "Kết quả đã chốt. Cần yêu cầu đính chính của trưởng phòng Tuyển sinh để đổi điểm.",
     "ADMISSION_TRANSITION_NOT_ALLOWED": "Chuyển trạng thái này chưa được phép trong nghiệp vụ đã chọn.",
     "ADMISSION_ENROLLMENT_LOCKED": "Dữ liệu nhập học đã chốt. Cần yêu cầu đính chính để thay đổi.",
     "ADMISSION_ENROLLMENT_DATE_REQUIRED": "Cần ngày xác nhận nhập học do file hoặc hồ sơ cung cấp.",
     "ADMISSION_LEGACY_RECONCILIATION_REQUIRED": "Hồ sơ cũ chưa có quyết định nhập học. Manager cần tạo yêu cầu RECONCILE_LEGACY.",
-    "ADMISSION_RESTORE_REQUEST_REQUIRED": "Hồ sơ đã rút cần yêu cầu RESTORE_ENROLLMENT của Manager hoặc Admin.",
-    "ADMISSION_CORRECTION_FORBIDDEN": "Chỉ ADMISSIONS_MANAGER hoặc ADMIN được đính chính.",
+    "ADMISSION_RESTORE_REQUEST_REQUIRED": "Hồ sơ đã rút cần yêu cầu RESTORE_ENROLLMENT của trưởng phòng Tuyển sinh.",
+    "ADMISSION_CORRECTION_FORBIDDEN": "Chỉ ADMISSIONS_MANAGER được đính chính.",
     "ADMISSION_REGISTRATION_MISSING": "Chưa có đăng ký khớp thí sinh, chương trình, năm và phương thức.",
     "ADMISSION_APPLICANT_MAPPING_MISSING": "Chưa có ánh xạ mã thí sinh trong đúng nguồn dữ liệu.",
     "ADMISSION_SCORE_REQUIRED": "Cần điểm trước khi công bố kết quả cuối của phương thức có dùng điểm.",

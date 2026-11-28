@@ -49,7 +49,7 @@ class ManualCleaningResponse(BaseModel):
     partial_key_check: dict[str, Any] | None = None
 
 
-Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.ADMIN, RoleCode.DATA_ADMIN))]
+Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.DATA_ADMIN))]
 
 
 class CleaningPreviewRequest(BaseModel):

@@ -11,7 +11,7 @@ Tiền tố `/api/v1`, dùng Bearer token hiện tại:
 | `GET /notifications` | `{items, total, unread_count, limit, offset}`; mới nhất trước |
 | `POST /notifications/read` | Body `{"event_ids":[1,2]}`; đánh dấu các sự kiện được phép xem; trả 204 |
 
-Bộ lọc: `unread_only` (mặc định false), `limit` (1–100, mặc định 20), `offset` (>=0), `workspace` (`ADMIN`, `DATA_ADMIN`, `MANAGER`, `STAFF`, tùy chọn). `unread_count` luôn đếm toàn bộ chưa đọc trong workspace hiện tại, không phụ thuộc phân trang hoặc bộ lọc chưa đọc. `total` tính sau bộ lọc.
+Bộ lọc: `unread_only` (mặc định false), `limit` (1–100, mặc định 20), `offset` (>=0), `workspace` (`DATA_ADMIN`, `MANAGER`, `STAFF`, tùy chọn). `unread_count` luôn đếm toàn bộ chưa đọc trong workspace hiện tại, không phụ thuộc phân trang hoặc bộ lọc chưa đọc. `total` tính sau bộ lọc.
 
 Mỗi dòng gồm mã sự kiện/yêu cầu, tiêu đề yêu cầu, lĩnh vực/phòng, loại sự kiện, trạng thái sau sự kiện, người thực hiện, thời gian và `read_at`. Không trả mô tả đầy đủ, nội dung hồ sơ nguồn, thông tin kết nối hoặc credential trong thông báo.
 
@@ -19,7 +19,7 @@ Các sự kiện trước khi triển khai cũng được hiển thị nếu ng�
 
 ## Phân quyền
 
-- ADMIN/DATA_ADMIN: các yêu cầu có trong hệ thống.
+- DATA_ADMIN: các yêu cầu có trong hệ thống.
 - Manager: đúng cặp lĩnh vực/phòng phụ trách đang có phân công hợp lệ; bao gồm yêu cầu trả lại người nạp thuộc phòng phụ trách.
 - STAFF: yêu cầu thuộc lĩnh vực/phòng đang có phân công, hoặc file đã được duyệt trả về chính người nạp theo quyền hiện có.
 - VIEWER: không có quyền nhận thông báo vận hành này.
@@ -36,7 +36,6 @@ Chuông thông báo có số chưa đọc, bộ lọc Tất cả/Chưa đọc, p
 
 Các đường mở trực tiếp:
 
-- ADMIN: `/admin/quality-issues/{issue_id}`; danh sách `/admin/quality-issues`.
 - DATA_ADMIN: `/data/quality/{issue_id}`; danh sách `/data/quality`.
 - Manager: `/manager/quality-issues/{issue_id}`; danh sách `/manager/quality-issues`.
 - STAFF: `/staff/quality-issues/{issue_id}`; danh sách `/staff/quality-issues`.

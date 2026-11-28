@@ -2,7 +2,7 @@
 
 Trang `/data/auto-pipeline` có tên **Theo dõi Bronze → Silver** trong nhóm Quản lý dữ liệu, ngay sau Nạp dữ liệu. Có lối tắt từ tổng quan Data Admin và từ chi tiết từng lần nạp.
 
-`GET /api/v1/pipeline/auto/flows` dành cho ADMIN/DATA_ADMIN. Query: `search` (tên file, dataset, người nạp), `ingestion_job_id`, `limit` (1–100), `offset`. Response gồm `items`, `next_offset`. Phân trang từ ingestion, vì file còn chờ hoặc lỗi trước Bronze chưa có auto job. Giao diện mặc định tải tất cả lần nạp gần nhất và làm mới mỗi 5 giây; không phải chọn dataset hoặc bật policy trước.
+`GET /api/v1/pipeline/auto/flows` dành cho DATA_ADMIN. Query: `search` (tên file, dataset, người nạp), `ingestion_job_id`, `limit` (1–100), `offset`. Response gồm `items`, `next_offset`. Phân trang từ ingestion, vì file còn chờ hoặc lỗi trước Bronze chưa có auto job. Giao diện mặc định tải tất cả lần nạp gần nhất và làm mới mỗi 5 giây; không phải chọn dataset hoặc bật policy trước.
 
 Mỗi dòng thể hiện 5 bước:
 

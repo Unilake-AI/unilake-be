@@ -76,7 +76,7 @@ Mọi lỗi nghiệp vụ (`AppException`) từ Backend trả về dạng:
 ### 2.1. Lấy thông tin quyền và cấu hình cho màn hình STAFF
 
 - **Endpoint:** `GET /api/v1/staff/context`
-- **Quyền:** `HR_STAFF`, `ACADEMIC_STAFF`, `ADMISSIONS_STAFF` (hoặc `ADMIN`, `DATA_ADMIN`)
+- **Quyền:** `HR_STAFF`, `ACADEMIC_STAFF`, `ADMISSIONS_STAFF` (hoặc `DATA_ADMIN`)
 - **Chức năng:** Gọi ngay sau khi mở giao diện STAFF để lấy danh sách lĩnh vực, phòng ban được phân công, các cờ quyền hiển thị nút chức năng và giới hạn file upload.
 
 **Request:** Header `Authorization: Bearer <access_token>`. Không có query/body.
@@ -139,7 +139,7 @@ Mọi lỗi nghiệp vụ (`AppException`) từ Backend trả về dạng:
 ### 3.1. Danh sách bộ dữ liệu được phép nạp file
 
 - **Endpoint:** `GET /api/v1/datasets`
-- **Quyền:** `HR_STAFF`, `ACADEMIC_STAFF`, `ADMISSIONS_STAFF` (hoặc `ADMIN`, `DATA_ADMIN`)
+- **Quyền:** `HR_STAFF`, `ACADEMIC_STAFF`, `ADMISSIONS_STAFF` (hoặc `DATA_ADMIN`)
 - **Chức năng:** Lấy danh sách các bộ dữ liệu tầng `BRONZE` đang `ACTIVE` thuộc lĩnh vực của STAFF để user chọn khi upload file bổ sung.
 
 **Query Parameters:**
@@ -181,7 +181,7 @@ Mọi lỗi nghiệp vụ (`AppException`) từ Backend trả về dạng:
 ### 3.2. Chi tiết một bộ dữ liệu được phép nạp file
 
 - **Endpoint:** `GET /api/v1/datasets/{dataset_id}`
-- **Quyền:** `HR_STAFF`, `ACADEMIC_STAFF`, `ADMISSIONS_STAFF` (hoặc `ADMIN`, `DATA_ADMIN`)
+- **Quyền:** `HR_STAFF`, `ACADEMIC_STAFF`, `ADMISSIONS_STAFF` (hoặc `DATA_ADMIN`)
 - **Chức năng:** Xem chi tiết metadata của một dataset `BRONZE` đang `ACTIVE` trong lĩnh vực được phép. Nếu `dataset_id` thuộc domain khác, API trả `404` để bảo mật.
 
 **Path Parameters:**
@@ -201,7 +201,7 @@ Mọi lỗi nghiệp vụ (`AppException`) từ Backend trả về dạng:
 ### 4.1. Tải file lên để kiểm tra và lưu vào Bronze
 
 - **Endpoint:** `POST /api/v1/ingestion/uploads`
-- **Quyền:** `HR_STAFF`, `ACADEMIC_STAFF`, `ADMISSIONS_STAFF` (hoặc `ADMIN`, `DATA_ADMIN`)
+- **Quyền:** `HR_STAFF`, `ACADEMIC_STAFF`, `ADMISSIONS_STAFF` (hoặc `DATA_ADMIN`)
 - **Content-Type:** `multipart/form-data`
 - **Chức năng:** Tiếp nhận file `.csv`, `.xlsx`, `.xlsm`, lưu tạm vào MinIO staging và tạo job `QUEUED` để worker kiểm tra dữ liệu và nạp vào tầng Bronze.
 
@@ -268,7 +268,7 @@ Mọi lỗi nghiệp vụ (`AppException`) từ Backend trả về dạng:
 ### 4.2. Danh sách các job ingestion
 
 - **Endpoint:** `GET /api/v1/ingestion/jobs`
-- **Quyền:** `HR_STAFF`, `ACADEMIC_STAFF`, `ADMISSIONS_STAFF` (hoặc `ADMIN`, `DATA_ADMIN`, `VIEWER` tùy scope)
+- **Quyền:** `HR_STAFF`, `ACADEMIC_STAFF`, `ADMISSIONS_STAFF` (hoặc `DATA_ADMIN`, `VIEWER` tùy scope)
 - **Chức năng:** Lấy danh sách các lần nạp dữ liệu trong phạm vi lĩnh vực của user (hỗ trợ lọc & phân trang).
 
 **Query Parameters:**

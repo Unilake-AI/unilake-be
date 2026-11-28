@@ -72,7 +72,7 @@ async def test_rejection_is_persisted(duplicate):
     with pytest.raises(AppException) as exc:
         await IngestionExecutionService(repo).start(
             IngestionStart(data_source_id=1, dataset_id=2, source_table="input.csv"),
-            {"roles": ["ADMIN"]},
+            {"roles": ["DATA_ADMIN"]},
         )
     assert exc.value.details == {"ingestion_job_id": 10}
     assert repo.create.call_args.kwargs["status"] == "REJECTED"
@@ -215,7 +215,7 @@ async def test_queue_unavailable_returns_503():
         await start_ingestion(
             IngestionStart(data_source_id=1, dataset_id=1, source_table="input.csv"),
             db,
-            {"roles": ["ADMIN"]},
+            {"roles": ["DATA_ADMIN"]},
         )
     assert exc.value.status_code == 503
     assert exc.value.code == "INGESTION_QUEUE_UNAVAILABLE"

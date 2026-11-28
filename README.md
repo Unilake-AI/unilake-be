@@ -257,7 +257,7 @@ Các endpoint thường dùng dưới đây sử dụng prefix mặc định `/a
 | Danh mục dữ liệu | `GET` | `/api/v1/governance/catalog` |
 | NLQ mô phỏng | `POST` | `/api/v1/nlq/ask` |
 
-Tạo tác vụ ingestion nguồn có sẵn, chạy cleaning và chạy lại job yêu cầu vai trò `ADMIN` hoặc `DATA_ADMIN`. Tải file cho phép `ADMIN`, `DATA_ADMIN`, `HR_STAFF`, `ACADEMIC_STAFF` và `ADMISSIONS_STAFF`; STAFF chỉ tải, xem job và thống kê trong lĩnh vực được cấp. `VIEWER` không xem được dữ liệu ingestion. Thu thập nguồn có sẵn cần nguồn và bộ dữ liệu hợp lệ trong danh mục. Khi upload, người dùng chọn bộ Bronze đã có hoặc đặt tên bộ mới; backend tự cấp mã và tạo nguồn tải lên. STAFF một lĩnh vực chỉ cần gửi tên và file, không cần nhập ID kỹ thuật.
+Tạo tác vụ ingestion nguồn có sẵn, chạy cleaning và chạy lại job yêu cầu vai trò `DATA_ADMIN`. Tải file cho phép `DATA_ADMIN`, `HR_STAFF`, `ACADEMIC_STAFF` và `ADMISSIONS_STAFF`; STAFF chỉ tải, xem job và thống kê trong lĩnh vực được cấp. `VIEWER` không xem được dữ liệu ingestion. Thu thập nguồn có sẵn cần nguồn và bộ dữ liệu hợp lệ trong danh mục. Khi upload, người dùng chọn bộ Bronze đã có hoặc đặt tên bộ mới; backend tự cấp mã và tạo nguồn tải lên. STAFF một lĩnh vực chỉ cần gửi tên và file, không cần nhập ID kỹ thuật.
 
 Hướng dẫn [tải file qua API](docs/ingestion-uploads.md) mô tả cách tiếp nhận trực tiếp từ máy người dùng. Tham khảo [đặc tả ingestion](docs/ingestion-execution.md) để tra cứu payload, vòng đời tác vụ và mã lỗi. Quy trình và cấu hình Bronze → Silver nằm trong [hướng dẫn nguồn thật](docs/standardization/source-silver-flow.md).
 
@@ -298,13 +298,27 @@ Seed đồng bộ quyền của 9 role và gán lại role cho các tài khoản
 ghi đè mật khẩu hoặc trạng thái của các tài khoản này. Tài khoản ngoài seed cần
 được gán ít nhất một role trong bảng trên để đăng nhập.
 
+Seed cũng đăng ký các bộ tiếp nhận Bronze đang hoạt động theo phòng sở hữu:
+
+| Phòng ban | Bộ dữ liệu |
+| --- | --- |
+| Tuyển sinh (PTS) | Hồ sơ đăng ký xét tuyển |
+| Đào tạo (PDT) | Khung chương trình và học phần |
+| Nhân sự (PNS) | Danh mục phòng ban, Danh mục chức vụ, Danh mục bằng cấp, Hồ sơ nhân viên, Hồ sơ giảng viên, Bằng cấp nhân viên, Phân công công tác |
+
+Staff có thể chọn các bộ này trong **Nạp dữ liệu** theo lĩnh vực được cấp.
+Seed chỉ đăng ký bộ tiếp nhận và hệ thống nguồn. Với Docker đã có dữ liệu,
+có thể [chạy riêng phần seed bộ dữ liệu](docs/db-local-sync.md#chạy-riêng-seed-bộ-dữ-liệu-phòng-ban).
+
 `DATA_ADMIN` có thêm quyền `query.execute`. Sáu role phòng ban được khai báo quyền
 xem dataset, catalog, dashboard, thực thi và xem lịch sử truy vấn. Hiện manager
 và staff có cùng tập quyền khai báo. [API Manager](docs/api/manager-api.md) đọc báo cáo
 Gold hiện hành và giới hạn theo role, phân công phòng ban còn hiệu lực và phòng sở hữu dataset.
 Các đường đọc Gold cũ cũng kiểm tra phạm vi này cho lĩnh vực của manager.
-Chuông [thông báo xử lý lỗi](docs/api/notifications-api.md) phục vụ ADMIN/DATA_ADMIN,
+[API VIEWER](docs/api/viewer-api.md) cung cấp tổng quan, catalog và thống kê Gold toàn trường.
+Chuông [thông báo xử lý lỗi](docs/api/notifications-api.md) phục vụ DATA_ADMIN,
 manager và STAFF, có số chưa đọc và liên kết trực tiếp tới yêu cầu được cấp quyền.
+[API ADMIN](docs/api/admin-iam.md) quản lý tài khoản, phân công, quyền Domain Owner và nhật ký IAM. Để cấp quyền quản trị hệ thống và vận hành dữ liệu cho cùng tài khoản, gán cả `ADMIN` và `DATA_ADMIN`.
 Bảng `role_permission` là cấu hình quyền; các endpoint hiện chưa kiểm tra đầy đủ
 bảng này. Xem trạng thái triển khai từng phân hệ ở phần phạm vi chức năng.
 

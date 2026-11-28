@@ -25,7 +25,7 @@ from app.modules.pipeline.models import CLEANING_RUNS, DATASET_CATALOG, QUARANTI
 router = APIRouter(
     prefix="/quarantine-records",
     tags=["quarantine-records"],
-    dependencies=[Depends(require_role(RoleCode.ADMIN, RoleCode.DATA_ADMIN))],
+    dependencies=[Depends(require_role(RoleCode.DATA_ADMIN))],
 )
 DB = Annotated[AsyncSession, Depends(get_db)]
 Q = QUARANTINE_RECORDS.c

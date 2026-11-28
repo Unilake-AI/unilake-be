@@ -21,7 +21,7 @@ class RoleCode(StrEnum):
 SYSTEM_DEPARTMENT_CODES = frozenset({"PDT", "PNS", "PTS"})
 
 
-DATA_WRITE_ROLES = frozenset({RoleCode.ADMIN, RoleCode.DATA_ADMIN})
+DATA_WRITE_ROLES = frozenset({RoleCode.DATA_ADMIN})
 MANAGER_SCOPES = {
     RoleCode.HR_MANAGER: ("hr", "PNS"),
     RoleCode.ACADEMIC_MANAGER: ("academic", "PDT"),

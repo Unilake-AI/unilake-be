@@ -35,7 +35,7 @@ router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 
 DB = Annotated[AsyncSession, Depends(get_db)]
 User = Annotated[dict[str, Any], Depends(get_current_user)]
-Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.ADMIN, RoleCode.DATA_ADMIN))]
+Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.DATA_ADMIN))]
 
 
 @router.post("/jobs", response_model=IngestionJobRead, status_code=202)

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+
+from app.core.roles import RoleCode  # noqa: TC001 - Pydantic resolves this at runtime
 
 
 class UserRead(BaseModel):
@@ -39,3 +42,32 @@ class AssignmentCreate(BaseModel):
         if self.end_date is not None and self.end_date < self.start_date:
             raise ValueError("Ngày kết thúc phải từ ngày bắt đầu trở đi")
         return self
+
+
+class AccountCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(min_length=3, max_length=100, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.@-]+$")
+    password: SecretStr
+    roles: set[RoleCode] = Field(min_length=1)
+
+
+class AccountAccessUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    roles: set[RoleCode] = Field(min_length=1)
+    is_active: bool
+    expected_roles: set[str]
+    expected_is_active: bool
+
+
+class IAMAuditEvent(BaseModel):
+    event_id: int
+    actor_id: int
+    username: str
+    target_id: int | None
+    action: str
+    occurred_at: datetime
+    outcome: Literal["SUCCESS", "REJECTED"]
+    changes: dict[str, Any] | None
+    error_code: str | None

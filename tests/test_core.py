@@ -55,6 +55,17 @@ def test_settings_cors_origin_regex_pattern() -> None:
     assert regex_settings.cors_origin_regex_pattern == r"^https?://10\.36\.120\.223(:\d+)?$"
 
 
+def test_settings_cors_origin_list_strips_trailing_slash() -> None:
+    settings = Settings(
+        CORS_ORIGINS="http://localhost:3000/, https://unilake-fe.vercel.app/ ",
+        JWT_SECRET_KEY="test-secret",
+    )
+    assert settings.cors_origin_list == [
+        "http://localhost:3000",
+        "https://unilake-fe.vercel.app",
+    ]
+
+
 def test_local_api_loads_upload_credentials_and_keeps_environment_priority(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("UPLOAD_WRITER_ACCESS_KEY", raising=False)

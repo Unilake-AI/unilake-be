@@ -28,7 +28,7 @@ from app.repositories.silver_profile_repo import load_source_profile
 
 router = APIRouter(prefix="/pipeline/silver/snapshots", tags=["silver-snapshots"])
 DB = Annotated[Engine, Depends(management_engine)]
-Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.ADMIN, RoleCode.DATA_ADMIN))]
+Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.DATA_ADMIN))]
 ProfileID = Annotated[str, Query(min_length=1, max_length=100)]
 
 

@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from fastapi import Path as PathParam
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.engine import Engine
@@ -24,19 +24,19 @@ from app.modules.pipeline.services.source_profiles import SourceProfile
 from app.repositories.silver_governance_repo import (
     approved_evidence,
     lock_profile,
+    manager_authorized,
     reject,
     require_manager,
 )
 
 router = APIRouter(prefix="/pipeline/profiles", tags=["silver-profiles"])
 DB = Annotated[Engine, Depends(management_engine)]
-Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.ADMIN, RoleCode.DATA_ADMIN))]
+Admin = Annotated[dict[str, Any], Depends(require_role(RoleCode.DATA_ADMIN))]
 SystemAdmin = Annotated[dict[str, Any], Depends(require_role(RoleCode.ADMIN))]
 Reviewer = Annotated[
     dict[str, Any],
     Depends(
         require_role(
-            RoleCode.ADMIN,
             RoleCode.DATA_ADMIN,
             RoleCode.ADMISSIONS_MANAGER,
             RoleCode.ACADEMIC_MANAGER,
@@ -122,6 +122,17 @@ class ReviewGrant(BaseModel):
     domain: str
 
 
+class DomainOwnerGrant(ReviewGrant):
+    user_id: int
+
+
+class DomainOwnerAuditEvent(DomainOwnerGrant):
+    actor_id: str
+    action: Literal["GRANTED", "REVOKED"]
+    occurred_at: datetime
+    outcome: Literal["SUCCESS"] = "SUCCESS"
+
+
 class ReviewProfile(BaseModel):
     profile_id: str
     definition: SourceProfile
@@ -154,10 +165,13 @@ def review_queue(db: DB, reviewer: Reviewer) -> ReviewQueue:
     """Chỉ trả các cấu hình đã đăng ký thuộc domain có grant còn hiệu lực."""
     with db.begin() as connection:
         state = configuration(connection)
-        grants = reviewer_grants(state, reviewer)
-        domains = {grant.domain for grant in grants}
-        for domain in sorted(domains):
-            require_manager(connection, str(reviewer["sub"]), domain)
+        candidates = reviewer_grants(state, reviewer)
+        domains = {
+            domain
+            for domain in sorted({grant.domain for grant in candidates})
+            if manager_authorized(connection, str(reviewer["sub"]), domain)
+        }
+        grants = [grant for grant in candidates if grant.domain in domains]
         items = []
         for name, current in sorted(state["profiles"].items()):
             if current["definition"]["domain"] not in domains:
@@ -250,6 +264,22 @@ class RevokeRequest(BaseModel):
     reason: str = Field(min_length=10, max_length=2000)
 
 
+@router.get("/owners/grants", response_model=list[DomainOwnerGrant])
+def list_owner_grants(
+    db: DB,
+    _user: Annotated[dict[str, Any], Depends(require_role(RoleCode.ADMIN, RoleCode.DATA_ADMIN))],
+) -> list[DomainOwnerGrant]:
+    with db.connect() as connection:
+        grants = configuration(connection)["grants"]
+    return [
+        DomainOwnerGrant(
+            grant_id=grant["grant_id"], domain=grant["domain"], user_id=grant["user_id"]
+        )
+        for grant in grants.values()
+        if grant["revoked_at"] is None
+    ]
+
+
 @router.post("/owners/grants", status_code=201)
 def grant_owner(request: OwnerGrant, db: DB, admin: SystemAdmin) -> dict[str, str]:
     grant_id = str(uuid4())
@@ -267,6 +297,43 @@ def grant_owner(request: OwnerGrant, db: DB, admin: SystemAdmin) -> dict[str, st
             "revocation_reason": None,
         }
     return {"grant_id": grant_id}
+
+
+@router.get("/owners/grants/audit", response_model=list[DomainOwnerAuditEvent])
+def domain_owner_audit(
+    db: DB,
+    _admin: SystemAdmin,
+    response: Response,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[DomainOwnerAuditEvent]:
+    response.headers["Cache-Control"] = "no-store"
+    with db.connect() as connection:
+        grants = configuration(connection)["grants"]
+    events = [
+        DomainOwnerAuditEvent(
+            grant_id=grant["grant_id"],
+            domain=grant["domain"],
+            user_id=grant["user_id"],
+            actor_id=grant[f"{change}_by"],
+            action=action,
+            occurred_at=grant[f"{change}_at"],
+        )
+        for grant in grants.values()
+        for change, action in (("granted", "GRANTED"), ("revoked", "REVOKED"))
+        if grant[f"{change}_at"] is not None
+    ]
+    events.sort(
+        key=lambda event: (
+            event.occurred_at
+            if event.occurred_at.tzinfo
+            else event.occurred_at.replace(tzinfo=UTC),
+            event.grant_id,
+            event.action,
+        ),
+        reverse=True,
+    )
+    return events[offset : offset + limit]
 
 
 @router.post("/owners/grants/{grant_id}/revoke")
@@ -289,7 +356,7 @@ def revoke_owner(
 def profile_history(profile_id: ProfileID, db: DB, reviewer: Reviewer) -> dict[str, Any]:
     with db.begin() as connection:
         current = lock_profile(connection, profile_id)
-        if not set(reviewer["roles"]) & {"ADMIN", "DATA_ADMIN"}:
+        if RoleCode.DATA_ADMIN not in reviewer["roles"]:
             require_manager(connection, str(reviewer["sub"]), current["definition"]["domain"])
         state = configuration(connection)
         revisions = sorted(
@@ -359,7 +426,7 @@ def revoke_approval(
         approval = state["approvals"].get(f"{profile_id}:{revision}")
         if approval is None or approval["revoked_at"] is not None:
             reject("SILVER_APPROVAL_NOT_ACTIVE")
-        if "ADMIN" not in reviewer["roles"]:
+        if RoleCode.DATA_ADMIN not in reviewer["roles"]:
             require_manager(connection, actor, current["definition"]["domain"])
             if approval["approved_by"] != actor:
                 reject("SILVER_DOMAIN_OWNER_REQUIRED", 403)

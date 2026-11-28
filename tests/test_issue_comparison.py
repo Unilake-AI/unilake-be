@@ -584,7 +584,7 @@ def test_comparison_endpoint_authorization_and_reordered_business_key_matching(
             )
 
             admin_resp = client.get(url, headers=_auth_header(2, RoleCode.ADMIN.value))
-            assert admin_resp.status_code == 200
+            assert admin_resp.status_code == 403
 
             resp = client.get(
                 f"{url}?cleaning_run_id={env.new_run_id}",

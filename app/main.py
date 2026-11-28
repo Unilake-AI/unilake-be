@@ -30,6 +30,7 @@ from app.modules.pipeline.routers.auto_pipeline import router as auto_pipeline_r
 from app.modules.pipeline.routers.gold import router as gold_router
 from app.modules.staff.router import router as staff_router
 from app.modules.users.router import router as users_router
+from app.modules.viewer.router import router as viewer_router
 from app.providers import provide_nlq_service
 
 
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
     application.include_router(nlq_router, prefix=api_prefix)
     application.include_router(staff_router, prefix=api_prefix)
     application.include_router(manager_router, prefix=api_prefix)
+    application.include_router(viewer_router, prefix=api_prefix)
     application.include_router(notifications_router, prefix=api_prefix)
     application.add_middleware(
         CORSMiddleware,

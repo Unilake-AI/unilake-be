@@ -42,7 +42,7 @@ def import_actor(automatic, monkeypatch, tmp_path):
     with automatic["engine"].begin() as conn:
         role_id = conn.execute(
             text("""
-                INSERT INTO app.role(role_code, role_name) VALUES ('ADMIN','Admin')
+                INSERT INTO app.role(role_code, role_name) VALUES ('DATA_ADMIN','Data Admin')
                 ON CONFLICT (role_code) DO UPDATE SET role_code=EXCLUDED.role_code
                 RETURNING role_id
             """)

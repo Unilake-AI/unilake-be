@@ -5,36 +5,19 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
-from app.modules.governance.contracts import CatalogTableSchema, FieldDefinitionSchema
 from app.modules.manager.schemas import ReportFilters
+from app.repositories import report_read_repo
 from app.repositories.manager_report_repo import dataset_scope
+from app.repositories.report_read_repo import ExplorerDataset as ExplorerDataset  # noqa: TC001
+from app.repositories.report_read_repo import ExplorerPage as ExplorerPage  # noqa: TC001
 
 if TYPE_CHECKING:
     from app.modules.manager.access import ManagerAccess
-
-
-class ExplorerDataset(BaseModel):
-    dataset_id: int
-    dataset_code: str
-    dataset_name: str
-    domain: str
-    layer: str
-    description: str | None
-    updated_at: datetime | None
-    last_published_at: datetime | None
-    tables: list[CatalogTableSchema] = Field(default_factory=list)
-
-
-class ExplorerPage(BaseModel):
-    items: list[ExplorerDataset]
-    total: int
-    limit: int
-    offset: int
 
 
 class LineageStep(BaseModel):
@@ -54,71 +37,7 @@ class DatasetLineage(BaseModel):
 
 
 async def catalog(db: AsyncSession, manager: ManagerAccess, filters: ReportFilters) -> ExplorerPage:
-    clause, params = dataset_scope(manager, filters)
-    total = int(
-        (
-            await db.execute(text("SELECT count(*) FROM app.dataset d WHERE " + clause), params)
-        ).scalar_one()
-    )
-    rows = (
-        (
-            await db.execute(
-                text(
-                    "SELECT d.dataset_id,d.dataset_code,d.dataset_name,d.domain,d.description,"
-                    " coalesce(d.updated_at,d.created_at) AS updated_at,dl.layer_code AS layer,"
-                    " (SELECT max(m.finished_at) FROM gold.current_metrics m WHERE m.dataset_id=d.dataset_id AND m.domain=d.domain) AS last_published_at"
-                    " FROM app.dataset d JOIN app.data_layer dl ON dl.data_layer_id=d.data_layer_id WHERE "
-                    + clause
-                    + " ORDER BY d.dataset_id LIMIT :limit OFFSET :offset"
-                ),
-                {**params, "limit": filters.limit, "offset": filters.offset},
-            )
-        )
-        .mappings()
-        .all()
-    )
-    if not rows:
-        return ExplorerPage(items=[], total=total, limit=filters.limit, offset=filters.offset)
-    columns = (
-        (
-            await db.execute(
-                text(
-                    "SELECT t.dataset_id,t.table_name,t.description AS table_description,c.column_name,c.data_type,c.is_nullable,c.description"
-                    " FROM app.catalog_table t LEFT JOIN app.catalog_column c ON c.catalog_table_id=t.catalog_table_id"
-                    " WHERE t.dataset_id=ANY(:ids) ORDER BY t.catalog_table_id,c.catalog_column_id"
-                ),
-                {"ids": [row["dataset_id"] for row in rows]},
-            )
-        )
-        .mappings()
-        .all()
-    )
-    tables: dict[int, dict[str, CatalogTableSchema]] = {}
-    for column in columns:
-        table = tables.setdefault(column["dataset_id"], {}).setdefault(
-            column["table_name"],
-            CatalogTableSchema(
-                name=column["table_name"], description=column["table_description"] or "", columns=[]
-            ),
-        )
-        if column["column_name"]:
-            table.columns.append(
-                FieldDefinitionSchema(
-                    name=column["column_name"],
-                    data_type=column["data_type"],
-                    nullable=column["is_nullable"] is not False,
-                    description=column["description"] or "",
-                )
-            )
-    return ExplorerPage(
-        items=[
-            ExplorerDataset(**row, tables=list(tables.get(row["dataset_id"], {}).values()))
-            for row in rows
-        ],
-        total=total,
-        limit=filters.limit,
-        offset=filters.offset,
-    )
+    return await report_read_repo.catalog(db, dataset_scope(manager, filters), filters)
 
 
 async def dataset(db: AsyncSession, manager: ManagerAccess, dataset_id: int) -> ExplorerDataset:

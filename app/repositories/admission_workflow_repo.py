@@ -6,6 +6,7 @@ from typing import Any, cast
 
 from sqlalchemy import Table, select, text, update
 
+from app.core.roles import DATA_WRITE_ROLES
 from app.modules.admissions.models import EVENTS
 from app.modules.admissions.policy import (
     READ_ROLES,
@@ -64,7 +65,7 @@ def dataset_scope(
         .first()
     )
     if row is None or (
-        roles.isdisjoint({"ADMIN", "DATA_ADMIN"})
+        roles.isdisjoint(DATA_WRITE_ROLES)
         and (row["department_code"] != "PTS" or row["department_status"] != "ACTIVE")
     ):
         raise AdmissionRuleError("ADMISSION_DATASET_FORBIDDEN")

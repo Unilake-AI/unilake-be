@@ -9,15 +9,15 @@ Frontend giữ nguyên. Các thao tác mới dùng API trong Swagger `/docs` ho�
 | --- | --- | --- |
 | admissions_results | admission_score, admission_status; tự đặt enrollment_status=PENDING khi mới trúng tuyển | Chỉ cập nhật đăng ký đã có; kiểm tra mã nguồn, bốn khóa tham chiếu, expected_revision và thang điểm |
 | admissions_enrollment | enrollment_status, enrollment_date | Chỉ đăng ký ACCEPTED; cần ngày do file cung cấp khi xác nhận; không tạo student |
-| RESULT_CORRECTION | Điểm/kết quả của đăng ký | ADMISSIONS_MANAGER hoặc ADMIN tạo yêu cầu có lý do, xem trước rồi áp dụng |
+| RESULT_CORRECTION | Điểm/kết quả của đăng ký | ADMISSIONS_MANAGER tạo yêu cầu có lý do, xem trước rồi áp dụng |
 | ENROLLMENT_CORRECTION | Đính chính ngày xác nhận hoặc chuyển trạng thái được phép | Dùng yêu cầu riêng, đúng revision hiện tại |
 | RESTORE_ENROLLMENT | Khôi phục WITHDRAWN về PENDING hoặc CONFIRMED | Manager/Admin phải nêu lý do; CONFIRMED phải cung cấp ngày xác nhận |
 | RECONCILE_LEGACY | Xác định PENDING, CONFIRMED hoặc DECLINED cho hồ sơ cũ đang NULL | Chỉ đăng ký ACCEPTED đã được đối soát; không tự suy ra từ dữ liệu cũ |
 
-STAFF, ADMIN và DATA_ADMIN có thể nộp hai loại file qua quyền upload hiện có.
+ADMISSIONS_STAFF và DATA_ADMIN có thể nộp hai loại file qua quyền upload hiện có.
 File tuân thủ quy tắc STAFF; quyền đính chính kết quả đã chốt đi qua yêu cầu riêng.
 DATA_ADMIN đơn lẻ không có quyền đính chính. ADMISSIONS_MANAGER bị giới hạn dataset
-admissions do PTS đang hoạt động sở hữu. ADMIN có phạm vi quản trị trên admissions.
+admissions do PTS đang hoạt động sở hữu.
 Quyền và trạng thái hoạt động của tài khoản được đọc lại từ DB ngay khi ghi Gold.
 
 Chuyển kết quả của STAFF:
@@ -204,7 +204,7 @@ xuất. Để đối chiếu với công việc phòng PTS, cần:
    phương thức và mã thí sinh đã được nhập. File cập nhật phải cùng namespace đó.
 3. Với dữ liệu cũ chưa có ánh xạ mã thí sinh, cần bảng đối chiếu mã nguồn → applicant_id
    có bằng chứng. Có bảng đối chiếu mới thực hiện bước ánh xạ riêng; không ghép theo tên.
-4. Người có ADMISSIONS_MANAGER/ADMIN xác nhận những hồ sơ cũ NULL cần đối soát,
+4. Người có ADMISSIONS_MANAGER xác nhận những hồ sơ cũ NULL cần đối soát,
    kèm quyết định và ngày thực tế nếu xác nhận nhập học.
 
 Những thông tin này phục vụ dữ liệu nghiệp vụ thực tế, không chặn việc triển khai

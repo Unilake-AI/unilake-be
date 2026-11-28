@@ -15,6 +15,7 @@ from sqlalchemy.engine import Connection
 
 from app.core.config import settings
 from app.core.exceptions import AppException
+from app.core.roles import MANAGER_SCOPES
 from app.modules.auth.models import Role, UserRole
 from app.modules.pipeline.contracts.automation import AUTOMATIC_RECIPE_VERSION
 from app.modules.pipeline.contracts.identity import digest
@@ -26,7 +27,8 @@ from app.modules.pipeline.models.profiles import (
 )
 from app.modules.pipeline.repositories.object_metadata import configuration, metadata_lock
 from app.modules.pipeline.services.source_profiles import SourceProfile
-from app.modules.users.models import User
+from app.modules.users.models import Assignment, Department, Employee, User
+from app.repositories.department_access_repo import current_assignment_conditions
 
 
 def approval_required() -> bool:
@@ -40,22 +42,33 @@ def reject(code: str, status: int = 409) -> NoReturn:
     )
 
 
-def require_manager(connection: Connection, user_id: str, domain: str) -> None:
-    role = {
-        "admissions": "ADMISSIONS_MANAGER",
-        "academic": "ACADEMIC_MANAGER",
-        "hr": "HR_MANAGER",
-    }.get(domain)
-    if not role or not user_id.isdecimal():
-        reject("SILVER_DOMAIN_OWNER_REQUIRED", 403)
+def manager_authorized(connection: Connection, user_id: str, domain: str) -> bool:
+    scope = next(
+        ((role, code) for role, (name, code) in MANAGER_SCOPES.items() if name == domain), None
+    )
+    if scope is None or not user_id.isdecimal():
+        return False
+    role, department = scope
     found = connection.execute(
         select(User.app_user_id)
         .join(UserRole, UserRole.app_user_id == User.app_user_id)
         .join(Role, Role.role_id == UserRole.role_id)
-        .where(User.app_user_id == int(user_id), User.is_active.is_(True), Role.role_code == role)
-        .with_for_update(read=True)
+        .join(Employee, Employee.employee_id == User.employee_id)
+        .join(Assignment, Assignment.employee_id == Employee.employee_id)
+        .join(Department, Department.department_id == Assignment.department_id)
+        .where(
+            User.app_user_id == int(user_id),
+            Role.role_code == role,
+            Department.department_code == department,
+            *current_assignment_conditions(),
+        )
+        .with_for_update(read=True, of=(User, UserRole, Employee, Assignment, Department))
     ).first()
-    if found is None:
+    return found is not None
+
+
+def require_manager(connection: Connection, user_id: str, domain: str) -> None:
+    if not manager_authorized(connection, user_id, domain):
         reject("SILVER_DOMAIN_OWNER_REQUIRED", 403)
 
 
